@@ -892,7 +892,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     <h1>BuildData AI</h1>
     <nav class="top-nav" aria-label="Workspace">
       <a class="active" href="/" data-i18n="nav.products">Produkty</a>
-      <a href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
+      <a href="/building-elements" target="_blank" rel="noopener" data-i18n="nav.buildingElements">Elementy budowlane</a>
     </nav>
     <div class="header-actions">
       <span class="muted" data-i18n="app.subtitle">Import, mapowanie, czyszczenie i eksport PIM JSON</span>
@@ -3114,6 +3114,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         .filter(input => input.dataset.inlineManualDirty === "1");
       let added = 0;
       const dirtyKeys = new Set();
+      const dirtyTypeSeriesTargets = new Set();
       for (const input of inputs) {
         const targetPath = input.dataset.inlineManualTarget || "";
         const typeSeriesRowIndexRaw = input.dataset.inlineManualTypeSeriesRowIndex;
@@ -3121,10 +3122,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         const hasTypeSeriesRowIndex = Number.isInteger(typeSeriesRowIndex) && typeSeriesRowIndex >= 0;
         if (!targetPath) continue;
         dirtyKeys.add(`${targetPath}::${hasTypeSeriesRowIndex ? typeSeriesRowIndex : ""}`);
+        if (targetPathIsTypeSeries(targetPath)) dirtyTypeSeriesTargets.add(targetPath);
       }
       enrichmentSession.manual_entries = (enrichmentSession.manual_entries || []).filter(entry => {
         if (entry.source !== "manual" || normalizeMatchKey(entry.product_key) !== normalizedProductKey) return true;
         const rowIndex = Number.isInteger(entry.type_series_row_index) ? entry.type_series_row_index : "";
+        if (targetPathIsTypeSeries(entry.target_path) && dirtyTypeSeriesTargets.has(entry.target_path) && rowIndex === "") return false;
         return !dirtyKeys.has(`${entry.target_path || ""}::${rowIndex}`);
       });
       for (const input of inputs) {
@@ -3134,6 +3137,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         const typeSeriesRowIndex = typeSeriesRowIndexRaw === undefined ? null : Number.parseInt(typeSeriesRowIndexRaw || "", 10);
         const hasTypeSeriesRowIndex = Number.isInteger(typeSeriesRowIndex) && typeSeriesRowIndex >= 0;
         if (!targetPath) continue;
+        if (targetPathIsTypeSeries(targetPath) && !hasTypeSeriesRowIndex) continue;
         if ((input.dataset.inlineManualBaseline || "") === manualValueKey(value)) continue;
         if (Array.isArray(value) && !value.length) continue;
         if (!Array.isArray(value) && !String(displayCellValue(value)).trim()) continue;
@@ -3145,7 +3149,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           scope: "current_product",
           product_key: productKey,
           mode: $("enrichmentMode")?.value || "replace",
-          apply_type_series_to_all: hasTypeSeriesRowIndex ? false : $("applyTypeSeriesToAll")?.checked !== false,
+          apply_type_series_to_all: targetPathIsTypeSeries(targetPath) ? false : $("applyTypeSeriesToAll")?.checked !== false,
           created_at: new Date().toISOString()
         };
         if (hasTypeSeriesRowIndex) entry.type_series_row_index = typeSeriesRowIndex;
@@ -4716,7 +4720,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           source: currentLang === "pl" ? "ręcznie" : "manual",
           label: labelForTarget(entry.target_path),
           target_path: entry.target_path,
-          is_type_series: String(entry.target_path || "").startsWith("type_series[]"),
+          is_type_series: targetPathIsTypeSeries(entry.target_path),
           apply_to_all_variants: entry.apply_type_series_to_all !== false,
           type_series_row_index: Number.isInteger(entry.type_series_row_index) ? entry.type_series_row_index : null,
           value: entry.value
@@ -4785,12 +4789,14 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         }
       }
       for (const [targetPath, value] of Object.entries(previewContext)) {
+        if (targetPathIsTypeSeries(targetPath)) continue;
         const added = productEnrichmentByTarget.get(targetPath);
         shownProductTargets.add(targetPath);
         productRows.push(`<tr${added ? ` class="enrichment-added"` : ""}><td>${esc(cleanModelLabel(targetPath))}${added ? `<br><span class="muted">${esc(added.source)}</span>` : ""}</td><td>${inlineManualInput(targetPath, added ? added.value : value, "", value)}</td><td>${esc(modelUnitForTarget(targetPath) || "-")}</td></tr>`);
       }
       if (!showMainMappingOnly) {
         for (const item of productEnrichments) {
+          if (targetPathIsTypeSeries(item.target_path)) continue;
           if (shownProductTargets.has(item.target_path)) continue;
           shownProductTargets.add(item.target_path);
           productRows.push(`<tr class="enrichment-added"><td>${esc(item.label)}<br><span class="muted">${esc(item.source)}</span></td><td>${inlineManualInput(item.target_path, item.value)}</td><td>${esc(modelUnitForTarget(item.target_path || "") || "-")}</td></tr>`);
@@ -6008,7 +6014,7 @@ def render_building_elements_home() -> str:
   <header>
     <h1>BuildData AI</h1>
     <nav class="top-nav" aria-label="Workspace">
-      <a href="/" data-i18n="nav.products">Produkty</a>
+      <a href="/" target="_blank" rel="noopener" data-i18n="nav.products">Produkty</a>
       <a class="active" href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
     </nav>
     <div class="header-actions">
