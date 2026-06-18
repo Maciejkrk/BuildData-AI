@@ -2,7 +2,7 @@
 
 ## Boundary
 
-BuildData AI Mapping Studio is a mapper, not a model authoring tool.
+BuildData AI is a mapper, not a model authoring tool.
 
 PIM/database remains the source of truth for:
 

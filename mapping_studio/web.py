@@ -7,7 +7,7 @@ def render_studio() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BuildData AI Products</title>
+  <title>BuildData AI</title>
   <style>
     :root {
       color-scheme: light;
@@ -58,7 +58,7 @@ def render_studio() -> str:
 </head>
 <body>
   <header>
-    <h1>BuildData AI Products</h1>
+    <h1>BuildData AI</h1>
     <div class="status">Modele są wczytywane z eksportów PIM. Studio ich nie tworzy.</div>
   </header>
   <main>

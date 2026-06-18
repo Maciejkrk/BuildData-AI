@@ -1,2 +1,2 @@
-"""BuildData AI Mapping Studio."""
+"""BuildData AI mapping studio."""
 

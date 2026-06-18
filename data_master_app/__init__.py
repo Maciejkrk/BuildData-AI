@@ -1,1 +1,1 @@
-"""BuildData AI Products web converter."""
+"""BuildData AI web converter."""

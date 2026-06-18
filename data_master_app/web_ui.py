@@ -27,7 +27,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BuildData AI Products</title>
+  <title>BuildData AI</title>
   <style>
     :root {
       --bg: #f3f5f7;
@@ -889,7 +889,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 </head>
 <body>
   <header>
-    <h1>BuildData AI Products</h1>
+    <h1>BuildData AI</h1>
     <nav class="top-nav" aria-label="Workspace">
       <a class="active" href="/" data-i18n="nav.products">Produkty</a>
       <a href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
@@ -5947,7 +5947,7 @@ def render_building_elements_home() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BuildData AI Products - Elementy budowlane</title>
+  <title>BuildData AI - Elementy budowlane</title>
   <style>
     :root {
       --bg:#f3f5f7; --panel:#fff; --soft:#f8fafc; --line:#d8dde6;
@@ -6006,7 +6006,7 @@ def render_building_elements_home() -> str:
 </head>
 <body>
   <header>
-    <h1>BuildData AI Products</h1>
+    <h1>BuildData AI</h1>
     <nav class="top-nav" aria-label="Workspace">
       <a href="/" data-i18n="nav.products">Produkty</a>
       <a class="active" href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>

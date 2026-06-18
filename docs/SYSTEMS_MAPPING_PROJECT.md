@@ -1,16 +1,16 @@
-# BuildData AI Systems - dokument startowy nowego projektu
+# BuildData AI - Elementy budowlane - dokument startowy nowego projektu
 
 Ten dokument opisuje zalozenia do otwarcia osobnego projektu dla mapowania
 systemow budowlanych. Traktujemy go jako specyfikacje startowa dla nowego repo
-albo nowego narzedzia obok `BuildData AI Products`.
+albo nowego narzedzia obok modulu produktowego `BuildData AI`.
 
-Obecny `BuildData AI Products` pozostaje narzedziem produktowym. Systemy i
+Obecny modul produktowy `BuildData AI` pozostaje narzedziem produktowym. Systemy i
 elementy budowlane powinny byc rozwijane osobno, bo maja inna logike danych:
 relacje, warianty, warstwy, skladniki i powiazanie z produktami.
 
 ## Cel narzedzia
 
-`BuildData AI Systems` ma przygotowywac dane systemow budowlanych do importu do
+Modul `Elementy budowlane` w `BuildData AI` ma przygotowywac dane systemow budowlanych do importu do
 PIM albo do formatu uzywanego dalej przez agenta.
 
 Glowny przeplyw:
@@ -22,7 +22,7 @@ model PIM systemow -> zmapowane produkty -> plik systemow klienta
 ```
 
 Narzedzie nie powinno tworzyc produktow. Produkty powinny byc przygotowane
-wczesniej przez `BuildData AI Products` i wczytane jako referencja.
+wczesniej przez modul produktowy `BuildData AI` i wczytane jako referencja.
 
 ## Dlaczego osobne narzedzie
 
@@ -77,7 +77,7 @@ Systemy musza miec dostep do listy produktow, do ktorych beda sie odnosic.
 Zrodlem powinna byc jedna z opcji:
 
 ```text
-products.json wygenerowany z BuildData AI Products
+products.json wygenerowany z BuildData AI
 albo
 aktualny eksport produktow z PIM
 ```
@@ -569,6 +569,6 @@ albo:
 builddata-systems-mapper
 ```
 
-Nie doklejac systemow do obecnego `BuildData AI Products`. Obecne repo powinno
+Nie doklejac systemow do obecnego modulu produktowego `BuildData AI`. Obecne repo powinno
 zostac zrodlem lekcji, testow i logiki parsowania, a nowe narzedzie powinno
 startowac od czystego UI oraz dynamicznego modelu PIM.

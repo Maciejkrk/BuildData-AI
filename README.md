@@ -1,4 +1,4 @@
-# BuildData AI Products
+# BuildData AI
 
 Advanced local web tool for mapping customer product data into existing
 BuildData/PIM product export structures.

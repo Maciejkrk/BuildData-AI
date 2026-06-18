@@ -40,8 +40,8 @@ class ConverterTests(unittest.TestCase):
     def test_web_ui_has_product_variant_row_rules_and_hidden_rule_rows(self):
         html = render_home()
 
-        self.assertIn("<title>BuildData AI Products</title>", html)
-        self.assertIn("<h1>BuildData AI Products</h1>", html)
+        self.assertIn("<title>BuildData AI</title>", html)
+        self.assertIn("<h1>BuildData AI</h1>", html)
         self.assertNotIn("systemsForm", html)
         self.assertNotIn("analyzeSystemsBtn", html)
         self.assertNotIn("building_elements.json", html)

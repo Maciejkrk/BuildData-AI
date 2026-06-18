@@ -12,7 +12,7 @@ from mapping_studio.services.product_reference import build_product_reference_in
 from mapping_studio.services.source_reader import read_source_tables
 from data_master_app.web_ui import render_home
 
-app = FastAPI(title="BuildData AI Products", version="0.1.0")
+app = FastAPI(title="BuildData AI", version="0.1.0")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -22,7 +22,7 @@ def home() -> HTMLResponse:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "app": "BuildData AI Products"}
+    return {"status": "ok", "app": "BuildData AI"}
 
 
 @app.post("/api/products/model")

@@ -24,7 +24,7 @@ PROJECTS_DIR = OUTPUT_DIR / "mapping-projects"
 MODEL_SESSIONS_DIR = OUTPUT_DIR / "model-sessions"
 SOURCE_SESSIONS_DIR = OUTPUT_DIR / "source-sessions"
 
-app = FastAPI(title="BuildData AI Products", version="0.1.0")
+app = FastAPI(title="BuildData AI", version="0.1.0")
 
 
 @app.get("/", response_class=HTMLResponse)
