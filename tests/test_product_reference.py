@@ -28,3 +28,31 @@ def test_product_reference_indexes_exported_products_by_id_name_and_code() -> No
     assert index.by_name["fastaqua"]["Id"] == 6076
     assert index.by_code["sku1"]["Id"] == 6076
 
+
+def test_product_reference_indexes_current_export_and_type_series_aliases() -> None:
+    payload = b"""{
+      "productsCount": 1,
+      "products": [
+        {
+          "Id": 900001,
+          "dataVersions": [
+            {
+              "productAttributes": [
+                {"AttributeId": 116, "varcharValue": "Rigips PRO"},
+                {"AttributeId": 318, "varcharValue": "PR00058890"},
+                {"ParentAttributeId": 135, "AttributeId": 319, "varcharValue": "11620533"},
+                {"ParentAttributeId": 135, "AttributeId": 321, "varcharValue": "AR00233378"}
+              ]
+            }
+          ]
+        }
+      ]
+    }"""
+
+    index = build_product_reference_index(payload)
+
+    assert index.by_name["rigipspro"]["Id"] == 900001
+    assert index.by_code["pr00058890"]["Id"] == 900001
+    assert index.by_name["11620533"]["Id"] == 900001
+    assert index.by_code["ar00233378"]["Id"] == 900001
+

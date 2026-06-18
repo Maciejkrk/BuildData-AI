@@ -34,6 +34,26 @@ to existing products.
 
 ## Local Run
 
+### Docker
+
+```powershell
+docker compose up --build -d
+```
+
+Open:
+
+```text
+http://localhost:8010
+```
+
+Stop:
+
+```powershell
+docker compose down
+```
+
+### Python
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -45,6 +65,22 @@ Open:
 
 ```text
 http://127.0.0.1:8010
+```
+
+## Deployment on the Docker machine
+
+```powershell
+cd C:\projects
+git clone https://github.com/Maciejkrk/BuildData-AI.git
+cd BuildData-AI
+docker compose up --build -d
+```
+
+The application listens on port `8010`. If the server firewall allows access,
+open it from another computer with:
+
+```text
+http://SERVER_IP:8010
 ```
 
 ## Initial Scope

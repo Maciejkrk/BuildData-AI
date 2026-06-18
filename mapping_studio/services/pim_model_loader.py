@@ -8,26 +8,54 @@ from mapping_studio.services.normalization import first_present, int_value, norm
 
 
 def load_product_model(files: dict[str, bytes]) -> PimModelBundle:
-    models_payload, attributes_payload = _load_model_pair(files, "productsmodels", "productsattributes")
+    models_payload, attributes_payload = _load_model_pair(
+        files,
+        ("productsmodels", "productmodels"),
+        ("productsattributes", "productattributes"),
+    )
     return _load_bundle(models_payload, attributes_payload, domain="products", root_type="product")
 
 
 def load_building_element_model(files: dict[str, bytes]) -> PimModelBundle:
     models_payload, attributes_payload = _load_model_pair(
         files,
-        "buildingselementsmodels",
-        "buildingselementsattributes",
+        (
+            "buildingselementsmodels",
+            "buildingelementsmodels",
+            "buildingelementmodels",
+            "systemsmodels",
+            "systemmodels",
+        ),
+        (
+            "buildingselementsattributes",
+            "buildingelementsattributes",
+            "buildingelementattributes",
+            "systemsattributes",
+            "systemattributes",
+        ),
     )
     return _load_bundle(models_payload, attributes_payload, domain="building_elements", root_type="building_element")
 
 
-def _load_model_pair(files: dict[str, bytes], models_key: str, attributes_key: str) -> tuple[Any, Any]:
+def _load_model_pair(
+    files: dict[str, bytes],
+    models_keys: str | tuple[str, ...],
+    attributes_keys: str | tuple[str, ...],
+) -> tuple[Any, Any]:
     keyed = {_file_key(name): content for name, content in files.items()}
-    models = keyed.get(models_key)
-    attributes = keyed.get(attributes_key)
+    models = _first_matching_file(keyed, models_keys)
+    attributes = _first_matching_file(keyed, attributes_keys)
     if models is None or attributes is None:
         raise ValueError("Both model and attribute JSON files are required.")
     return json.loads(models.decode("utf-8-sig")), json.loads(attributes.decode("utf-8-sig"))
+
+
+def _first_matching_file(keyed: dict[str, bytes], expected_keys: str | tuple[str, ...]) -> bytes | None:
+    keys = (expected_keys,) if isinstance(expected_keys, str) else expected_keys
+    for key in keys:
+        if key in keyed:
+            return keyed[key]
+    return None
 
 
 def _file_key(filename: str) -> str:

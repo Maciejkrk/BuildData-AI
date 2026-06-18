@@ -52,3 +52,21 @@ def test_deleted_attributes_are_not_exposed() -> None:
 
     assert [field.attribute_id for field in bundle.fields] == [280]
 
+
+def test_building_element_model_accepts_singular_export_filenames() -> None:
+    files = {
+        "buildingElementsModels.json": b"""{
+          "models": [{"Id": 74, "Name": "Building Element", "modelType": "Building_Element"}]
+        }""",
+        "buildingElementsAttributes.json": b"""{
+          "attributes": [
+            {"Id": 280, "ProductModelId": 74, "AttributeName": "name", "DispName": "Name", "AttributeType": "VarChar", "deleted": false}
+          ]
+        }""",
+    }
+
+    bundle = load_building_element_model(files)
+
+    assert bundle.root_model_id == 74
+    assert bundle.fields[0].attribute_id == 280
+
