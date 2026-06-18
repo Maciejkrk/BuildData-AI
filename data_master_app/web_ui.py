@@ -675,8 +675,39 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
     .editable-value-input {
       width: 100%;
-      min-width: 180px;
+      min-width: 0;
+      max-width: 100%;
       margin-top: 0;
+    }
+    .type-series-preview-scroll {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+    }
+    .type-series-preview-table {
+      min-width: 100%;
+      width: max-content;
+      table-layout: auto;
+      margin-top: 0;
+    }
+    .type-series-preview-table th,
+    .type-series-preview-table td {
+      min-width: 96px;
+      max-width: 220px;
+      overflow-wrap: anywhere;
+    }
+    .type-series-preview-table th:first-child,
+    .type-series-preview-table td:first-child {
+      min-width: 42px;
+      width: 42px;
+      max-width: 42px;
+      text-align: center;
+    }
+    .type-series-preview-table .editable-value-input {
+      min-width: 64px;
+      width: 100%;
     }
     .manual-edit-actions {
       display: flex;
@@ -4626,7 +4657,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           unit: modelUnitForTarget(item.target_path)
         });
       }
-      if (!columns.length) return `<table><tbody><tr><td>${esc(t("missing.typeSeries"))}</td></tr></tbody></table>`;
+      if (!columns.length) return `<div class="type-series-preview-scroll"><table class="type-series-preview-table"><tbody><tr><td>${esc(t("missing.typeSeries"))}</td></tr></tbody></table></div>`;
       const variantRule = rowRuleList(productMappingProfile?._row_rules || {}).find(rule => rule.row_mode === "product_variants");
       const variantEntries = (previewRows || []).flatMap(entry =>
         Array.isArray(entry.variants) ? entry.variants.map(row => ({ row })) : []
@@ -4664,10 +4695,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         }).join("");
         return `<tr><td>${esc(index + 1)}</td>${cells}</tr>`;
       }).join("");
-      return `<table>
+      return `<div class="type-series-preview-scroll"><table class="type-series-preview-table">
         <thead><tr><th>#</th>${columns.map(column => `<th>${esc(column.label)}${column.unit ? `<br><span class="muted">${esc(t("preview.unit"))}: ${esc(column.unit)}</span>` : ""}</th>`).join("")}</tr></thead>
         <tbody>${rows || `<tr><td colspan="${esc(columns.length + 1)}">${esc(t("missing.typeSeries"))}</td></tr>`}</tbody>
-      </table>`;
+      </table></div>`;
     }
 
     function productLabelForPreview(entry, index) {
