@@ -3,5 +3,5 @@ services:
     build: .
     container_name: builddata-ai
     ports:
-      - "8010:8010"
+      - "8020:8010"
     restart: unless-stopped

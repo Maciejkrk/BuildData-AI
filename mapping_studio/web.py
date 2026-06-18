@@ -7,7 +7,7 @@ def render_studio() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BuildData AI Mapping Studio</title>
+  <title>BuildData AI Products</title>
   <style>
     :root {
       color-scheme: light;
@@ -58,14 +58,14 @@ def render_studio() -> str:
 </head>
 <body>
   <header>
-    <h1>BuildData AI Mapping Studio</h1>
+    <h1>BuildData AI Products</h1>
     <div class="status">Modele są wczytywane z eksportów PIM. Studio ich nie tworzy.</div>
   </header>
   <main>
     <nav>
       <button class="tab active" data-view="products">Produkty</button>
-      <button class="tab" data-view="elements">Systemy i elementy</button>
-      <p class="locked">Mapowanie systemów wymaga referencyjnego pliku products.json.</p>
+      <button class="tab" data-view="elements">Elementy budowlane</button>
+      <p class="locked">Mapowanie elementów budowlanych wymaga referencyjnego pliku products.json.</p>
     </nav>
     <section id="products">
       <h2>Mapowanie produktów</h2>
@@ -87,8 +87,8 @@ def render_studio() -> str:
       </div>
     </section>
     <section id="elements" hidden>
-      <h2>Mapowanie systemów i elementów</h2>
-      <p>Wczytaj model systemów z PIM, referencyjny products.json i plik importowany. Relacje wariantów, warstw i produktów są odczytywane z modelu.</p>
+      <h2>Mapowanie elementów budowlanych</h2>
+      <p>Wczytaj model elementów budowlanych z PIM, referencyjny products.json i plik importowany. Relacje wariantów, warstw i produktów są odczytywane z modelu.</p>
       <div class="grid">
         <div class="panel">
           <h3>Model, produkty i dane</h3>

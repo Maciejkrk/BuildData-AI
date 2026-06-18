@@ -1,12 +1,16 @@
-# BuildData AI Mapping Studio
+# BuildData AI Products
 
-Local studio for mapping customer data into existing BuildData/PIM export
-structures.
+Advanced local web tool for mapping customer product data into existing
+BuildData/PIM product export structures.
 
-The studio does not create PIM models. Product and building-element models are
-generated in the existing database/PIM and imported here as JSON model exports.
-This tool only reads those models, exposes valid target fields, validates
-dictionary values, builds previews, and exports mapped payloads.
+The application does not create PIM models. Product models are generated in the
+existing database/PIM and imported here as JSON model exports. The tool reads
+those models, exposes valid target fields, validates dictionary values, builds
+live previews, supports row rules for product/type-series files, enriches mapped
+data, and exports `products.json`.
+
+The interface is available in Polish and English. Use the language selector in
+the top right corner of the application.
 
 ## Workflows
 
@@ -18,7 +22,7 @@ dictionary values, builds previews, and exports mapped payloads.
    - Export `products.json`.
    - Save/load a mapping project.
 
-2. Building elements
+2. Building elements, next tool scope
    - Load existing `buildingsElementsModels.json` and
      `buildingsElementsAttributes.json`.
    - Load a completed product reference, usually `products.json`.
@@ -32,6 +36,10 @@ Building-element mapping is intentionally gated by a product reference. The
 studio can suggest product matches, but exported product relations must resolve
 to existing products.
 
+The current Docker entrypoint runs the advanced product mapper. Building-element
+mapping is documented as the next tool scope and should reuse the same model
+driven principles.
+
 ## Local Run
 
 ### Docker
@@ -43,7 +51,7 @@ docker compose up --build -d
 Open:
 
 ```text
-http://localhost:8010
+http://localhost:8020
 ```
 
 Stop:
@@ -58,7 +66,7 @@ docker compose down
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-uvicorn mapping_studio.main:app --host 127.0.0.1 --port 8010
+uvicorn data_master_app.main:app --host 127.0.0.1 --port 8010
 ```
 
 Open:
@@ -76,19 +84,19 @@ cd BuildData-AI
 docker compose up --build -d
 ```
 
-The application listens on port `8010`. If the server firewall allows access,
+The application listens on container port `8010` and is exposed by Docker on
+host port `8020`. If the server firewall allows access,
 open it from another computer with:
 
 ```text
-http://SERVER_IP:8010
+http://SERVER_IP:8020
 ```
 
 ## Initial Scope
 
-This repository starts with a modular FastAPI backend and a simple studio UI.
-The product workflow reuses proven ideas from the previous prototype, while the
-building-element workflow reads nested model relations dynamically from the
-model export:
+This repository starts from the advanced product mapper built in the previous
+prototype. The next building-element tool should read nested model relations
+dynamically from the model export:
 
 ```text
 Building Element -> Variants -> Layers -> Available Products -> Product
