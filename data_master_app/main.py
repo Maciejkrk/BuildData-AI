@@ -10,7 +10,12 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from .converter import analyze_product_model_files, analyze_uploaded_file, convert_products_file
-from .web_ui import render_home
+from .web_ui import render_building_elements_home, render_home
+from mapping_studio.services.building_preview import preview_building_elements
+from mapping_studio.services.mapping_analyzer import analyze_source_tables, bundle_payload
+from mapping_studio.services.pim_model_loader import load_building_element_model, load_product_model
+from mapping_studio.services.product_reference import build_product_reference_index
+from mapping_studio.services.source_reader import read_source_tables
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -39,6 +44,16 @@ def home(product_model_id: str | None = None) -> HTMLResponse:
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {"status": "ok"}
+
+
+@app.get("/building-elements", response_class=HTMLResponse)
+def building_elements_home() -> HTMLResponse:
+    return html_response(render_building_elements_home())
+
+
+@app.get("/elements")
+def elements_redirect() -> RedirectResponse:
+    return redirect_response("/building-elements")
 
 
 @app.post("/convert")
@@ -131,6 +146,60 @@ async def product_model(product_model_files: list[UploadFile] = File(...)) -> di
         result["model_id"] = save_product_model_session(model_files)
         return result
     except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/products/model")
+async def products_model_api(files: list[UploadFile] = File(...)) -> dict[str, Any]:
+    try:
+        model_files = await api_files_payload(files)
+        return {"model": bundle_payload(load_product_model(model_files))}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/building-elements/model")
+async def building_elements_model_api(files: list[UploadFile] = File(...)) -> dict[str, Any]:
+    try:
+        model_files = await api_files_payload(files)
+        return {"model": bundle_payload(load_building_element_model(model_files))}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/building-elements/analyze")
+async def analyze_building_elements_api(
+    file: UploadFile = File(...),
+    model_files: list[UploadFile] = File(...),
+    products_reference: UploadFile = File(...),
+) -> dict[str, Any]:
+    try:
+        model = load_building_element_model(await api_files_payload(model_files))
+        product_index = build_product_reference_index(await products_reference.read())
+        tables = read_source_tables(file.filename or "building-elements", await file.read())
+        analysis = analyze_source_tables(tables, model)
+        analysis["product_reference"] = {
+            "products_count": product_index.products_count,
+            "duplicates": product_index.duplicates,
+        }
+        return analysis
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/building-elements/preview")
+async def building_elements_preview_api(
+    file: UploadFile = File(...),
+    products_reference: UploadFile = File(...),
+    mapping_json: str = Form("{}"),
+) -> dict[str, Any]:
+    try:
+        tables = read_source_tables(file.filename or "building-elements", await file.read())
+        rows = tables[0].rows if tables else []
+        product_index = build_product_reference_index(await products_reference.read())
+        mapping = json.loads(mapping_json or "{}")
+        return preview_building_elements(rows, mapping, product_index)
+    except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -293,6 +362,17 @@ async def model_files_from_uploads(
         if content:
             model_files[upload.filename or "model.json"] = content
     return model_files
+
+
+async def api_files_payload(files: list[UploadFile]) -> dict[str, bytes]:
+    payload: dict[str, bytes] = {}
+    for upload in files:
+        content = await upload.read()
+        if content:
+            payload[upload.filename or "file.json"] = content
+    if not payload:
+        raise ValueError("Model files are required.")
+    return payload
 
 
 def save_product_model_session(model_files: dict[str, bytes]) -> str:

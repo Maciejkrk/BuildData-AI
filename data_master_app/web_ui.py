@@ -67,6 +67,27 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       align-items: center;
       gap: 12px;
     }
+    .top-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .top-nav a {
+      display: inline-block;
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #fff;
+      color: var(--secondary);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .top-nav a.active {
+      border-color: var(--accent);
+      background: #f0fdfa;
+      color: var(--accent);
+    }
     .model-file-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -869,6 +890,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 <body>
   <header>
     <h1>BuildData AI Products</h1>
+    <nav class="top-nav" aria-label="Workspace">
+      <a class="active" href="/" data-i18n="nav.products">Produkty</a>
+      <a href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
+    </nav>
     <div class="header-actions">
       <span class="muted" data-i18n="app.subtitle">Import, mapowanie, czyszczenie i eksport PIM JSON</span>
       <select id="languageSelect" class="language-select" aria-label="Language">
@@ -1013,6 +1038,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 
     const I18N = {
       pl: {
+        "nav.products": "Produkty",
+        "nav.buildingElements": "Elementy budowlane",
         "app.subtitle": "Mapowanie danych produktowych i eksport products.json",
         "model.title": "Model produktu PIM",
         "model.help": "Najpierw wczytaj dwa pliki z PIM: productsModels.json i productsAttributes.json. One tworzą obowiązujący model produktu dla całego procesu.",
@@ -1295,6 +1322,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "sample.title": "Próbka danych z pliku"
       },
       en: {
+        "nav.products": "Products",
+        "nav.buildingElements": "Building elements",
         "app.subtitle": "Product data mapping and products.json export",
         "model.title": "Product PIM Model",
         "model.help": "First load two files from PIM: productsModels.json and productsAttributes.json. They define the product model for the whole process.",
@@ -5910,6 +5939,219 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
   </script>
 </body>
 </html>""".replace("__INITIAL_PRODUCT_MODEL_JSON__", initial_model_json).replace("__INITIAL_ANALYSIS_JSON__", initial_analysis_json).replace("__INITIAL_PRODUCT_MODEL_STATUS__", initial_status).replace("__INITIAL_REPORT_HTML__", initial_report_html).replace("__REPORT_EMPTY_HIDDEN__", report_empty_hidden).replace("__INITIAL_SUMMARY__", initial_summary).replace("__MODEL_READY_DISABLED__", model_ready_disabled).replace("__PRODUCT_MODEL_ID_VALUE__", product_model_id_value).replace("__PRODUCTS_STATUS__", products_status).replace("__PRODUCTS_SOURCE_ID__", html.escape(str((initial_analysis or {}).get("source_id") or "")))
+
+
+def render_building_elements_home() -> str:
+    return """<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BuildData AI Products - Elementy budowlane</title>
+  <style>
+    :root {
+      --bg:#f3f5f7; --panel:#fff; --soft:#f8fafc; --line:#d8dde6;
+      --text:#182230; --muted:#667085; --accent:#0f766e; --secondary:#344054;
+      --warn:#9a3412;
+      font-family: Arial, sans-serif;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-size:14px; }
+    header {
+      min-height:58px; display:flex; align-items:center; justify-content:space-between;
+      gap:16px; padding:12px 22px; border-bottom:1px solid var(--line); background:var(--panel);
+    }
+    h1 { margin:0; font-size:20px; }
+    h2 { margin:0 0 8px; font-size:17px; }
+    h3 { margin:0 0 12px; font-size:15px; }
+    p { margin:0 0 14px; color:var(--muted); line-height:1.45; }
+    .header-actions, .top-nav { display:flex; align-items:center; gap:8px; }
+    .top-nav a {
+      display:inline-block; padding:8px 11px; border:1px solid var(--line); border-radius:4px;
+      background:#fff; color:var(--secondary); text-decoration:none; font-weight:700; font-size:13px;
+    }
+    .top-nav a.active { border-color:var(--accent); background:#f0fdfa; color:var(--accent); }
+    select.language-select { width:auto; min-width:140px; padding:7px 9px; }
+    main { display:grid; grid-template-columns:360px 1fr; gap:16px; padding:16px; }
+    .panel {
+      border:1px solid var(--line); border-radius:6px; background:var(--panel);
+      padding:14px; margin-bottom:14px;
+    }
+    label { display:block; margin-top:12px; color:#344054; font-weight:700; font-size:12px; }
+    input[type=file], textarea {
+      width:100%; margin-top:6px; padding:9px 10px; border:1px solid var(--line);
+      border-radius:4px; background:#fff; color:var(--text); font:inherit;
+    }
+    textarea { min-height:110px; font-family:Consolas, "Courier New", monospace; }
+    button {
+      width:100%; margin-top:12px; padding:11px 14px; border:0; border-radius:4px;
+      background:var(--accent); color:#fff; font-weight:700; cursor:pointer;
+    }
+    button.secondary { background:var(--secondary); }
+    pre {
+      min-height:220px; max-height:520px; overflow:auto; padding:12px; border-radius:4px;
+      background:#0f172a; color:#e5e7eb; white-space:pre-wrap;
+    }
+    .status { margin-top:10px; color:var(--muted); line-height:1.45; }
+    .notice {
+      padding:10px; border:1px solid #fed7aa; border-radius:4px;
+      background:#fff7ed; color:var(--warn); line-height:1.45;
+    }
+    @media (max-width:900px) {
+      header { align-items:flex-start; flex-direction:column; }
+      main { grid-template-columns:1fr; }
+      .header-actions, .top-nav { flex-wrap:wrap; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BuildData AI Products</h1>
+    <nav class="top-nav" aria-label="Workspace">
+      <a href="/" data-i18n="nav.products">Produkty</a>
+      <a class="active" href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
+    </nav>
+    <div class="header-actions">
+      <span class="status" data-i18n="app.subtitle">Mapowanie elementów budowlanych na podstawie modelu PIM</span>
+      <select id="languageSelect" class="language-select" aria-label="Language">
+        <option value="pl">Polski</option>
+        <option value="en">English</option>
+      </select>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <div class="panel">
+        <h2 data-i18n="elements.title">Elementy budowlane</h2>
+        <p data-i18n="elements.help">Ten moduł służy do rozpoczęcia mapowania elementów budowlanych. Relacje do produktów wymagają referencyjnego pliku products.json z mapowania produktów.</p>
+        <div class="notice" data-i18n="elements.notice">To jest pierwszy ekran roboczy dla elementów budowlanych. Docelowo będzie rozwinięty do takiego samego poziomu obsługi jak mapowanie produktów.</div>
+      </div>
+      <div class="panel">
+        <h3 data-i18n="elements.files">Model, produkty i dane</h3>
+        <label><span data-i18n="elements.modelFiles">buildingElementsModels.json + buildingElementsAttributes.json</span>
+          <input id="elementModelFiles" type="file" multiple accept=".json">
+        </label>
+        <label><span data-i18n="elements.productsReference">Referencyjne products.json</span>
+          <input id="productReferenceFile" type="file" accept=".json">
+        </label>
+        <label><span data-i18n="elements.importFile">Plik importowany</span>
+          <input id="elementSourceFile" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">
+        </label>
+        <button type="button" onclick="analyzeElements()" data-i18n="elements.analyze">Analizuj elementy budowlane</button>
+        <label><span data-i18n="elements.mappingJson">Mapowanie JSON do podglądu drzewa</span>
+          <textarea id="elementMapping">{}</textarea>
+        </label>
+        <button type="button" class="secondary" onclick="previewElements()" data-i18n="elements.preview">Podgląd drzewa</button>
+        <div id="elementStatus" class="status"></div>
+      </div>
+    </aside>
+    <section class="panel">
+      <h2 data-i18n="elements.result">Wynik analizy</h2>
+      <pre id="elementOutput">{}</pre>
+    </section>
+  </main>
+  <script>
+    const I18N = {
+      pl: {
+        "nav.products": "Produkty",
+        "nav.buildingElements": "Elementy budowlane",
+        "app.subtitle": "Mapowanie elementów budowlanych na podstawie modelu PIM",
+        "elements.title": "Elementy budowlane",
+        "elements.help": "Ten moduł służy do rozpoczęcia mapowania elementów budowlanych. Relacje do produktów wymagają referencyjnego pliku products.json z mapowania produktów.",
+        "elements.notice": "To jest pierwszy ekran roboczy dla elementów budowlanych. Docelowo będzie rozwinięty do takiego samego poziomu obsługi jak mapowanie produktów.",
+        "elements.files": "Model, produkty i dane",
+        "elements.modelFiles": "buildingElementsModels.json + buildingElementsAttributes.json",
+        "elements.productsReference": "Referencyjne products.json",
+        "elements.importFile": "Plik importowany",
+        "elements.analyze": "Analizuj elementy budowlane",
+        "elements.mappingJson": "Mapowanie JSON do podglądu drzewa",
+        "elements.preview": "Podgląd drzewa",
+        "elements.result": "Wynik analizy",
+        "status.ready": "Analiza gotowa.",
+        "status.previewReady": "Podgląd gotowy.",
+        "status.missing": "Brakuje pliku: ",
+        "status.error": "Błąd żądania"
+      },
+      en: {
+        "nav.products": "Products",
+        "nav.buildingElements": "Building elements",
+        "app.subtitle": "Building-element mapping based on the PIM model",
+        "elements.title": "Building elements",
+        "elements.help": "This module starts building-element mapping. Product relations require a reference products.json exported from product mapping.",
+        "elements.notice": "This is the first working screen for building elements. It will be expanded to the same operational depth as product mapping.",
+        "elements.files": "Model, products and data",
+        "elements.modelFiles": "buildingElementsModels.json + buildingElementsAttributes.json",
+        "elements.productsReference": "Reference products.json",
+        "elements.importFile": "Imported file",
+        "elements.analyze": "Analyze building elements",
+        "elements.mappingJson": "Mapping JSON for tree preview",
+        "elements.preview": "Tree preview",
+        "elements.result": "Analysis result",
+        "status.ready": "Analysis ready.",
+        "status.previewReady": "Preview ready.",
+        "status.missing": "Missing file: ",
+        "status.error": "Request error"
+      }
+    };
+    let currentLang = localStorage.getItem("aiDataMasterLang") || "pl";
+    const $ = (id) => document.getElementById(id);
+    function t(key) { return I18N[currentLang]?.[key] || I18N.pl[key] || key; }
+    function applyLanguage() {
+      document.documentElement.lang = currentLang;
+      $("languageSelect").value = currentLang;
+      for (const element of document.querySelectorAll("[data-i18n]")) {
+        element.textContent = t(element.dataset.i18n);
+      }
+    }
+    $("languageSelect").addEventListener("change", (event) => {
+      currentLang = event.target.value;
+      localStorage.setItem("aiDataMasterLang", currentLang);
+      applyLanguage();
+    });
+    function addFiles(form, name, input) {
+      [...input.files].forEach((file) => form.append(name, file));
+    }
+    function addRequiredFile(form, name, input, label) {
+      const file = input.files[0];
+      if (!file) throw new Error(t("status.missing") + label);
+      form.append(name, file);
+    }
+    async function postForm(url, form) {
+      const response = await fetch(url, { method: "POST", body: form });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || t("status.error"));
+      return payload;
+    }
+    async function analyzeElements() {
+      const form = new FormData();
+      try {
+        addFiles(form, "model_files", $("elementModelFiles"));
+        addRequiredFile(form, "products_reference", $("productReferenceFile"), "products.json");
+        addRequiredFile(form, "file", $("elementSourceFile"), t("elements.importFile"));
+        const payload = await postForm("/api/building-elements/analyze", form);
+        $("elementOutput").textContent = JSON.stringify(payload, null, 2);
+        $("elementStatus").textContent = t("status.ready");
+      } catch (error) {
+        $("elementStatus").textContent = error.message;
+      }
+    }
+    async function previewElements() {
+      const form = new FormData();
+      try {
+        addRequiredFile(form, "products_reference", $("productReferenceFile"), "products.json");
+        addRequiredFile(form, "file", $("elementSourceFile"), t("elements.importFile"));
+        form.append("mapping_json", $("elementMapping").value || "{}");
+        const payload = await postForm("/api/building-elements/preview", form);
+        $("elementOutput").textContent = JSON.stringify(payload, null, 2);
+        $("elementStatus").textContent = t("status.previewReady");
+      } catch (error) {
+        $("elementStatus").textContent = error.message;
+      }
+    }
+    applyLanguage();
+  </script>
+</body>
+</html>"""
 
 
 def render_initial_model_report(initial_model: dict) -> str:
