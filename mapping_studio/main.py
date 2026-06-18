@@ -10,19 +10,19 @@ from mapping_studio.services.mapping_analyzer import analyze_source_tables, bund
 from mapping_studio.services.pim_model_loader import load_building_element_model, load_product_model
 from mapping_studio.services.product_reference import build_product_reference_index
 from mapping_studio.services.source_reader import read_source_tables
-from mapping_studio.web import render_studio
+from data_master_app.web_ui import render_home
 
-app = FastAPI(title="BuildData AI Mapping Studio", version="0.1.0")
+app = FastAPI(title="BuildData AI Products", version="0.1.0")
 
 
 @app.get("/", response_class=HTMLResponse)
 def home() -> HTMLResponse:
-    return HTMLResponse(render_studio(), media_type="text/html; charset=utf-8")
+    return HTMLResponse(render_home(), media_type="text/html; charset=utf-8")
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "app": "BuildData AI Products"}
 
 
 @app.post("/api/products/model")
