@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 
 from data_master_app.converter import analyze_uploaded_file as legacy_analyze_products_file
 from data_master_app.converter import convert_products_file as legacy_convert_products_file
-from mapping_studio.services.building_preview import preview_building_elements
+from mapping_studio.services.building_preview import preview_building_elements_from_tables
 from mapping_studio.services.mapping_analyzer import analyze_source_tables, bundle_payload
 from mapping_studio.services.pim_model_loader import load_building_element_model, load_product_model
 from mapping_studio.services.product_reference import build_product_reference_index
@@ -140,7 +140,7 @@ async def building_elements_preview(
             if reference_content:
                 product_index = build_product_reference_index(reference_content)
         mapping = json.loads(mapping_json or "{}")
-        return preview_building_elements(rows, mapping, product_index)
+        return preview_building_elements_from_tables(tables, mapping, product_index)
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

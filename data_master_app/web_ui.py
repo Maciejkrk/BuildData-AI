@@ -6071,9 +6071,9 @@ def render_building_elements_home() -> str:
     .model-map-group:first-child { border-top:0; }
     .model-map-row {
       display:grid;
-      grid-template-columns:minmax(220px, 1fr) minmax(150px, 220px) minmax(220px, 320px);
+      grid-template-columns:minmax(220px, 1fr) minmax(120px, 170px) minmax(150px, 210px) minmax(170px, 240px);
       gap:12px;
-      align-items:center;
+      align-items:start;
       padding:10px 12px;
       border-top:1px solid #eef2f6;
     }
@@ -6091,6 +6091,30 @@ def render_building_elements_home() -> str:
       border:1px solid var(--line);
       border-radius:4px;
       background:#fff;
+    }
+    .model-cleanup {
+      grid-column:1 / -1;
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+      gap:8px;
+      padding:8px;
+      border:1px solid #eef2f6;
+      border-radius:4px;
+      background:#fbfcfd;
+    }
+    .model-cleanup label { margin:0; font-weight:600; color:var(--muted); }
+    .model-cleanup input {
+      width:100%;
+      margin-top:4px;
+      padding:7px;
+      border:1px solid var(--line);
+      border-radius:4px;
+    }
+    .model-options {
+      grid-column:1 / -1;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.4;
     }
     .raw-json-toggle {
       width:auto;
@@ -6287,10 +6311,14 @@ def render_building_elements_home() -> str:
     }
     function renderElementMappingEditor(payload) {
       const tables = payload.tables || [];
-      const table = tables[0] || {};
-      const columns = table.columns || [];
       const fields = payload.model?.fields || [];
-      const suggested = table.suggested_mapping?.mapping || {};
+      const firstTable = tables[0]?.name || "";
+      const columnsForFirstTable = tables[0]?.columns || [];
+      const tableOptions = (selected) => [
+        `<option value="">-- tabela --</option>`,
+        ...tables.map((table) => `<option value="${escapeHtml(table.name)}" ${table.name === selected ? "selected" : ""}>${escapeHtml(table.name)}</option>`)
+      ].join("");
+      const suggested = tables[0]?.suggested_mapping?.mapping || {};
       const suggestedByTarget = {};
       for (const [source, target] of Object.entries(suggested)) {
         if (!suggestedByTarget[target]) suggestedByTarget[target] = source;
@@ -6304,24 +6332,43 @@ def render_building_elements_home() -> str:
         if (!groups[group]) groups[group] = [];
         groups[group].push(field);
       }
-      const options = (selected) => [
+      const columnOptions = (selected, tableName) => [
         `<option value="">-- nie mapuj teraz --</option>`,
-        ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
+        ...(columnsForElementTable(tableName) || []).map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
       ].join("");
       const groupHtml = Object.entries(groups).map(([group, groupFields]) => `
         <div class="model-map-group">${escapeHtml(group)}</div>
-        ${groupFields.map((field) => `
+        ${groupFields.map((field) => {
+          const selectedColumn = suggestedByTarget[field.key] || "";
+          const selectedTable = selectedColumn ? firstTable : "";
+          const optionLabels = (field.options || []).map((option) => option.label || option.value).filter(Boolean).slice(0, 10).join(", ");
+          const isChoice = ["single_choice", "multi_choice"].includes(field.kind);
+          return `
           <div class="model-map-row">
             <div class="model-map-label">
               <strong>${escapeHtml(field.label || field.key)}</strong>
               <span>${escapeHtml(field.key)}</span>
             </div>
             <div class="model-map-kind">${escapeHtml(field.kind || "")}${field.required ? " / wymagane" : ""}</div>
-            <select data-element-target="${escapeHtml(field.key)}" onchange="syncElementMappingTextarea()">
-              ${options(suggestedByTarget[field.key] || "")}
+            <select data-element-table="${escapeHtml(field.key)}" onchange="refreshElementColumnSelect(this); syncElementMappingTextarea()">
+              ${tableOptions(selectedTable)}
             </select>
+            <select data-element-column="${escapeHtml(field.key)}" onchange="syncElementMappingTextarea()">
+              ${columnOptions(selectedColumn, selectedTable)}
+            </select>
+            <div class="model-cleanup">
+              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="trim" checked onchange="syncElementMappingTextarea()"> trim</label>
+              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="decimalComma" onchange="syncElementMappingTextarea()"> przecinek -> kropka</label>
+              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="parseNumber" onchange="syncElementMappingTextarea()"> tylko liczba</label>
+              <label>usuń tekst<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="removeText" oninput="syncElementMappingTextarea()"></label>
+              <label>separator<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitBy" oninput="syncElementMappingTextarea()"></label>
+              <label>część<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitPart" type="number" min="1" oninput="syncElementMappingTextarea()"></label>
+              <label>przelicznik<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="unitConversionFactor" oninput="syncElementMappingTextarea()"></label>
+              <label>jednostka docelowa<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="targetUnit" value="${escapeHtml(field.unit || "")}" oninput="syncElementMappingTextarea()"></label>
+            </div>
+            ${isChoice ? `<div class="model-options"><strong>Opcje z modelu:</strong> ${escapeHtml(optionLabels || "brak opcji w eksporcie modelu")}<br>Mapowanie wartości słownikowych dodamy jako następny krok: wartość z pliku -> opcja PIM.</div>` : ""}
           </div>
-        `).join("")}
+        `}).join("")}
       `).join("");
       const relationItems = (payload.model?.relations || []).map((relation) => `<li>${escapeHtml(relation.label)}: model ${escapeHtml(relation.source_model_id)} -> ${escapeHtml(relation.target_model_id)}</li>`).join("");
       return `
@@ -6332,10 +6379,45 @@ def render_building_elements_home() -> str:
         <ul class="tree-list">${relationItems || "<li>Brak relacji zagnieżdżonych w modelu.</li>"}</ul>
       `;
     }
+    function columnsForElementTable(tableName) {
+      const table = (lastElementAnalysis?.tables || []).find((item) => item.name === tableName);
+      return table?.columns || [];
+    }
+    function refreshElementColumnSelect(tableSelect) {
+      const target = tableSelect.dataset.elementTable;
+      const columnSelect = document.querySelector(`[data-element-column="${CSS.escape(target)}"]`);
+      if (!columnSelect) return;
+      const current = columnSelect.value;
+      const columns = columnsForElementTable(tableSelect.value);
+      columnSelect.innerHTML = [
+        `<option value="">-- nie mapuj teraz --</option>`,
+        ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === current ? "selected" : ""}>${escapeHtml(column)}</option>`)
+      ].join("");
+    }
+    function cleanupForTarget(target) {
+      const cleanup = {};
+      for (const input of document.querySelectorAll(`[data-cleanup="${CSS.escape(target)}"]`)) {
+        const key = input.dataset.cleanupKey;
+        if (!key) continue;
+        if (input.type === "checkbox") {
+          if (input.checked) cleanup[key] = true;
+        } else if (input.value) {
+          cleanup[key] = input.value;
+        }
+      }
+      return cleanup;
+    }
     function collectElementMapping() {
       const mapping = {};
-      for (const select of document.querySelectorAll("[data-element-target]")) {
-        if (select.value) mapping[select.value] = select.dataset.elementTarget;
+      for (const tableSelect of document.querySelectorAll("[data-element-table]")) {
+        const target = tableSelect.dataset.elementTable;
+        const columnSelect = document.querySelector(`[data-element-column="${CSS.escape(target)}"]`);
+        if (!target || !tableSelect.value || !columnSelect?.value) continue;
+        mapping[target] = {
+          table: tableSelect.value,
+          column: columnSelect.value,
+          cleanup: cleanupForTarget(target),
+        };
       }
       return mapping;
     }

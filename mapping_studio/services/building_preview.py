@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from data_master_app.mapping import apply_cleanup
 from mapping_studio.models import ProductReferenceIndex
+from mapping_studio.services.source_reader import SourceTable
 from mapping_studio.services.normalization import lookup_key
 
 
@@ -39,7 +41,61 @@ def preview_building_elements(rows: list[dict[str, Any]], mapping: dict[str, str
     }
 
 
+def preview_building_elements_from_tables(
+    tables: list[SourceTable],
+    mapping_profile: dict[str, Any],
+    product_index: ProductReferenceIndex | None,
+) -> dict[str, Any]:
+    if not mapping_profile:
+        return preview_building_elements(tables[0].rows if tables else [], {}, product_index)
+    if is_legacy_mapping(mapping_profile):
+        return preview_building_elements(tables[0].rows if tables else [], mapping_profile, product_index)
+
+    rows = mapped_rows_from_profile(tables, mapping_profile)
+    return preview_building_elements(rows, {}, product_index)
+
+
+def is_legacy_mapping(mapping_profile: dict[str, Any]) -> bool:
+    return all(isinstance(value, str) for value in mapping_profile.values())
+
+
+def mapped_rows_from_profile(tables: list[SourceTable], mapping_profile: dict[str, Any]) -> list[dict[str, Any]]:
+    tables_by_name = {table.name: table for table in tables}
+    fallback_table = tables[0] if tables else SourceTable("data", [])
+    row_count = max((len(table.rows) for table in tables), default=0)
+    result: list[dict[str, Any]] = []
+    for index in range(row_count):
+        mapped: dict[str, Any] = {}
+        source_context: dict[str, Any] = {}
+        for target_path, rule in mapping_profile.items():
+            if str(target_path).startswith("_") or not isinstance(rule, dict):
+                continue
+            table = tables_by_name.get(str(rule.get("table") or "")) or fallback_table
+            if index >= len(table.rows):
+                continue
+            source_row = table.rows[index]
+            column = rule.get("column")
+            if not column:
+                continue
+            value = source_row.get(str(column))
+            cleanup = rule.get("cleanup") or {}
+            value = apply_cleanup(value, cleanup, source_row)
+            if value not in (None, ""):
+                mapped[target_path] = value
+            source_context[target_path] = {
+                "table": table.name,
+                "column": column,
+                "row": index + 1,
+            }
+        if mapped:
+            mapped["_source_context"] = source_context
+            result.append(mapped)
+    return result
+
+
 def apply_simple_mapping(row: dict[str, Any], mapping: dict[str, str]) -> dict[str, Any]:
+    if not mapping:
+        return dict(row)
     mapped: dict[str, Any] = {}
     for source, target in mapping.items():
         if target and target != "ignore":
@@ -63,4 +119,3 @@ def normalize_tree(systems: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
             variants.append({"name": variant["name"], "layers": layers})
         result.append({"name": system["name"], "variants": variants})
     return result
-
