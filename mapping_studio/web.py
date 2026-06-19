@@ -100,9 +100,6 @@ def render_studio() -> str:
           <label>Plik importowany</label>
           <input id="elementSourceFile" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">
           <button onclick="analyzeElements()">Analizuj systemy</button>
-          <label>Mapowanie JSON do podglądu drzewa</label>
-          <textarea id="elementMapping">{}</textarea>
-          <button class="secondary" onclick="previewElements()">Podgląd drzewa</button>
           <div id="elementStatus" class="status"></div>
         </div>
         <div class="panel">
@@ -177,19 +174,6 @@ def render_studio() -> str:
       }
     }
 
-    async function previewElements() {
-      const form = new FormData();
-      try {
-        addRequiredFile(form, 'products_reference', document.getElementById('productReferenceFile'), 'products.json');
-        addRequiredFile(form, 'file', document.getElementById('elementSourceFile'), 'plik importowany');
-        form.append('mapping_json', document.getElementById('elementMapping').value || '{}');
-        const payload = await postForm('/api/building-elements/preview', form);
-        elementOutput.textContent = JSON.stringify(payload, null, 2);
-        elementStatus.textContent = 'Podgląd gotowy.';
-      } catch (error) {
-        elementStatus.textContent = error.message;
-      }
-    }
   </script>
 </body>
 </html>"""

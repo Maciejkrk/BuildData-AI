@@ -6168,10 +6168,6 @@ def render_building_elements_home() -> str:
           <input id="elementSourceFile" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">
         </label>
         <button type="button" onclick="analyzeElements()" data-i18n="elements.analyze">Analizuj elementy budowlane</button>
-        <label><span data-i18n="elements.mappingJson">Mapowanie JSON do podglądu drzewa</span>
-          <textarea id="elementMapping">{}</textarea>
-        </label>
-        <button type="button" class="secondary" onclick="previewElements()" data-i18n="elements.preview">Podgląd drzewa</button>
         <div id="elementStatus" class="status"></div>
       </div>
     </aside>
@@ -6200,8 +6196,6 @@ def render_building_elements_home() -> str:
         "elements.productsReference": "Referencyjne products.json (opcjonalne do analizy, wymagane do eksportu relacji)",
         "elements.importFile": "Plik importowany",
         "elements.analyze": "Analizuj elementy budowlane",
-        "elements.mappingJson": "Mapowanie JSON do podglądu drzewa",
-        "elements.preview": "Podgląd drzewa",
         "elements.result": "Wynik analizy",
         "elements.modeBannerTitle": "Aktualnie mapujesz: ELEMENTY BUDOWLANE",
         "elements.modeBannerText": "Na tym etapie importujemy strukturę systemów, wariantów i warstw. Produkty w warstwach można dopasować później.",
@@ -6224,8 +6218,6 @@ def render_building_elements_home() -> str:
         "elements.productsReference": "Reference products.json (optional for analysis, required for relation export)",
         "elements.importFile": "Imported file",
         "elements.analyze": "Analyze building elements",
-        "elements.mappingJson": "Mapping JSON for tree preview",
-        "elements.preview": "Tree preview",
         "elements.result": "Analysis result",
         "elements.modeBannerTitle": "Currently mapping: BUILDING ELEMENTS",
         "elements.modeBannerText": "This step imports system, variant and layer structure. Layer products can be matched later.",
@@ -6238,6 +6230,8 @@ def render_building_elements_home() -> str:
       }
     };
     let currentLang = localStorage.getItem("aiDataMasterLang") || "pl";
+    let lastElementAnalysis = null;
+    let currentElementMapping = {};
     const $ = (id) => document.getElementById(id);
     function t(key) { return I18N[currentLang]?.[key] || I18N.pl[key] || key; }
     function applyLanguage() {
@@ -6279,21 +6273,6 @@ def render_building_elements_home() -> str:
         const payload = await postForm("/api/building-elements/analyze", form);
         renderElementAnalysis(payload);
         $("elementStatus").textContent = t("status.ready");
-      } catch (error) {
-        $("elementStatus").textContent = error.message;
-      }
-    }
-    async function previewElements() {
-      const form = new FormData();
-      try {
-        addOptionalFile(form, "products_reference", $("productReferenceFile"));
-        addRequiredFile(form, "file", $("elementSourceFile"), t("elements.importFile"));
-        const mapping = collectElementMapping();
-        $("elementMapping").value = JSON.stringify(mapping, null, 2);
-        form.append("mapping_json", JSON.stringify(mapping));
-        const payload = await postForm("/api/building-elements/preview", form);
-        renderElementPreview(payload);
-        $("elementStatus").textContent = t("status.previewReady");
       } catch (error) {
         $("elementStatus").textContent = error.message;
       }
@@ -6350,21 +6329,21 @@ def render_building_elements_home() -> str:
               <span>${escapeHtml(field.key)}</span>
             </div>
             <div class="model-map-kind">${escapeHtml(field.kind || "")}${field.required ? " / wymagane" : ""}</div>
-            <select data-element-table="${escapeHtml(field.key)}" onchange="refreshElementColumnSelect(this); syncElementMappingTextarea()">
+            <select data-element-table="${escapeHtml(field.key)}" onchange="refreshElementMappingState(this)">
               ${tableOptions(selectedTable)}
             </select>
-            <select data-element-column="${escapeHtml(field.key)}" onchange="syncElementMappingTextarea()">
+            <select data-element-column="${escapeHtml(field.key)}" onchange="syncElementMappingState()">
               ${columnOptions(selectedColumn, selectedTable)}
             </select>
             <div class="model-cleanup">
-              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="trim" checked onchange="syncElementMappingTextarea()"> trim</label>
-              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="decimalComma" onchange="syncElementMappingTextarea()"> przecinek -> kropka</label>
-              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="parseNumber" onchange="syncElementMappingTextarea()"> tylko liczba</label>
-              <label>usuń tekst<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="removeText" oninput="syncElementMappingTextarea()"></label>
-              <label>separator<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitBy" oninput="syncElementMappingTextarea()"></label>
-              <label>część<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitPart" type="number" min="1" oninput="syncElementMappingTextarea()"></label>
-              <label>przelicznik<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="unitConversionFactor" oninput="syncElementMappingTextarea()"></label>
-              <label>jednostka docelowa<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="targetUnit" value="${escapeHtml(field.unit || "")}" oninput="syncElementMappingTextarea()"></label>
+              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="trim" checked onchange="syncElementMappingState()"> trim</label>
+              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="decimalComma" onchange="syncElementMappingState()"> przecinek -> kropka</label>
+              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="parseNumber" onchange="syncElementMappingState()"> tylko liczba</label>
+              <label>usuń tekst<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="removeText" oninput="syncElementMappingState()"></label>
+              <label>separator<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitBy" oninput="syncElementMappingState()"></label>
+              <label>część<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitPart" type="number" min="1" oninput="syncElementMappingState()"></label>
+              <label>przelicznik<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="unitConversionFactor" oninput="syncElementMappingState()"></label>
+              <label>jednostka docelowa<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="targetUnit" value="${escapeHtml(field.unit || "")}" oninput="syncElementMappingState()"></label>
             </div>
             ${isChoice ? `<div class="model-options"><strong>Opcje z modelu:</strong> ${escapeHtml(optionLabels || "brak opcji w eksporcie modelu")}<br>Mapowanie wartości słownikowych dodamy jako następny krok: wartość z pliku -> opcja PIM.</div>` : ""}
           </div>
@@ -6394,6 +6373,10 @@ def render_building_elements_home() -> str:
         ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === current ? "selected" : ""}>${escapeHtml(column)}</option>`)
       ].join("");
     }
+    function refreshElementMappingState(tableSelect) {
+      refreshElementColumnSelect(tableSelect);
+      syncElementMappingState();
+    }
     function cleanupForTarget(target) {
       const cleanup = {};
       for (const input of document.querySelectorAll(`[data-cleanup="${CSS.escape(target)}"]`)) {
@@ -6421,8 +6404,8 @@ def render_building_elements_home() -> str:
       }
       return mapping;
     }
-    function syncElementMappingTextarea() {
-      $("elementMapping").value = JSON.stringify(collectElementMapping(), null, 2);
+    function syncElementMappingState() {
+      currentElementMapping = collectElementMapping();
     }
     function renderElementAnalysis(payload) {
       lastElementAnalysis = payload;
@@ -6449,7 +6432,7 @@ def render_building_elements_home() -> str:
         <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
         ${mappingEditor}
       `;
-      syncElementMappingTextarea();
+      syncElementMappingState();
     }
     function renderElementPreview(payload) {
       setRawJson(payload);
