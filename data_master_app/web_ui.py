@@ -1766,13 +1766,14 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
     async function saveProductWorkspaceFilesState() {
       try {
+        const previous = await getProductWorkspaceItem(PRODUCT_WORKSPACE_FILES_KEY) || {};
         const modelFiles = selectedProductModelFiles();
         const productsFile = $("productsFile")?.files?.[0] || loadedProjectFiles.productsFile || null;
         const typicalFile = $("typicalFile")?.files?.[0] || $("typicalFileVisible")?.files?.[0] || loadedProjectFiles.typicalDataFile || null;
         const payload = {
-          productModelFiles: await Promise.all((modelFiles || []).map(projectFileFromFile)),
-          productsFile: productsFile ? await projectFileFromFile(productsFile) : null,
-          typicalDataFile: typicalFile ? await projectFileFromFile(typicalFile) : null,
+          productModelFiles: modelFiles.length ? await Promise.all(modelFiles.map(projectFileFromFile)) : (previous.productModelFiles || []),
+          productsFile: productsFile ? await projectFileFromFile(productsFile) : (previous.productsFile || null),
+          typicalDataFile: typicalFile ? await projectFileFromFile(typicalFile) : (previous.typicalDataFile || null),
           savedAt: new Date().toISOString(),
         };
         await setProductWorkspaceItem(PRODUCT_WORKSPACE_FILES_KEY, payload);
@@ -6565,13 +6566,16 @@ def render_building_elements_home() -> str:
     }
     async function saveElementWorkspaceFilesState() {
       try {
+        const previous = await getElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY) || {};
         const modelFiles = [...$("elementModelFiles").files];
         const sourceFile = $("elementSourceFile").files[0] || null;
         const productsReferenceFile = $("productReferenceFile").files[0] || null;
         const payload = {
-          modelFiles: await Promise.all((modelFiles.length ? modelFiles : loadedElementProjectFiles.modelFiles).map(projectFileFromFile)),
-          sourceFile: sourceFile ? await projectFileFromFile(sourceFile) : (loadedElementProjectFiles.sourceFile ? await projectFileFromFile(loadedElementProjectFiles.sourceFile) : null),
-          productsReferenceFile: productsReferenceFile ? await projectFileFromFile(productsReferenceFile) : (loadedElementProjectFiles.productsReferenceFile ? await projectFileFromFile(loadedElementProjectFiles.productsReferenceFile) : null),
+          modelFiles: modelFiles.length
+            ? await Promise.all(modelFiles.map(projectFileFromFile))
+            : (loadedElementProjectFiles.modelFiles.length ? await Promise.all(loadedElementProjectFiles.modelFiles.map(projectFileFromFile)) : (previous.modelFiles || [])),
+          sourceFile: sourceFile ? await projectFileFromFile(sourceFile) : (loadedElementProjectFiles.sourceFile ? await projectFileFromFile(loadedElementProjectFiles.sourceFile) : (previous.sourceFile || null)),
+          productsReferenceFile: productsReferenceFile ? await projectFileFromFile(productsReferenceFile) : (loadedElementProjectFiles.productsReferenceFile ? await projectFileFromFile(loadedElementProjectFiles.productsReferenceFile) : (previous.productsReferenceFile || null)),
           savedAt: new Date().toISOString(),
         };
         await setElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY, payload);
@@ -6763,8 +6767,12 @@ def render_building_elements_home() -> str:
         $("elementStatus").textContent = currentLang === "pl"
           ? "Proszę czekać, trwa odczyt hierarchii modelu."
           : "Please wait, model hierarchy is loading.";
+        if (!$("elementModelFiles").files.length && !loadedElementProjectFiles.modelFiles.length) {
+          await restoreElementWorkspaceFilesState();
+        }
         const selectedModelFiles = [...$("elementModelFiles").files];
         const modelFiles = selectedModelFiles.length ? selectedModelFiles : loadedElementProjectFiles.modelFiles;
+        if (modelFiles.length < 2) throw new Error(currentLang === "pl" ? "Wczytaj oba pliki modelu: Models i Attributes." : "Load both model files: Models and Attributes.");
         addFilesFromList(form, "files", modelFiles);
         const payload = await postForm("/api/building-elements/model", form);
         renderElementAnalysis({
@@ -6785,8 +6793,12 @@ def render_building_elements_home() -> str:
         $("elementStatus").textContent = currentLang === "pl"
           ? "Proszę czekać, trwa analiza pliku klienta."
           : "Please wait, customer file analysis is running.";
+        if ((!$("elementModelFiles").files.length && !loadedElementProjectFiles.modelFiles.length) || (!$("elementSourceFile").files[0] && !loadedElementProjectFiles.sourceFile)) {
+          await restoreElementWorkspaceFilesState();
+        }
         const selectedModelFiles = [...$("elementModelFiles").files];
         const modelFiles = selectedModelFiles.length ? selectedModelFiles : loadedElementProjectFiles.modelFiles;
+        if (modelFiles.length < 2) throw new Error(currentLang === "pl" ? "Wczytaj oba pliki modelu: Models i Attributes." : "Load both model files: Models and Attributes.");
         addFilesFromList(form, "model_files", modelFiles);
         addOptionalProjectFile(form, "products_reference", $("productReferenceFile"), loadedElementProjectFiles.productsReferenceFile);
         addRequiredProjectFile(form, "file", $("elementSourceFile"), loadedElementProjectFiles.sourceFile, t("elements.importFile"));
