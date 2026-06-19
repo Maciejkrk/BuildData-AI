@@ -38,11 +38,65 @@ def bundle_payload(model: PimModelBundle) -> dict[str, Any]:
                 "required": field.required,
                 "group": field.group,
                 "unit": field.unit,
+                "parent_relation_key": field.parent_relation_key,
                 "options": [option.__dict__ for option in field.options],
             }
             for field in model.fields
         ],
         "relations": [relation.__dict__ for relation in model.relations],
+        "hierarchy": hierarchy_payload(model),
+    }
+
+
+def hierarchy_payload(model: PimModelBundle) -> dict[str, Any]:
+    fields_by_parent: dict[str | None, list[PimField]] = {}
+    for field in model.fields:
+        fields_by_parent.setdefault(field.parent_relation_key, []).append(field)
+
+    relations_by_parent: dict[str | None, list[Any]] = {}
+    for relation in model.relations:
+        relations_by_parent.setdefault(relation.parent_relation_key, []).append(relation)
+
+    def field_payload(field: PimField) -> dict[str, Any]:
+        return {
+            "type": "field",
+            "key": field.key,
+            "label": field.label,
+            "attribute_id": field.attribute_id,
+            "model_id": field.model_id,
+            "kind": field.kind,
+            "required": field.required,
+            "group": field.group,
+            "unit": field.unit,
+            "parent_relation_key": field.parent_relation_key,
+            "options": [option.__dict__ for option in field.options],
+        }
+
+    def relation_payload(parent_key: str | None) -> list[dict[str, Any]]:
+        result = []
+        for relation in relations_by_parent.get(parent_key, []):
+            result.append(
+                {
+                    "type": "relation",
+                    "key": relation.key,
+                    "label": relation.label,
+                    "attribute_id": relation.attribute_id,
+                    "source_model_id": relation.source_model_id,
+                    "target_model_id": relation.target_model_id,
+                    "parent_relation_key": relation.parent_relation_key,
+                    "fields": [field_payload(field) for field in fields_by_parent.get(relation.key, [])],
+                    "children": relation_payload(relation.key),
+                }
+            )
+        return result
+
+    return {
+        "type": "model",
+        "key": f"model.{model.root_model_id}",
+        "label": model.root_model_name,
+        "model_id": model.root_model_id,
+        "fields": [field_payload(field) for field in fields_by_parent.get(None, [])],
+        "children": relation_payload(None),
     }
 
 
@@ -104,4 +158,3 @@ def similarity(left: str, right: str) -> float:
     if not left_tokens or not right_tokens:
         return 0.0
     return len(left_tokens & right_tokens) / len(left_tokens | right_tokens)
-

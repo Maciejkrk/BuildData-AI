@@ -123,6 +123,7 @@ def _load_bundle(models_payload: Any, attributes_payload: Any, *, domain: str, r
                     target_model_id=target_model_id,
                     unit=text_value(attribute.get("Unit")) or None,
                     group=group,
+                    parent_relation_key=parent_relation_key,
                     aliases=aliases(attribute, label),
                     options=options(attribute),
                 )

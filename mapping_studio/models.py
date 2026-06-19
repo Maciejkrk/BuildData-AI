@@ -35,6 +35,7 @@ class PimField:
     target_model_id: int | None = None
     unit: str | None = None
     group: str = "General"
+    parent_relation_key: str | None = None
     aliases: tuple[str, ...] = ()
     options: tuple[PimOption, ...] = ()
 
@@ -65,4 +66,3 @@ class ProductReferenceIndex:
     by_code: dict[str, dict[str, Any]] = field(default_factory=dict)
     by_name: dict[str, dict[str, Any]] = field(default_factory=dict)
     duplicates: dict[str, list[str]] = field(default_factory=dict)
-

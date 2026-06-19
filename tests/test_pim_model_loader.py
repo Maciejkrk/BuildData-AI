@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from mapping_studio.models import FieldKind
+from mapping_studio.services.mapping_analyzer import bundle_payload
 from mapping_studio.services.pim_model_loader import load_building_element_model
 
 
@@ -33,6 +34,15 @@ def test_building_element_model_relations_are_read_from_export() -> None:
     assert [relation.attribute_id for relation in bundle.relations] == [283, 285, 289]
     product_fields = [field for field in bundle.fields if field.attribute_id == 290]
     assert product_fields[0].kind == FieldKind.PRODUCT_REF
+    assert product_fields[0].parent_relation_key == "model.76.attribute.289"
+
+    hierarchy = bundle_payload(bundle)["hierarchy"]
+    assert hierarchy["label"] == "Building Element"
+    assert hierarchy["fields"][0]["attribute_id"] == 280
+    assert hierarchy["children"][0]["attribute_id"] == 283
+    assert hierarchy["children"][0]["fields"][0]["attribute_id"] == 284
+    assert hierarchy["children"][0]["children"][0]["attribute_id"] == 285
+    assert hierarchy["children"][0]["children"][0]["children"][0]["attribute_id"] == 289
 
 
 def test_deleted_attributes_are_not_exposed() -> None:
