@@ -16,6 +16,7 @@ def analyze_source_tables(tables: list[SourceTable], model: PimModelBundle) -> d
                 "rows": len(table.rows),
                 "columns": columns_for_rows(table.rows),
                 "sample_rows": table.rows[:20],
+                "column_values": column_values(table.rows, columns_for_rows(table.rows)),
                 "suggested_mapping": suggest_mapping(table.rows, model.fields),
             }
             for table in tables
@@ -107,6 +108,24 @@ def columns_for_rows(rows: list[dict[str, Any]]) -> list[str]:
             if key not in seen:
                 seen.append(key)
     return seen
+
+
+def column_values(rows: list[dict[str, Any]], columns: list[str], limit: int = 500) -> dict[str, list[Any]]:
+    values: dict[str, list[Any]] = {column: [] for column in columns}
+    seen: dict[str, set[str]] = {column: set() for column in columns}
+    for row in rows:
+        for column in columns:
+            if len(values[column]) >= limit:
+                continue
+            value = row.get(column)
+            if value in (None, ""):
+                continue
+            key = str(value).strip()
+            if not key or key in seen[column]:
+                continue
+            seen[column].add(key)
+            values[column].append(value)
+    return values
 
 
 def suggest_mapping(rows: list[dict[str, Any]], fields: tuple[PimField, ...]) -> dict[str, Any]:

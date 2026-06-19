@@ -1110,6 +1110,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let pimModelAccepted = INITIAL_PRODUCT_MODEL_ACCEPTED;
     let acceptedProductModelSignature = "";
     const PRODUCT_WORKSPACE_KEY = "buildDataAiProductsWorkspace";
+    const PRODUCT_WORKSPACE_FILES_KEY = "products-files";
     const REQUIRED_PRODUCT_MODEL_FILES = [
       { key: "productsmodels", label: "productsModels.json" },
       { key: "productsattributes", label: "productsAttributes.json" }
@@ -1274,7 +1275,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "mapping.splitPart": "WeĹş czÄ™Ĺ›Ä‡ nr",
         "mapping.addExtraction": "Dodaj kolejnÄ… wartoĹ›Ä‡ z tej kolumny",
         "mapping.extraction": "Ekstrakcja",
-        "mapping.trim": "UsuĹ„ spacje z poczÄ…tku i koĹ„ca",
+        "mapping.trim": "Usuń spacje z początku i końca",
         "mapping.decimalComma": "ZamieĹ„ przecinek dziesiÄ™tny na kropkÄ™",
         "mapping.parseNumber": "Zostaw tylko liczbÄ™",
         "mapping.before": "Przed",
@@ -1734,13 +1735,76 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       }
     }
 
-    function restoreProductWorkspaceState() {
+    function openProductWorkspaceDb() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("BuildDataAIWorkspace", 1);
+        request.onupgradeneeded = () => request.result.createObjectStore("items");
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+    async function setProductWorkspaceItem(key, value) {
+      const db = await openProductWorkspaceDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("items", "readwrite");
+        tx.objectStore("items").put(value, key);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    }
+    async function getProductWorkspaceItem(key) {
+      const db = await openProductWorkspaceDb();
+      const value = await new Promise((resolve, reject) => {
+        const tx = db.transaction("items", "readonly");
+        const request = tx.objectStore("items").get(key);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      db.close();
+      return value;
+    }
+    async function saveProductWorkspaceFilesState() {
       try {
+        const modelFiles = selectedProductModelFiles();
+        const productsFile = $("productsFile")?.files?.[0] || loadedProjectFiles.productsFile || null;
+        const typicalFile = $("typicalFile")?.files?.[0] || $("typicalFileVisible")?.files?.[0] || loadedProjectFiles.typicalDataFile || null;
+        const payload = {
+          productModelFiles: await Promise.all((modelFiles || []).map(projectFileFromFile)),
+          productsFile: productsFile ? await projectFileFromFile(productsFile) : null,
+          typicalDataFile: typicalFile ? await projectFileFromFile(typicalFile) : null,
+          savedAt: new Date().toISOString(),
+        };
+        await setProductWorkspaceItem(PRODUCT_WORKSPACE_FILES_KEY, payload);
+      } catch (error) {
+        console.warn("Could not save product files state", error);
+      }
+    }
+    async function restoreProductWorkspaceFilesState() {
+      try {
+        const payload = await getProductWorkspaceItem(PRODUCT_WORKSPACE_FILES_KEY);
+        if (!payload) return;
+        loadedProjectFiles = {
+          productModelFiles: (payload.productModelFiles || []).map(fileFromProjectFile).filter(Boolean),
+          productsFile: fileFromProjectFile(payload.productsFile),
+          typicalDataFile: fileFromProjectFile(payload.typicalDataFile),
+        };
+      } catch (error) {
+        console.warn("Could not restore product files state", error);
+      }
+    }
+    async function restoreProductWorkspaceState() {
+      try {
+        await restoreProductWorkspaceFilesState();
         const raw = sessionStorage.getItem(PRODUCT_WORKSPACE_KEY);
         if (!raw || INITIAL_ANALYSIS?.analysis) return;
         const payload = JSON.parse(raw);
         if (payload.projectName && $("projectName")) $("projectName").value = payload.projectName;
         if (payload.status && $("productsStatus")) $("productsStatus").textContent = payload.status;
+        if (!pimModelAccepted && loadedProjectFiles.productModelFiles.length) {
+          await loadProductModelFields(loadedProjectFiles.productModelFiles);
+          acceptedProductModelSignature = productModelSignature(loadedProjectFiles.productModelFiles);
+        }
         enrichmentSession = payload.enrichmentSession || enrichmentSession;
         mappingWorkspaceTab = payload.mappingWorkspaceTab || mappingWorkspaceTab;
         productMapping = payload.mapping || productMapping;
@@ -5902,6 +5966,18 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     };
 
     $("languageSelect").addEventListener("change", (event) => setLanguage(event.target.value));
+    async function persistProductWorkspaceBeforeNavigation(event) {
+      const link = event.currentTarget;
+      if (!link?.href) return;
+      event.preventDefault();
+      if (activeMode === "products") collectMapping("products");
+      saveProductWorkspaceState();
+      await saveProductWorkspaceFilesState();
+      window.location.href = link.href;
+    }
+    for (const link of document.querySelectorAll(".top-nav a")) {
+      link.addEventListener("click", persistProductWorkspaceBeforeNavigation);
+    }
     if ($("projectName")) $("projectName").addEventListener("input", saveProductWorkspaceState);
     $("saveProjectBtn").addEventListener("click", () => saveProject());
     $("loadProjectFile").addEventListener("change", () => {
@@ -5919,10 +5995,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         }
         resetAfterProductModelChange();
         updateProductModelSelectionStatus();
+        saveProductWorkspaceFilesState();
       });
     }
     $("typicalFile").addEventListener("change", async () => {
       const file = $("typicalFile").files[0];
+      await saveProductWorkspaceFilesState();
       await loadTypicalDataFile(file);
     });
     $("typicalModelsFile").addEventListener("change", async () => {
@@ -5957,6 +6035,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if ($("productsLinksInline")) $("productsLinksInline").innerHTML = "";
       updateWorkflowGate();
       if ($("productsFile").files[0]) {
+        saveProductWorkspaceFilesState();
         $("productsStatus").textContent = currentLang === "pl"
           ? `Wybrano ${$("productsFile").files[0].name}. AnalizujÄ™ plik.`
           : `Selected ${$("productsFile").files[0].name}. Analyzing file.`;
@@ -6431,6 +6510,7 @@ def render_building_elements_home() -> str:
     let loadedElementProject = null;
     let loadedElementProjectFiles = { modelFiles: [], sourceFile: null, productsReferenceFile: null };
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
+    const ELEMENT_WORKSPACE_FILES_KEY = "building-elements-files";
     const $ = (id) => document.getElementById(id);
     function t(key) { return I18N[currentLang]?.[key] || I18N.pl[key] || key; }
     function applyLanguage() {
@@ -6454,8 +6534,67 @@ def render_building_elements_home() -> str:
         console.warn("Could not save building-elements workspace state", error);
       }
     }
-    function restoreElementWorkspaceState() {
+    function openElementWorkspaceDb() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("BuildDataAIWorkspace", 1);
+        request.onupgradeneeded = () => request.result.createObjectStore("items");
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+    async function setElementWorkspaceItem(key, value) {
+      const db = await openElementWorkspaceDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("items", "readwrite");
+        tx.objectStore("items").put(value, key);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    }
+    async function getElementWorkspaceItem(key) {
+      const db = await openElementWorkspaceDb();
+      const value = await new Promise((resolve, reject) => {
+        const tx = db.transaction("items", "readonly");
+        const request = tx.objectStore("items").get(key);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      db.close();
+      return value;
+    }
+    async function saveElementWorkspaceFilesState() {
       try {
+        const modelFiles = [...$("elementModelFiles").files];
+        const sourceFile = $("elementSourceFile").files[0] || null;
+        const productsReferenceFile = $("productReferenceFile").files[0] || null;
+        const payload = {
+          modelFiles: await Promise.all((modelFiles.length ? modelFiles : loadedElementProjectFiles.modelFiles).map(projectFileFromFile)),
+          sourceFile: sourceFile ? await projectFileFromFile(sourceFile) : (loadedElementProjectFiles.sourceFile ? await projectFileFromFile(loadedElementProjectFiles.sourceFile) : null),
+          productsReferenceFile: productsReferenceFile ? await projectFileFromFile(productsReferenceFile) : (loadedElementProjectFiles.productsReferenceFile ? await projectFileFromFile(loadedElementProjectFiles.productsReferenceFile) : null),
+          savedAt: new Date().toISOString(),
+        };
+        await setElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY, payload);
+      } catch (error) {
+        console.warn("Could not save building-elements files state", error);
+      }
+    }
+    async function restoreElementWorkspaceFilesState() {
+      try {
+        const payload = await getElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY);
+        if (!payload) return;
+        loadedElementProjectFiles = {
+          modelFiles: (payload.modelFiles || []).map(fileFromProjectFile).filter(Boolean),
+          sourceFile: fileFromProjectFile(payload.sourceFile),
+          productsReferenceFile: fileFromProjectFile(payload.productsReferenceFile),
+        };
+      } catch (error) {
+        console.warn("Could not restore building-elements files state", error);
+      }
+    }
+    async function restoreElementWorkspaceState() {
+      try {
+        await restoreElementWorkspaceFilesState();
         const raw = sessionStorage.getItem(ELEMENT_WORKSPACE_KEY);
         if (!raw) return;
         const payload = JSON.parse(raw);
@@ -6473,6 +6612,17 @@ def render_building_elements_home() -> str:
       applyLanguage();
       saveElementWorkspaceState();
     });
+    async function persistElementWorkspaceBeforeNavigation(event) {
+      const link = event.currentTarget;
+      if (!link?.href) return;
+      event.preventDefault();
+      syncElementMappingState();
+      await saveElementWorkspaceFilesState();
+      window.location.href = link.href;
+    }
+    for (const link of document.querySelectorAll(".top-nav a")) {
+      link.addEventListener("click", persistElementWorkspaceBeforeNavigation);
+    }
     function addFiles(form, name, input) {
       [...input.files].forEach((file) => form.append(name, file));
     }
@@ -6597,6 +6747,7 @@ def render_building_elements_home() -> str:
         $("elementProjectName").value = loadedElementProject.name || "mapowanie-elementow-budowlanych";
         $("elementProjectStatus").textContent = `${t("project.loaded")} ${loadedElementProject.name || file.name}`;
         saveElementWorkspaceState();
+        await saveElementWorkspaceFilesState();
         if (loadedElementProjectFiles.sourceFile) {
           await analyzeElements();
         } else {
@@ -6693,14 +6844,14 @@ def render_building_elements_home() -> str:
         if (!tableName || !columnName) return [];
         const table = (lastElementAnalysis?.tables || []).find((item) => item.name === tableName);
         const values = [];
-        for (const row of table?.sample_rows || []) {
-          const raw = row?.[columnName];
+        const sourceValues = table?.column_values?.[columnName] || (table?.sample_rows || []).map((row) => row?.[columnName]);
+        for (const raw of sourceValues) {
           if (raw === undefined || raw === null || raw === "") continue;
           for (const part of String(raw).split(/[;,]/).map((item) => item.trim()).filter(Boolean)) {
             if (!values.includes(part)) values.push(part);
           }
         }
-        return values.slice(0, 30);
+        return values.slice(0, 500);
       }
       function elementOptionText(option) {
         return option?.label || option?.value || String(option?.id || "");
@@ -6752,7 +6903,7 @@ def render_building_elements_home() -> str:
             <details class="model-map-details">
               <summary>Szczegóły mapowania i czyszczenia</summary>
               <div class="model-cleanup">
-                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="trim" ${cleanup.trim === false ? "" : "checked"} onchange="syncElementMappingState()"${disabledAttr}> trim</label>
+                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="trim" ${cleanup.trim === false ? "" : "checked"} onchange="syncElementMappingState()"${disabledAttr}> usuń spacje z początku i końca</label>
                 <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="decimalComma" ${cleanup.decimalComma ? "checked" : ""} onchange="syncElementMappingState()"${disabledAttr}> przecinek -> kropka</label>
                 <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="parseNumber" ${cleanup.parseNumber ? "checked" : ""} onchange="syncElementMappingState()"${disabledAttr}> tylko liczba</label>
                 <label>usuń tekst<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="removeText" value="${escapeHtml(cleanup.removeText || "")}" oninput="syncElementMappingState()"${disabledAttr}></label>
@@ -6960,6 +7111,12 @@ def render_building_elements_home() -> str:
       const file = $("elementProjectFile").files[0];
       if (file) loadElementProjectFromFile(file);
     });
+    for (const inputId of ["elementModelFiles", "productReferenceFile", "elementSourceFile"]) {
+      $(inputId).addEventListener("change", async () => {
+        await saveElementWorkspaceFilesState();
+        saveElementWorkspaceState();
+      });
+    }
     restoreElementWorkspaceState();
     applyLanguage();
   </script>
@@ -7148,7 +7305,7 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
                   <label>Na <input type="text" data-cleanup="replaceTo" placeholder="nowa wartoĹ›Ä‡"></label>
                   <label>Podziel po <input type="text" data-cleanup="splitBy" placeholder="np. /, x, ;"></label>
                   <label>CzÄ™Ĺ›Ä‡ po podziale <input type="text" data-cleanup="splitPart" value="1"></label>
-                  <div class="checkbox-row"><input type="checkbox" data-cleanup="trim" checked> UsuĹ„ spacje</div>
+                  <div class="checkbox-row"><input type="checkbox" data-cleanup="trim" checked> Usuń spacje z początku i końca</div>
                   <div class="checkbox-row"><input type="checkbox" data-cleanup="decimalComma"> ZamieĹ„ przecinek dziesiÄ™tny</div>
                   <div class="checkbox-row"><input type="checkbox" data-cleanup="parseNumber"> Odczytaj liczbÄ™</div>
                 </div>
