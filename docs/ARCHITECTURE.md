@@ -72,15 +72,27 @@ mapping_studio/
     mapping_analyzer.py           suggests mappings and exposes target fields
     product_reference.py          indexes completed products.json
     building_preview.py           builds initial building-element tree preview
+
+data_master_app/
+  canonical_model.py              migrated product canonical model
+  mapping_model.py                migrated mapping/enrichment profile model
+  mapping.py                      migrated product/PIM mapping logic
+  converter.py                    migrated product conversion and enrichment
+  main.py                         legacy product app endpoints
+  web_ui.py                       legacy product UI reference
 ```
+
+The new `/api/products/analyze` and `/api/products/convert` endpoints in
+`mapping_studio.main` call the migrated product converter. That keeps product
+behavior regression-tested while the new UI is cleaned up incrementally.
 
 ## Next Implementation Steps
 
-1. Split the product workflow into `mapping_engine`, `product_builder`, and
-   `pim_exporter` services.
-2. Port the proven product tests from the previous prototype, minus UI history.
+1. Split the migrated product workflow into `mapping_engine`,
+   `product_builder`, and `pim_exporter` services behind the studio API.
+2. Replace the legacy product UI with focused studio screens while keeping the
+   regression tests green.
 3. Add project save/load as a single JSON mapping project.
 4. Add full building-element export that preserves nested hashes and parent
    relations from the loaded model.
 5. Add manual product resolution UI for unresolved layer products.
-

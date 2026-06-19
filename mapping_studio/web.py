@@ -78,6 +78,7 @@ def render_studio() -> str:
           <label>Plik importowany</label>
           <input id="productSourceFile" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">
           <button onclick="analyzeProducts()">Analizuj produkty</button>
+          <button class="secondary" onclick="convertProducts()">Eksportuj products.json</button>
           <div id="productStatus" class="status"></div>
         </div>
         <div class="panel">
@@ -144,6 +145,19 @@ def render_studio() -> str:
         const payload = await postForm('/api/products/analyze', form);
         productOutput.textContent = JSON.stringify(payload, null, 2);
         productStatus.textContent = 'Analiza gotowa.';
+      } catch (error) {
+        productStatus.textContent = error.message;
+      }
+    }
+
+    async function convertProducts() {
+      const form = new FormData();
+      try {
+        addFiles(form, 'model_files', document.getElementById('productModelFiles'));
+        addRequiredFile(form, 'file', document.getElementById('productSourceFile'), 'plik importowany');
+        const payload = await postForm('/api/products/convert', form);
+        productOutput.textContent = JSON.stringify(payload, null, 2);
+        productStatus.textContent = 'Eksport gotowy.';
       } catch (error) {
         productStatus.textContent = error.message;
       }

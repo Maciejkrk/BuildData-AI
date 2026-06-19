@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 
+from data_master_app.converter import analyze_uploaded_file as legacy_analyze_products_file
+from data_master_app.converter import convert_products_file as legacy_convert_products_file
 from mapping_studio.services.building_preview import preview_building_elements
 from mapping_studio.services.mapping_analyzer import analyze_source_tables, bundle_payload
 from mapping_studio.services.pim_model_loader import load_building_element_model, load_product_model
@@ -13,6 +17,7 @@ from mapping_studio.services.source_reader import read_source_tables
 from data_master_app.web_ui import render_home
 
 app = FastAPI(title="BuildData AI", version="0.1.0")
+OUTPUT_DIR = Path(__file__).resolve().parents[1] / "outputs"
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -46,10 +51,47 @@ async def building_elements_model(files: list[UploadFile] = File(...)) -> dict[s
 @app.post("/api/products/analyze")
 async def analyze_products(file: UploadFile = File(...), model_files: list[UploadFile] = File(...)) -> dict[str, Any]:
     try:
-        model = load_product_model(await files_payload(model_files))
-        tables = read_source_tables(file.filename or "products", await file.read())
-        return analyze_source_tables(tables, model)
+        content = await file.read()
+        if not content:
+            raise ValueError("Uploaded product file is empty.")
+        return legacy_analyze_products_file(
+            file.filename or "products",
+            content,
+            product_model_files=await files_payload(model_files),
+        )
     except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/products/convert")
+async def convert_products(
+    file: UploadFile = File(...),
+    model_files: list[UploadFile] = File(...),
+    typical_data_file: UploadFile | None = File(None),
+    product_mapping: str | None = Form(None),
+    product_mapping_profile: str | None = Form(None),
+    enrichment_session: str | None = Form(None),
+) -> dict[str, Any]:
+    try:
+        content = await file.read()
+        if not content:
+            raise ValueError("Uploaded product file is empty.")
+        typical_payload = None
+        if typical_data_file is not None:
+            typical_content = await typical_data_file.read()
+            if typical_content:
+                typical_payload = json.loads(typical_content)
+        return legacy_convert_products_file(
+            file.filename or "products",
+            content,
+            OUTPUT_DIR,
+            product_mapping=json.loads(product_mapping) if product_mapping else None,
+            product_mapping_profile=json.loads(product_mapping_profile) if product_mapping_profile else None,
+            enrichment_session=json.loads(enrichment_session) if enrichment_session else None,
+            typical_products_payload=typical_payload,
+            product_model_files=await files_payload(model_files),
+        )
+    except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -100,4 +142,3 @@ async def files_payload(files: list[UploadFile]) -> dict[str, bytes]:
     if not payload:
         raise ValueError("Model files are required.")
     return payload
-

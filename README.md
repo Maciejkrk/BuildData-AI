@@ -94,8 +94,16 @@ http://SERVER_IP:8020
 
 ## Initial Scope
 
-This repository starts from the advanced product mapper built in the previous
-prototype. The next building-element tool should read nested model relations
+This repository contains two layers:
+
+- `data_master_app/` - migrated product workflow from the previous
+  `ai-data-master` prototype, including product mapping, type-series handling,
+  enrichment, export and regression tests.
+- `mapping_studio/` - the new studio shell where products and building elements
+  will be professionalized into one mapper application.
+
+The product workflow now reuses the proven prototype implementation through the
+new studio API. The building-element workflow reads nested model relations
 dynamically from the model export:
 
 ```text
@@ -104,3 +112,25 @@ Building Element -> Variants -> Layers -> Available Products -> Product
 
 The relation names and IDs come from the loaded model files, not from hardcoded
 prototype constants.
+
+## Migrated Product Functionality
+
+The previous product tool has been brought into this repository so that the next
+work can build from the full tested behavior rather than from notes only.
+
+Migrated areas:
+
+- product canonical model,
+- mapping profile model,
+- PIM model field extraction,
+- source readers for `.xlsx`, `.json`, `.csv` and `.tsv`,
+- product mapping suggestions,
+- type-series row rules,
+- value cleanup and unit conversion helpers,
+- dictionary value mapping,
+- product enrichment from manual and typical-data sessions,
+- `products.json` export,
+- legacy FastAPI endpoints and server-rendered UI,
+- regression tests from the previous project.
+
+The old UI is kept as a working reference, not as the final studio interface.
