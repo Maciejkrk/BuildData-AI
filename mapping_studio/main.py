@@ -99,16 +99,24 @@ async def convert_products(
 async def analyze_building_elements(
     file: UploadFile = File(...),
     model_files: list[UploadFile] = File(...),
-    products_reference: UploadFile = File(...),
+    products_reference: UploadFile | None = File(None),
 ) -> dict[str, Any]:
     try:
         model = load_building_element_model(await files_payload(model_files))
-        product_index = build_product_reference_index(await products_reference.read())
+        product_index = None
+        if products_reference is not None:
+            reference_content = await products_reference.read()
+            if reference_content:
+                product_index = build_product_reference_index(reference_content)
         tables = read_source_tables(file.filename or "building-elements", await file.read())
         analysis = analyze_source_tables(tables, model)
         analysis["product_reference"] = {
-            "products_count": product_index.products_count,
-            "duplicates": product_index.duplicates,
+            "loaded": product_index is not None,
+            "products_count": product_index.products_count if product_index else 0,
+            "duplicates": product_index.duplicates if product_index else {},
+            "message": "Referencja products.json nie jest jeszcze wczytana. Produkty w warstwach będzie można dopasować później."
+            if product_index is None
+            else "Referencja products.json jest wczytana.",
         }
         return analysis
     except ValueError as exc:
@@ -118,7 +126,7 @@ async def analyze_building_elements(
 @app.post("/api/building-elements/preview")
 async def building_elements_preview(
     file: UploadFile = File(...),
-    products_reference: UploadFile = File(...),
+    products_reference: UploadFile | None = File(None),
     mapping_json: str = Form("{}"),
 ) -> dict[str, Any]:
     import json
@@ -126,7 +134,11 @@ async def building_elements_preview(
     try:
         tables = read_source_tables(file.filename or "building-elements", await file.read())
         rows = tables[0].rows if tables else []
-        product_index = build_product_reference_index(await products_reference.read())
+        product_index = None
+        if products_reference is not None:
+            reference_content = await products_reference.read()
+            if reference_content:
+                product_index = build_product_reference_index(reference_content)
         mapping = json.loads(mapping_json or "{}")
         return preview_building_elements(rows, mapping, product_index)
     except (ValueError, json.JSONDecodeError) as exc:

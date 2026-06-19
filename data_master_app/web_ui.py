@@ -6029,6 +6029,36 @@ def render_building_elements_home() -> str:
       min-height:220px; max-height:520px; overflow:auto; padding:12px; border-radius:4px;
       background:#0f172a; color:#e5e7eb; white-space:pre-wrap;
     }
+    .mode-banner {
+      border:1px solid #99f6e4;
+      background:#f0fdfa;
+      color:#115e59;
+      border-radius:6px;
+      padding:14px;
+      margin-bottom:14px;
+    }
+    .mode-banner strong { display:block; font-size:18px; margin-bottom:4px; }
+    .summary-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
+      gap:10px;
+      margin:12px 0;
+    }
+    .summary-card {
+      border:1px solid var(--line);
+      border-radius:6px;
+      padding:10px;
+      background:#fff;
+    }
+    .summary-card strong { display:block; font-size:20px; color:var(--text); }
+    .summary-card span { color:var(--muted); font-size:12px; }
+    .tree-list { margin:12px 0 0; padding-left:18px; line-height:1.55; }
+    .raw-json-toggle {
+      width:auto;
+      padding:8px 10px;
+      margin-top:10px;
+      background:var(--secondary);
+    }
     .status { margin-top:10px; color:var(--muted); line-height:1.45; }
     .notice {
       padding:10px; border:1px solid #fed7aa; border-radius:4px;
@@ -6083,8 +6113,14 @@ def render_building_elements_home() -> str:
       </div>
     </aside>
     <section class="panel">
+      <div class="mode-banner">
+        <strong data-i18n="elements.modeBannerTitle">Aktualnie mapujesz: ELEMENTY BUDOWLANE</strong>
+        <span data-i18n="elements.modeBannerText">Na tym etapie importujemy strukturę systemów, wariantów i warstw. Produkty w warstwach można dopasować później.</span>
+      </div>
       <h2 data-i18n="elements.result">Wynik analizy</h2>
-      <pre id="elementOutput">{}</pre>
+      <div id="elementSummary" class="notice" data-i18n="elements.emptyResult">Wczytaj model elementów i plik importowany, a następnie kliknij analizę. Referencyjne products.json jest opcjonalne na tym etapie.</div>
+      <button type="button" class="raw-json-toggle" onclick="toggleRawJson()" data-i18n="elements.rawJson">Pokaż / ukryj surowy JSON</button>
+      <pre id="elementOutput" hidden>{}</pre>
     </section>
   </main>
   <script>
@@ -6098,12 +6134,16 @@ def render_building_elements_home() -> str:
         "elements.notice": "To jest pierwszy ekran roboczy dla elementów budowlanych. Docelowo będzie rozwinięty do takiego samego poziomu obsługi jak mapowanie produktów.",
         "elements.files": "Model, produkty i dane",
         "elements.modelFiles": "buildingElementsModels.json + buildingElementsAttributes.json",
-        "elements.productsReference": "Referencyjne products.json",
+        "elements.productsReference": "Referencyjne products.json (opcjonalne do analizy, wymagane do eksportu relacji)",
         "elements.importFile": "Plik importowany",
         "elements.analyze": "Analizuj elementy budowlane",
         "elements.mappingJson": "Mapowanie JSON do podglądu drzewa",
         "elements.preview": "Podgląd drzewa",
         "elements.result": "Wynik analizy",
+        "elements.modeBannerTitle": "Aktualnie mapujesz: ELEMENTY BUDOWLANE",
+        "elements.modeBannerText": "Na tym etapie importujemy strukturę systemów, wariantów i warstw. Produkty w warstwach można dopasować później.",
+        "elements.emptyResult": "Wczytaj model elementów i plik importowany, a następnie kliknij analizę. Referencyjne products.json jest opcjonalne na tym etapie.",
+        "elements.rawJson": "Pokaż / ukryj surowy JSON",
         "status.ready": "Analiza gotowa.",
         "status.previewReady": "Podgląd gotowy.",
         "status.missing": "Brakuje pliku: ",
@@ -6118,12 +6158,16 @@ def render_building_elements_home() -> str:
         "elements.notice": "This is the first working screen for building elements. It will be expanded to the same operational depth as product mapping.",
         "elements.files": "Model, products and data",
         "elements.modelFiles": "buildingElementsModels.json + buildingElementsAttributes.json",
-        "elements.productsReference": "Reference products.json",
+        "elements.productsReference": "Reference products.json (optional for analysis, required for relation export)",
         "elements.importFile": "Imported file",
         "elements.analyze": "Analyze building elements",
         "elements.mappingJson": "Mapping JSON for tree preview",
         "elements.preview": "Tree preview",
         "elements.result": "Analysis result",
+        "elements.modeBannerTitle": "Currently mapping: BUILDING ELEMENTS",
+        "elements.modeBannerText": "This step imports system, variant and layer structure. Layer products can be matched later.",
+        "elements.emptyResult": "Load the building-element model and imported file, then run analysis. Reference products.json is optional at this step.",
+        "elements.rawJson": "Show / hide raw JSON",
         "status.ready": "Analysis ready.",
         "status.previewReady": "Preview ready.",
         "status.missing": "Missing file: ",
@@ -6153,6 +6197,10 @@ def render_building_elements_home() -> str:
       if (!file) throw new Error(t("status.missing") + label);
       form.append(name, file);
     }
+    function addOptionalFile(form, name, input) {
+      const file = input.files[0];
+      if (file) form.append(name, file);
+    }
     async function postForm(url, form) {
       const response = await fetch(url, { method: "POST", body: form });
       const payload = await response.json();
@@ -6163,10 +6211,10 @@ def render_building_elements_home() -> str:
       const form = new FormData();
       try {
         addFiles(form, "model_files", $("elementModelFiles"));
-        addRequiredFile(form, "products_reference", $("productReferenceFile"), "products.json");
+        addOptionalFile(form, "products_reference", $("productReferenceFile"));
         addRequiredFile(form, "file", $("elementSourceFile"), t("elements.importFile"));
         const payload = await postForm("/api/building-elements/analyze", form);
-        $("elementOutput").textContent = JSON.stringify(payload, null, 2);
+        renderElementAnalysis(payload);
         $("elementStatus").textContent = t("status.ready");
       } catch (error) {
         $("elementStatus").textContent = error.message;
@@ -6175,15 +6223,71 @@ def render_building_elements_home() -> str:
     async function previewElements() {
       const form = new FormData();
       try {
-        addRequiredFile(form, "products_reference", $("productReferenceFile"), "products.json");
+        addOptionalFile(form, "products_reference", $("productReferenceFile"));
         addRequiredFile(form, "file", $("elementSourceFile"), t("elements.importFile"));
         form.append("mapping_json", $("elementMapping").value || "{}");
         const payload = await postForm("/api/building-elements/preview", form);
-        $("elementOutput").textContent = JSON.stringify(payload, null, 2);
+        renderElementPreview(payload);
         $("elementStatus").textContent = t("status.previewReady");
       } catch (error) {
         $("elementStatus").textContent = error.message;
       }
+    }
+    function toggleRawJson() {
+      $("elementOutput").hidden = !$("elementOutput").hidden;
+    }
+    function setRawJson(payload) {
+      $("elementOutput").textContent = JSON.stringify(payload, null, 2);
+    }
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[char]));
+    }
+    function renderElementAnalysis(payload) {
+      setRawJson(payload);
+      const tables = payload.tables || [];
+      const fields = payload.model?.fields || [];
+      const relations = payload.model?.relations || [];
+      const rows = tables.reduce((sum, table) => sum + (table.rows || 0), 0);
+      const reference = payload.product_reference || {};
+      const tableItems = tables.map((table) => `<li>${escapeHtml(table.name)}: ${table.rows || 0} wierszy, ${(table.columns || []).length} kolumn</li>`).join("");
+      $("elementSummary").className = "panel";
+      $("elementSummary").innerHTML = `
+        <h3>Analiza elementów budowlanych</h3>
+        <div class="summary-grid">
+          <div class="summary-card"><strong>${tables.length}</strong><span>tabele</span></div>
+          <div class="summary-card"><strong>${rows}</strong><span>wiersze</span></div>
+          <div class="summary-card"><strong>${fields.length}</strong><span>pola modelu PIM</span></div>
+          <div class="summary-card"><strong>${relations.length}</strong><span>relacje zagnieżdżone</span></div>
+          <div class="summary-card"><strong>${reference.products_count || 0}</strong><span>produkty referencyjne</span></div>
+        </div>
+        <p>${escapeHtml(reference.message || "")}</p>
+        <h3>Wczytane tabele</h3>
+        <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
+      `;
+    }
+    function renderElementPreview(payload) {
+      setRawJson(payload);
+      const systems = payload.systems || [];
+      const quality = payload.quality || {};
+      const systemItems = systems.map((system) => {
+        const variants = (system.variants || []).map((variant) => {
+          const layers = (variant.layers || []).map((layer) => `<li>${escapeHtml(layer.name)}: ${(layer.products || []).length} produktów, wiersze ${(layer.source_rows || []).join(", ")}</li>`).join("");
+          return `<li><strong>${escapeHtml(variant.name)}</strong><ul>${layers}</ul></li>`;
+        }).join("");
+        return `<li><strong>${escapeHtml(system.name)}</strong><ul>${variants}</ul></li>`;
+      }).join("");
+      $("elementSummary").className = "panel";
+      $("elementSummary").innerHTML = `
+        <h3>Podgląd struktury elementów budowlanych</h3>
+        <div class="summary-grid">
+          <div class="summary-card"><strong>${quality.systems || systems.length}</strong><span>systemy</span></div>
+          <div class="summary-card"><strong>${quality.unresolved_products_count || 0}</strong><span>produkty do dopasowania</span></div>
+          <div class="summary-card"><strong>${quality.product_reference_loaded ? "tak" : "nie"}</strong><span>referencja products.json</span></div>
+        </div>
+        <ul class="tree-list">${systemItems || "<li>Brak danych do pokazania. Sprawdź mapowanie i plik importowany.</li>"}</ul>
+      `;
     }
     applyLanguage();
   </script>

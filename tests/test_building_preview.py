@@ -36,3 +36,20 @@ def test_building_preview_requires_resolved_product_reference() -> None:
     assert preview["quality"]["unresolved_products_count"] == 1
     assert preview["systems"][0]["variants"][0]["layers"][0]["products"][0]["resolved"] is True
 
+
+def test_building_preview_can_start_without_product_reference() -> None:
+    rows = [
+        {
+            "Nazwa systemu": "System 1",
+            "Wariant": "Wariant A",
+            "Nazwa warstwy": "Warstwa 1",
+            "Nazwa produktu": "Produkt do pozniejszego dopasowania",
+        }
+    ]
+
+    preview = preview_building_elements(rows, {}, None)
+
+    assert preview["quality"]["systems"] == 1
+    assert preview["quality"]["product_reference_loaded"] is False
+    assert preview["quality"]["unresolved_products_count"] == 1
+    assert preview["systems"][0]["variants"][0]["layers"][0]["products"][0]["resolved"] is False
