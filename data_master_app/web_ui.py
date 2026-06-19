@@ -1086,6 +1086,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let supplementProductsUrl = "";
     let activeTable = null;
     let activeMode = null;
+    let lastProductAnalysis = null;
     let loadedProject = null;
     let loadedProjectFiles = { productModelFiles: [], productsFile: null, typicalDataFile: null };
     let enrichmentSession = { manual_entries: [], typical_sources: [], typical_matches: [] };
@@ -1108,6 +1109,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let lastElementAnalysis = null;
     let pimModelAccepted = INITIAL_PRODUCT_MODEL_ACCEPTED;
     let acceptedProductModelSignature = "";
+    const PRODUCT_WORKSPACE_KEY = "buildDataAiProductsWorkspace";
     const REQUIRED_PRODUCT_MODEL_FILES = [
       { key: "productsmodels", label: "productsModels.json" },
       { key: "productsattributes", label: "productsAttributes.json" }
@@ -1711,6 +1713,50 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       currentLang = language;
       localStorage.setItem("aiDataMasterLang", language);
       applyLanguage();
+      saveProductWorkspaceState();
+    }
+
+    function saveProductWorkspaceState() {
+      try {
+        const payload = {
+          projectName: $("projectName")?.value || "",
+          analysis: lastProductAnalysis,
+          mapping: productMapping,
+          mappingProfile: productMappingProfile,
+          enrichmentSession,
+          mappingWorkspaceTab,
+          status: $("productsStatus")?.textContent || "",
+          savedAt: new Date().toISOString(),
+        };
+        sessionStorage.setItem(PRODUCT_WORKSPACE_KEY, JSON.stringify(payload));
+      } catch (error) {
+        console.warn("Could not save product workspace state", error);
+      }
+    }
+
+    function restoreProductWorkspaceState() {
+      try {
+        const raw = sessionStorage.getItem(PRODUCT_WORKSPACE_KEY);
+        if (!raw || INITIAL_ANALYSIS?.analysis) return;
+        const payload = JSON.parse(raw);
+        if (payload.projectName && $("projectName")) $("projectName").value = payload.projectName;
+        if (payload.status && $("productsStatus")) $("productsStatus").textContent = payload.status;
+        enrichmentSession = payload.enrichmentSession || enrichmentSession;
+        mappingWorkspaceTab = payload.mappingWorkspaceTab || mappingWorkspaceTab;
+        productMapping = payload.mapping || productMapping;
+        productMappingProfile = payload.mappingProfile || productMappingProfile;
+        if (payload.mappingProfile) {
+          loadedProject = {
+            ...(loadedProject || {}),
+            product_mapping: payload.mapping || {},
+            product_mapping_profile: payload.mappingProfile || {},
+            enrichment_session: enrichmentSession,
+          };
+        }
+        if (payload.analysis) renderAnalysis(payload.analysis, "products");
+      } catch (error) {
+        console.warn("Could not restore product workspace state", error);
+      }
     }
 
     const esc = (value) => String(value ?? "")
@@ -4286,6 +4332,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       renderProductPreview();
       refreshTargetStructure();
       attachChoiceMapEvents(mode);
+      if (mode === "products") saveProductWorkspaceState();
       return result;
     }
 
@@ -5602,11 +5649,15 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 
       activeTable = best;
       activeMode = mode;
-      if (mode === "products") mainProductTable = best;
+      if (mode === "products") {
+        mainProductTable = best;
+        lastProductAnalysis = data;
+      }
       productPreviewIndex = 0;
       showReport(renderMappingEditor(best, mode), `Mapping: ${mode}`);
       applyLoadedProjectToUi(mode);
       attachMappingEvents(mode);
+      if (mode === "products") saveProductWorkspaceState();
     }
 
     async function projectPayload() {
@@ -5837,9 +5888,11 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "BĹ‚Ä…d analizy." : "Analysis error."));
         $(statusId).textContent = t("analysis.ready");
         renderAnalysis(data, mode);
+        if (mode === "products") saveProductWorkspaceState();
       } catch (error) {
         $(statusId).textContent = error.message;
         $("summary").textContent = t("status.error");
+        if (mode === "products") saveProductWorkspaceState();
       }
     }
 
@@ -5849,6 +5902,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     };
 
     $("languageSelect").addEventListener("change", (event) => setLanguage(event.target.value));
+    if ($("projectName")) $("projectName").addEventListener("input", saveProductWorkspaceState);
     $("saveProjectBtn").addEventListener("click", () => saveProject());
     $("loadProjectFile").addEventListener("change", () => {
       const file = $("loadProjectFile").files[0];
@@ -6023,6 +6077,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     if (INITIAL_ANALYSIS && INITIAL_ANALYSIS.analysis) {
       $("productsStatus").textContent = t("analysis.ready");
       renderAnalysis(INITIAL_ANALYSIS.analysis, INITIAL_ANALYSIS.mode || "products");
+    } else {
+      restoreProductWorkspaceState();
     }
     applyLanguage();
   </script>
@@ -6253,7 +6309,7 @@ def render_building_elements_home() -> str:
       <a class="active" href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
     </nav>
     <div class="header-actions">
-      <span class="status" data-i18n="app.subtitle">Mapowanie elementĂłw budowlanych na podstawie modelu PIM</span>
+      <span class="status" data-i18n="app.subtitle">Mapowanie elementów budowlanych na podstawie modelu PIM</span>
       <select id="languageSelect" class="language-select" aria-label="Language">
         <option value="pl">Polski</option>
         <option value="en">English</option>
@@ -6264,8 +6320,8 @@ def render_building_elements_home() -> str:
     <aside>
       <div class="panel">
         <h2 data-i18n="elements.title">Elementy budowlane</h2>
-        <p data-i18n="elements.help">Ten moduĹ‚ sĹ‚uĹĽy do rozpoczÄ™cia mapowania elementĂłw budowlanych. Relacje do produktĂłw wymagajÄ… referencyjnego pliku products.json z mapowania produktĂłw.</p>
-        <div class="notice" data-i18n="elements.notice">To jest pierwszy ekran roboczy dla elementĂłw budowlanych. Docelowo bÄ™dzie rozwiniÄ™ty do takiego samego poziomu obsĹ‚ugi jak mapowanie produktĂłw.</div>
+        <p data-i18n="elements.help">Ten moduł służy do mapowania elementów budowlanych. Relacje do produktów wymagają referencyjnego pliku products.json z mapowania produktów.</p>
+        <div class="notice" data-i18n="elements.notice">To jest ekran roboczy dla hierarchii elementów budowlanych: leveli, parentów, wariantów i pól modelu PIM.</div>
       </div>
       <div class="panel">
         <h3 data-i18n="elements.files">Model, produkty i dane</h3>
@@ -6284,7 +6340,7 @@ def render_building_elements_home() -> str:
       </div>
       <div class="panel">
         <h3 data-i18n="project.title">Projekt mapowania</h3>
-        <p data-i18n="project.help">Zapisuje pliki, model i aktualne mapowanie, aby moĹĽna byĹ‚o wrĂłciÄ‡ do pracy bez ponownego ustawiania importu.</p>
+        <p data-i18n="project.help">Zapisuje pliki, model i aktualne mapowanie, aby można było wrócić do pracy bez ponownego ustawiania importu.</p>
         <label><span data-i18n="project.name">Nazwa projektu</span>
           <input id="elementProjectName" type="text" value="mapowanie-elementow-budowlanych">
         </label>
@@ -6298,10 +6354,10 @@ def render_building_elements_home() -> str:
     <section class="panel">
       <div class="mode-banner">
         <strong data-i18n="elements.modeBannerTitle">Aktualnie mapujesz: ELEMENTY BUDOWLANE</strong>
-        <span data-i18n="elements.modeBannerText">Na tym etapie importujemy strukturÄ™ systemĂłw, wariantĂłw i warstw. Produkty w warstwach moĹĽna dopasowaÄ‡ pĂłĹşniej.</span>
+        <span data-i18n="elements.modeBannerText">Na tym etapie importujemy strukturę systemów, wariantów i warstw. Produkty w warstwach można dopasować później.</span>
       </div>
       <h2 data-i18n="elements.result">Wynik analizy</h2>
-      <div id="elementSummary" class="notice" data-i18n="elements.emptyResult">Wczytaj model elementĂłw i plik importowany, a nastÄ™pnie kliknij analizÄ™. Referencyjne products.json jest opcjonalne na tym etapie.</div>
+      <div id="elementSummary" class="notice" data-i18n="elements.emptyResult">Wczytaj model elementów i plik importowany, a następnie kliknij analizę. Referencyjne products.json jest opcjonalne na tym etapie.</div>
     </section>
   </main>
   <script>
@@ -6310,10 +6366,10 @@ def render_building_elements_home() -> str:
         "nav.products": "Produkty",
         "nav.menu": "Wróć do menu głównego",
         "nav.buildingElements": "Elementy budowlane",
-        "app.subtitle": "Mapowanie elementĂłw budowlanych na podstawie modelu PIM",
+        "app.subtitle": "Mapowanie elementów budowlanych na podstawie modelu PIM",
         "elements.title": "Elementy budowlane",
-        "elements.help": "Ten moduĹ‚ sĹ‚uĹĽy do rozpoczÄ™cia mapowania elementĂłw budowlanych. Relacje do produktĂłw wymagajÄ… referencyjnego pliku products.json z mapowania produktĂłw.",
-        "elements.notice": "To jest pierwszy ekran roboczy dla elementĂłw budowlanych. Docelowo bÄ™dzie rozwiniÄ™ty do takiego samego poziomu obsĹ‚ugi jak mapowanie produktĂłw.",
+        "elements.help": "Ten moduł służy do mapowania elementów budowlanych. Relacje do produktów wymagają referencyjnego pliku products.json z mapowania produktów.",
+        "elements.notice": "To jest ekran roboczy dla hierarchii elementów budowlanych: leveli, parentów, wariantów i pól modelu PIM.",
         "elements.files": "Model, produkty i dane",
         "elements.modelFiles": "buildingElementsModels.json + buildingElementsAttributes.json",
         "elements.loadModel": "Wczytaj hierarchię modelu",
@@ -6322,20 +6378,20 @@ def render_building_elements_home() -> str:
         "elements.analyze": "Analizuj elementy budowlane",
         "elements.result": "Wynik analizy",
         "elements.modeBannerTitle": "Aktualnie mapujesz: ELEMENTY BUDOWLANE",
-        "elements.modeBannerText": "Na tym etapie importujemy strukturÄ™ systemĂłw, wariantĂłw i warstw. Produkty w warstwach moĹĽna dopasowaÄ‡ pĂłĹşniej.",
-        "elements.emptyResult": "Wczytaj model elementĂłw i plik importowany, a nastÄ™pnie kliknij analizÄ™. Referencyjne products.json jest opcjonalne na tym etapie.",
+        "elements.modeBannerText": "Na tym etapie importujemy strukturę systemów, wariantów i warstw. Produkty w warstwach można dopasować później.",
+        "elements.emptyResult": "Wczytaj model elementów i plik importowany, a następnie kliknij analizę. Referencyjne products.json jest opcjonalne na tym etapie.",
         "project.title": "Projekt mapowania",
-        "project.help": "Zapisuje pliki, model i aktualne mapowanie, aby moĹĽna byĹ‚o wrĂłciÄ‡ do pracy bez ponownego ustawiania importu.",
+        "project.help": "Zapisuje pliki, model i aktualne mapowanie, aby można było wrócić do pracy bez ponownego ustawiania importu.",
         "project.name": "Nazwa projektu",
         "project.save": "Zapisz projekt mapowania",
         "project.load": "Wczytaj projekt mapowania",
         "project.saved": "Projekt zapisany:",
         "project.loaded": "Wczytano projekt:",
         "project.missing": "Najpierw wczytaj pliki modelu.",
-        "project.failed": "Nie udaĹ‚o siÄ™ obsĹ‚uĹĽyÄ‡ projektu.",
+        "project.failed": "Nie udało się obsłużyć projektu.",
         "status.ready": "Analiza gotowa.",
         "status.missing": "Brakuje pliku: ",
-        "status.error": "BĹ‚Ä…d ĹĽÄ…dania"
+        "status.error": "Błąd żądania"
       },
       en: {
         "nav.products": "Products",
@@ -6374,6 +6430,7 @@ def render_building_elements_home() -> str:
     let currentElementMapping = {};
     let loadedElementProject = null;
     let loadedElementProjectFiles = { modelFiles: [], sourceFile: null, productsReferenceFile: null };
+    const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
     const $ = (id) => document.getElementById(id);
     function t(key) { return I18N[currentLang]?.[key] || I18N.pl[key] || key; }
     function applyLanguage() {
@@ -6383,10 +6440,38 @@ def render_building_elements_home() -> str:
         element.textContent = t(element.dataset.i18n);
       }
     }
+    function saveElementWorkspaceState() {
+      try {
+        const payload = {
+          projectName: $("elementProjectName")?.value || "",
+          analysis: lastElementAnalysis,
+          mapping: currentElementMapping,
+          status: $("elementStatus")?.textContent || "",
+          savedAt: new Date().toISOString(),
+        };
+        sessionStorage.setItem(ELEMENT_WORKSPACE_KEY, JSON.stringify(payload));
+      } catch (error) {
+        console.warn("Could not save building-elements workspace state", error);
+      }
+    }
+    function restoreElementWorkspaceState() {
+      try {
+        const raw = sessionStorage.getItem(ELEMENT_WORKSPACE_KEY);
+        if (!raw) return;
+        const payload = JSON.parse(raw);
+        currentElementMapping = payload.mapping || {};
+        if (payload.projectName && $("elementProjectName")) $("elementProjectName").value = payload.projectName;
+        if (payload.status && $("elementStatus")) $("elementStatus").textContent = payload.status;
+        if (payload.analysis) renderElementAnalysis(payload.analysis);
+      } catch (error) {
+        console.warn("Could not restore building-elements workspace state", error);
+      }
+    }
     $("languageSelect").addEventListener("change", (event) => {
       currentLang = event.target.value;
       localStorage.setItem("aiDataMasterLang", currentLang);
       applyLanguage();
+      saveElementWorkspaceState();
     });
     function addFiles(form, name, input) {
       [...input.files].forEach((file) => form.append(name, file));
@@ -6511,6 +6596,7 @@ def render_building_elements_home() -> str:
         currentElementMapping = loadedElementProject.building_element_mapping || {};
         $("elementProjectName").value = loadedElementProject.name || "mapowanie-elementow-budowlanych";
         $("elementProjectStatus").textContent = `${t("project.loaded")} ${loadedElementProject.name || file.name}`;
+        saveElementWorkspaceState();
         if (loadedElementProjectFiles.sourceFile) {
           await analyzeElements();
         } else {
@@ -6536,8 +6622,10 @@ def render_building_elements_home() -> str:
           product_reference: { products_count: 0, message: "Wczytano hierarchię modelu. Dodaj plik importowany, aby mapować kolumny." },
         });
         $("elementStatus").textContent = t("status.ready");
+        saveElementWorkspaceState();
       } catch (error) {
         $("elementStatus").textContent = error.message;
+        saveElementWorkspaceState();
       }
     }
     async function analyzeElements() {
@@ -6554,8 +6642,10 @@ def render_building_elements_home() -> str:
         const payload = await postForm("/api/building-elements/analyze", form);
         renderElementAnalysis(payload);
         $("elementStatus").textContent = t("status.ready");
+        saveElementWorkspaceState();
       } catch (error) {
         $("elementStatus").textContent = error.message;
+        saveElementWorkspaceState();
       }
     }
     function escapeHtml(value) {
@@ -6626,7 +6716,6 @@ def render_building_elements_home() -> str:
         if (!["single_choice", "multi_choice"].includes(field.kind)) return "";
         const disabledAttr = disabled ? " disabled" : "";
         const values = elementSourceValues(tableName, columnName);
-        const optionPills = (field.options || []).map((option) => `<span class="pill">${escapeHtml(elementOptionText(option))}</span>`).join(" ");
         const rows = values.map((value) => `
           <tr>
             <td class="choice-map-value">${escapeHtml(value)}</td>
@@ -6637,7 +6726,6 @@ def render_building_elements_home() -> str:
           <div class="model-options" data-element-choice-container="${escapeHtml(field.key)}">
             <textarea hidden data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="choiceMap">${escapeHtml(JSON.stringify(choiceMap || {}))}</textarea>
             <strong>Mapowanie opcji wyboru:</strong>
-            <div class="helper">Opcje PIM: ${optionPills || "brak opcji w eksporcie modelu"}</div>
             ${columnName
               ? `<table class="choice-map-table"><thead><tr><th>Wartość z pliku klienta</th><th>Opcja PIM</th></tr></thead><tbody>${rows || `<tr><td colspan="2">Brak wartości w próbce danych.</td></tr>`}</tbody></table>`
               : `<div class="helper">Wybierz kolumnę, aby zmapować wartości klienta na opcje PIM.</div>`}
@@ -6838,6 +6926,7 @@ def render_building_elements_home() -> str:
     }
     function syncElementMappingState() {
       currentElementMapping = collectElementMapping();
+      saveElementWorkspaceState();
     }
     function renderElementAnalysis(payload) {
       lastElementAnalysis = payload;
@@ -6850,12 +6939,12 @@ def render_building_elements_home() -> str:
       const mappingEditor = renderElementMappingEditor(payload);
       $("elementSummary").className = "panel";
       $("elementSummary").innerHTML = `
-        <h3>Analiza elementĂłw budowlanych</h3>
+        <h3>Analiza elementów budowlanych</h3>
         <div class="summary-grid">
           <div class="summary-card"><strong>${tables.length}</strong><span>tabele</span></div>
           <div class="summary-card"><strong>${rows}</strong><span>wiersze</span></div>
           <div class="summary-card"><strong>${fields.length}</strong><span>pola modelu PIM</span></div>
-          <div class="summary-card"><strong>${relations.length}</strong><span>relacje zagnieĹĽdĹĽone</span></div>
+          <div class="summary-card"><strong>${relations.length}</strong><span>relacje zagnieżdżone</span></div>
           <div class="summary-card"><strong>${reference.products_count || 0}</strong><span>produkty referencyjne</span></div>
         </div>
         <p>${escapeHtml(reference.message || "")}</p>
@@ -6864,11 +6953,14 @@ def render_building_elements_home() -> str:
         ${mappingEditor}
       `;
       syncElementMappingState();
+      saveElementWorkspaceState();
     }
+    $("elementProjectName").addEventListener("input", saveElementWorkspaceState);
     $("elementProjectFile").addEventListener("change", () => {
       const file = $("elementProjectFile").files[0];
       if (file) loadElementProjectFromFile(file);
     });
+    restoreElementWorkspaceState();
     applyLanguage();
   </script>
 </body>
