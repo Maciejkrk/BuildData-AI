@@ -3,6 +3,51 @@
 import json
 import html
 
+def render_main_menu() -> str:
+    return """<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BuildData AI</title>
+  <style>
+    :root { --bg:#f3f5f7; --panel:#fff; --line:#d8dde6; --text:#182230; --muted:#667085; --accent:#0f766e; --secondary:#344054; font-family:Arial,sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); }
+    header { min-height:64px; display:flex; align-items:center; justify-content:space-between; padding:14px 24px; border-bottom:1px solid var(--line); background:var(--panel); }
+    h1 { margin:0; font-size:22px; }
+    main { max-width:980px; margin:0 auto; padding:28px 18px; }
+    .intro { margin-bottom:18px; color:var(--muted); line-height:1.45; }
+    .choice-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:16px; }
+    .choice { display:block; min-height:190px; padding:20px; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:inherit; text-decoration:none; }
+    .choice:hover { border-color:var(--accent); box-shadow:0 8px 22px rgba(15,23,42,.08); }
+    .choice strong { display:block; margin-bottom:8px; font-size:20px; color:var(--text); }
+    .choice span { display:block; color:var(--muted); line-height:1.45; }
+    .choice .badge { display:inline-block; margin-top:18px; padding:6px 9px; border-radius:999px; background:#f0fdfa; color:var(--accent); font-weight:700; font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BuildData AI</h1>
+  </header>
+  <main>
+    <p class="intro">Wybierz niezależną sekcję pracy. Projekty produktów i elementów budowlanych są prowadzone osobno.</p>
+    <div class="choice-grid">
+      <a class="choice" href="/products">
+        <strong>Mapowanie Produktów</strong>
+        <span>Import pliku klienta, mapowanie cech produktu i typoszeregu, czyszczenie danych oraz generowanie products.json.</span>
+        <span class="badge">BuildData AI Products</span>
+      </a>
+      <a class="choice" href="/building-elements">
+        <strong>Mapowanie Building Elementów</strong>
+        <span>Mapowanie hierarchii systemów, wariantów, warstw i relacji odczytanej z modelu PIM elementów budowlanych.</span>
+        <span class="badge">BuildData AI Building Elements</span>
+      </a>
+    </div>
+  </main>
+</body>
+</html>"""
+
 def render_home(initial_product_model: dict | None = None, initial_analysis: dict | None = None) -> str:
     initial_model = initial_product_model or {}
     initial_model_accepted = bool(initial_model.get("model_id") and initial_model.get("target_fields"))
@@ -27,7 +72,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BuildData AI</title>
+  <title>BuildData AI Products</title>
   <style>
     :root {
       --bg: #f3f5f7;
@@ -920,10 +965,11 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 </head>
 <body>
   <header>
-    <h1>BuildData AI</h1>
+    <h1>BuildData AI Products</h1>
     <nav class="top-nav" aria-label="Workspace">
-      <a class="active" href="/" data-i18n="nav.products">Produkty</a>
-      <a href="/building-elements" target="_blank" rel="noopener" data-i18n="nav.buildingElements">Elementy budowlane</a>
+      <a href="/" data-i18n="nav.menu">Wróć do menu głównego</a>
+      <a class="active" href="/products" data-i18n="nav.products">Produkty</a>
+      <a href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
     </nav>
     <div class="header-actions">
       <span class="muted" data-i18n="app.subtitle">Import, mapowanie, czyszczenie i eksport PIM JSON</span>
@@ -1071,6 +1117,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     const I18N = {
       pl: {
         "nav.products": "Produkty",
+        "nav.menu": "Wróć do menu głównego",
         "nav.buildingElements": "Elementy budowlane",
         "app.subtitle": "Mapowanie danych produktowych i eksport products.json",
         "model.title": "Model produktu PIM",
@@ -1355,6 +1402,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       },
       en: {
         "nav.products": "Products",
+        "nav.menu": "Back to main menu",
         "nav.buildingElements": "Building elements",
         "app.subtitle": "Product data mapping and products.json export",
         "model.title": "Product PIM Model",
@@ -5932,6 +5980,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (event.submitter?.id === "analyzeProductsBtn") {
         const file = fileOrMessage("productsFile", "productsStatus", t("analysis.chooseFile"));
         if (!file) return;
+        $("productsStatus").textContent = currentLang === "pl"
+          ? "Proszę czekać, trwa analiza pliku klienta."
+          : "Please wait, customer file analysis is running.";
         event.target.submit();
         return;
       }
@@ -5985,7 +6036,7 @@ def render_building_elements_home() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BuildData AI - Elementy budowlane</title>
+  <title>BuildData AI Building Elements</title>
   <style>
     :root {
       --bg:#f3f5f7; --panel:#fff; --soft:#f8fafc; --line:#d8dde6;
@@ -6076,13 +6127,47 @@ def render_building_elements_home() -> str:
     .model-tree-node:first-child { border-top:0; }
     .model-tree-header {
       padding:12px;
-      background:#f8fafc;
+      background:#eef6f4;
       border-bottom:1px solid #eef2f6;
+      box-shadow:inset 4px 0 0 var(--accent);
     }
     .model-tree-header strong { display:block; color:var(--text); }
     .model-tree-header span { display:block; color:var(--muted); font-size:12px; margin-top:3px; }
-    .model-tree-children { margin-left:18px; border-left:2px solid #d9e7e4; }
+    .model-tree-children { margin-left:22px; border-left:3px solid #99f6e4; }
     .model-tree-empty { padding:10px 12px; color:var(--muted); font-size:12px; }
+    .model-map-details {
+      grid-column:1 / -1;
+      border:1px solid #eef2f6;
+      border-radius:4px;
+      background:#fbfcfd;
+      overflow:hidden;
+    }
+    .model-map-details summary {
+      padding:9px 10px;
+      cursor:pointer;
+      font-weight:700;
+      color:#344054;
+      background:#f8fafc;
+    }
+    .choice-map-table {
+      grid-column:1 / -1;
+      width:100%;
+      table-layout:fixed;
+      margin-top:8px;
+      font-size:12px;
+    }
+    .choice-map-table select { width:100%; }
+    .choice-map-value { overflow-wrap:anywhere; }
+    .pill {
+      display:inline-block;
+      margin:4px 4px 0 0;
+      padding:4px 7px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:#fff;
+      color:#344054;
+      font-size:12px;
+    }
     .model-map-row {
       display:grid;
       grid-template-columns:minmax(220px, 1fr) minmax(120px, 170px) minmax(150px, 210px) minmax(170px, 240px);
@@ -6144,9 +6229,10 @@ def render_building_elements_home() -> str:
 </head>
 <body>
   <header>
-    <h1>BuildData AI</h1>
+    <h1>BuildData AI Building Elements</h1>
     <nav class="top-nav" aria-label="Workspace">
-      <a href="/" target="_blank" rel="noopener" data-i18n="nav.products">Produkty</a>
+      <a href="/" data-i18n="nav.menu">Wróć do menu głównego</a>
+      <a href="/products" data-i18n="nav.products">Produkty</a>
       <a class="active" href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
     </nav>
     <div class="header-actions">
@@ -6205,6 +6291,7 @@ def render_building_elements_home() -> str:
     const I18N = {
       pl: {
         "nav.products": "Produkty",
+        "nav.menu": "Wróć do menu głównego",
         "nav.buildingElements": "Elementy budowlane",
         "app.subtitle": "Mapowanie elementĂłw budowlanych na podstawie modelu PIM",
         "elements.title": "Elementy budowlane",
@@ -6235,6 +6322,7 @@ def render_building_elements_home() -> str:
       },
       en: {
         "nav.products": "Products",
+        "nav.menu": "Back to main menu",
         "nav.buildingElements": "Building elements",
         "app.subtitle": "Building-element mapping based on the PIM model",
         "elements.title": "Building elements",
@@ -6418,6 +6506,9 @@ def render_building_elements_home() -> str:
     async function loadElementModelHierarchy() {
       const form = new FormData();
       try {
+        $("elementStatus").textContent = currentLang === "pl"
+          ? "Proszę czekać, trwa odczyt hierarchii modelu."
+          : "Please wait, model hierarchy is loading.";
         const selectedModelFiles = [...$("elementModelFiles").files];
         const modelFiles = selectedModelFiles.length ? selectedModelFiles : loadedElementProjectFiles.modelFiles;
         addFilesFromList(form, "files", modelFiles);
@@ -6435,6 +6526,9 @@ def render_building_elements_home() -> str:
     async function analyzeElements() {
       const form = new FormData();
       try {
+        $("elementStatus").textContent = currentLang === "pl"
+          ? "Proszę czekać, trwa analiza pliku klienta."
+          : "Please wait, customer file analysis is running.";
         const selectedModelFiles = [...$("elementModelFiles").files];
         const modelFiles = selectedModelFiles.length ? selectedModelFiles : loadedElementProjectFiles.modelFiles;
         addFilesFromList(form, "model_files", modelFiles);
@@ -6472,15 +6566,57 @@ def render_building_elements_home() -> str:
         `<option value="">-- nie mapuj teraz --</option>`,
         ...(columnsForElementTable(tableName) || []).map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
       ].join("");
+      function elementSourceValues(tableName, columnName) {
+        if (!tableName || !columnName) return [];
+        const table = (lastElementAnalysis?.tables || []).find((item) => item.name === tableName);
+        const values = [];
+        for (const row of table?.sample_rows || []) {
+          const raw = row?.[columnName];
+          if (raw === undefined || raw === null || raw === "") continue;
+          for (const part of String(raw).split(/[;,]/).map((item) => item.trim()).filter(Boolean)) {
+            if (!values.includes(part)) values.push(part);
+          }
+        }
+        return values.slice(0, 30);
+      }
+      function elementOptionText(option) {
+        return option?.label || option?.value || String(option?.id || "");
+      }
+      function elementOptionSelect(field, selected) {
+        const options = (field.options || []).map((option) => {
+          const value = elementOptionText(option);
+          return `<option value="${escapeHtml(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`;
+        }).join("");
+        return `<option value="">-- nie importuj bez mapy --</option>${options}`;
+      }
+      function renderElementChoiceMap(field, tableName, columnName, choiceMap = {}) {
+        if (!["single_choice", "multi_choice"].includes(field.kind)) return "";
+        const values = elementSourceValues(tableName, columnName);
+        const optionPills = (field.options || []).map((option) => `<span class="pill">${escapeHtml(elementOptionText(option))}</span>`).join(" ");
+        const rows = values.map((value) => `
+          <tr>
+            <td class="choice-map-value">${escapeHtml(value)}</td>
+            <td><select data-element-choice-source="${escapeHtml(field.key)}" data-choice-value="${escapeHtml(value)}" onchange="syncElementChoiceMap('${escapeHtml(field.key)}')">${elementOptionSelect(field, choiceMap[value] || "")}</select></td>
+          </tr>
+        `).join("");
+        return `
+          <div class="model-options" data-element-choice-container="${escapeHtml(field.key)}">
+            <textarea hidden data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="choiceMap">${escapeHtml(JSON.stringify(choiceMap || {}))}</textarea>
+            <strong>Mapowanie opcji wyboru:</strong>
+            <div class="helper">Opcje PIM: ${optionPills || "brak opcji w eksporcie modelu"}</div>
+            ${columnName
+              ? `<table class="choice-map-table"><thead><tr><th>Wartość z pliku klienta</th><th>Opcja PIM</th></tr></thead><tbody>${rows || `<tr><td colspan="2">Brak wartości w próbce danych.</td></tr>`}</tbody></table>`
+              : `<div class="helper">Wybierz tabelę i kolumnę, aby zmapować wartości klienta na opcje PIM.</div>`}
+          </div>
+        `;
+      }
       function fieldHtml(field) {
         const existing = currentElementMapping[field.key] || {};
         const selectedColumn = existing.column || suggestedByTarget[field.key] || "";
         const selectedTable = existing.table || (selectedColumn ? firstTable : "");
         const cleanup = existing.cleanup || {};
-        const optionLabels = (field.options || []).map((option) => option.label || option.value).filter(Boolean).slice(0, 10).join(", ");
-        const isChoice = ["single_choice", "multi_choice"].includes(field.kind);
         return `
-          <div class="model-map-row">
+          <div class="model-map-row" data-element-field-row="${escapeHtml(field.key)}">
             <div class="model-map-label">
               <strong>${escapeHtml(field.label || field.key)}</strong>
               <span>${escapeHtml(field.key)}</span>
@@ -6489,20 +6625,23 @@ def render_building_elements_home() -> str:
             <select data-element-table="${escapeHtml(field.key)}" onchange="refreshElementMappingState(this)">
               ${tableOptions(selectedTable)}
             </select>
-            <select data-element-column="${escapeHtml(field.key)}" onchange="syncElementMappingState()">
+            <select data-element-column="${escapeHtml(field.key)}" onchange="refreshElementFieldState('${escapeHtml(field.key)}')">
               ${columnOptions(selectedColumn, selectedTable)}
             </select>
-            <div class="model-cleanup">
-              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="trim" ${cleanup.trim === false ? "" : "checked"} onchange="syncElementMappingState()"> trim</label>
-              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="decimalComma" ${cleanup.decimalComma ? "checked" : ""} onchange="syncElementMappingState()"> przecinek -> kropka</label>
-              <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="parseNumber" ${cleanup.parseNumber ? "checked" : ""} onchange="syncElementMappingState()"> tylko liczba</label>
-              <label>usuń tekst<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="removeText" value="${escapeHtml(cleanup.removeText || "")}" oninput="syncElementMappingState()"></label>
-              <label>separator<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitBy" value="${escapeHtml(cleanup.splitBy || "")}" oninput="syncElementMappingState()"></label>
-              <label>część<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitPart" type="number" min="1" value="${escapeHtml(cleanup.splitPart || "")}" oninput="syncElementMappingState()"></label>
-              <label>przelicznik<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="unitConversionFactor" value="${escapeHtml(cleanup.unitConversionFactor || "")}" oninput="syncElementMappingState()"></label>
-              <label>jednostka docelowa<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="targetUnit" value="${escapeHtml(cleanup.targetUnit || field.unit || "")}" oninput="syncElementMappingState()"></label>
-            </div>
-            ${isChoice ? `<div class="model-options"><strong>Opcje z modelu:</strong> ${escapeHtml(optionLabels || "brak opcji w eksporcie modelu")}<br>Mapowanie wartości słownikowych dodamy jako następny krok: wartość z pliku -> opcja PIM.</div>` : ""}
+            <details class="model-map-details">
+              <summary>Szczegóły mapowania i czyszczenia</summary>
+              <div class="model-cleanup">
+                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="trim" ${cleanup.trim === false ? "" : "checked"} onchange="syncElementMappingState()"> trim</label>
+                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="decimalComma" ${cleanup.decimalComma ? "checked" : ""} onchange="syncElementMappingState()"> przecinek -> kropka</label>
+                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="parseNumber" ${cleanup.parseNumber ? "checked" : ""} onchange="syncElementMappingState()"> tylko liczba</label>
+                <label>usuń tekst<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="removeText" value="${escapeHtml(cleanup.removeText || "")}" oninput="syncElementMappingState()"></label>
+                <label>separator<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitBy" value="${escapeHtml(cleanup.splitBy || "")}" oninput="syncElementMappingState()"></label>
+                <label>część<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitPart" type="number" min="1" value="${escapeHtml(cleanup.splitPart || "")}" oninput="syncElementMappingState()"></label>
+                <label>przelicznik<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="unitConversionFactor" value="${escapeHtml(cleanup.unitConversionFactor || "")}" oninput="syncElementMappingState()"></label>
+                <label>jednostka docelowa<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="targetUnit" value="${escapeHtml(cleanup.targetUnit || field.unit || "")}" oninput="syncElementMappingState()"></label>
+                ${renderElementChoiceMap(field, selectedTable, selectedColumn, cleanup.choiceMap || {})}
+              </div>
+            </details>
           </div>
         `;
       }
@@ -6545,9 +6684,37 @@ def render_building_elements_home() -> str:
         ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === current ? "selected" : ""}>${escapeHtml(column)}</option>`)
       ].join("");
     }
+    function elementFieldByKey(key) {
+      return (lastElementAnalysis?.model?.fields || []).find((field) => field.key === key);
+    }
+    function syncElementChoiceMap(target) {
+      const holder = document.querySelector(`textarea[data-cleanup="${CSS.escape(target)}"][data-cleanup-key="choiceMap"]`);
+      if (!holder) return;
+      const choiceMap = {};
+      for (const select of document.querySelectorAll(`[data-element-choice-source="${CSS.escape(target)}"]`)) {
+        const source = select.dataset.choiceValue || "";
+        if (source && select.value) choiceMap[source] = select.value;
+      }
+      holder.value = JSON.stringify(choiceMap);
+      syncElementMappingState();
+    }
+    function refreshElementFieldState(target) {
+      const row = document.querySelector(`[data-element-field-row="${CSS.escape(target)}"]`);
+      const field = elementFieldByKey(target);
+      if (!row || !field) {
+        syncElementMappingState();
+        return;
+      }
+      const tableName = row.querySelector(`[data-element-table="${CSS.escape(target)}"]`)?.value || "";
+      const columnName = row.querySelector(`[data-element-column="${CSS.escape(target)}"]`)?.value || "";
+      const cleanup = cleanupForTarget(target);
+      const container = row.querySelector(`[data-element-choice-container="${CSS.escape(target)}"]`);
+      if (container) container.outerHTML = renderElementChoiceMap(field, tableName, columnName, cleanup.choiceMap || {});
+      syncElementMappingState();
+    }
     function refreshElementMappingState(tableSelect) {
       refreshElementColumnSelect(tableSelect);
-      syncElementMappingState();
+      refreshElementFieldState(tableSelect.dataset.elementTable);
     }
     function cleanupForTarget(target) {
       const cleanup = {};
@@ -6556,6 +6723,13 @@ def render_building_elements_home() -> str:
         if (!key) continue;
         if (input.type === "checkbox") {
           if (input.checked) cleanup[key] = true;
+        } else if (key === "choiceMap") {
+          try {
+            const parsed = JSON.parse(input.value || "{}");
+            if (Object.keys(parsed).length) cleanup[key] = parsed;
+          } catch (error) {
+            cleanup[key] = {};
+          }
         } else if (input.value) {
           cleanup[key] = input.value;
         }

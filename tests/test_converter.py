@@ -32,16 +32,24 @@ from data_master_app.mapping import (
     suggest_mapping,
 )
 from data_master_app.main import analyze_products_page, app, home, product_model_accept, product_model_files
-from data_master_app.web_ui import render_home
+from data_master_app.web_ui import render_home, render_main_menu
 from starlette.datastructures import UploadFile
 
 
 class ConverterTests(unittest.TestCase):
+    def test_main_menu_links_to_independent_mapping_sections(self):
+        html = render_main_menu()
+
+        self.assertIn("Mapowanie Produktów", html)
+        self.assertIn('href="/products"', html)
+        self.assertIn("Mapowanie Building Elementów", html)
+        self.assertIn('href="/building-elements"', html)
+
     def test_web_ui_has_product_variant_row_rules_and_hidden_rule_rows(self):
         html = render_home()
 
-        self.assertIn("<title>BuildData AI</title>", html)
-        self.assertIn("<h1>BuildData AI</h1>", html)
+        self.assertIn("<title>BuildData AI Products</title>", html)
+        self.assertIn("<h1>BuildData AI Products</h1>", html)
         self.assertNotIn("systemsForm", html)
         self.assertNotIn("analyzeSystemsBtn", html)
         self.assertNotIn("building_elements.json", html)
@@ -129,7 +137,7 @@ class ConverterTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 303)
         location = response.headers["location"]
-        self.assertTrue(location.startswith("/?product_model_id="))
+        self.assertTrue(location.startswith("/products?product_model_id="))
 
         page = home(product_model_id=location.split("=", 1)[1])
         body = page.body.decode("utf-8")

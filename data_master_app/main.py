@@ -10,7 +10,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from .converter import analyze_product_model_files, analyze_uploaded_file, convert_products_file
-from .web_ui import render_building_elements_home, render_home
+from .web_ui import render_building_elements_home, render_home, render_main_menu
 from mapping_studio.services.building_preview import preview_building_elements_from_tables
 from mapping_studio.services.mapping_analyzer import analyze_source_tables, bundle_payload
 from mapping_studio.services.pim_model_loader import load_building_element_model, load_product_model
@@ -29,6 +29,13 @@ app = FastAPI(title="BuildData AI", version="0.1.0")
 
 @app.get("/", response_class=HTMLResponse)
 def home(product_model_id: str | None = None) -> HTMLResponse:
+    if product_model_id:
+        return products_home(product_model_id)
+    return html_response(render_main_menu())
+
+
+@app.get("/products", response_class=HTMLResponse)
+def products_home(product_model_id: str | None = None) -> HTMLResponse:
     if product_model_id:
         try:
             model_files = load_product_model_session(product_model_id)
@@ -251,7 +258,7 @@ async def product_model_accept(
             products_file=products_file,
         )
         model_id = save_product_model_session(model_files)
-        return redirect_response(f"/?product_model_id={model_id}")
+        return redirect_response(f"/products?product_model_id={model_id}")
     except ValueError as exc:
         files = [
             products_models_file.filename or "productsModels.json",
