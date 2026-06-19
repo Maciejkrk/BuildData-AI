@@ -1059,6 +1059,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let activeProductModelId = INITIAL_PRODUCT_MODEL_ACCEPTED ? INITIAL_PRODUCT_MODEL.model_id : "";
     let acceptingProductModel = false;
     let currentLang = localStorage.getItem("aiDataMasterLang") || "pl";
+    let lastElementAnalysis = null;
     let pimModelAccepted = INITIAL_PRODUCT_MODEL_ACCEPTED;
     let acceptedProductModelSignature = "";
     const REQUIRED_PRODUCT_MODEL_FILES = [
@@ -6053,6 +6054,44 @@ def render_building_elements_home() -> str:
     .summary-card strong { display:block; font-size:20px; color:var(--text); }
     .summary-card span { color:var(--muted); font-size:12px; }
     .tree-list { margin:12px 0 0; padding-left:18px; line-height:1.55; }
+    .model-map {
+      border:1px solid var(--line);
+      border-radius:6px;
+      overflow:hidden;
+      margin-top:12px;
+      background:#fff;
+    }
+    .model-map-group {
+      padding:10px 12px;
+      background:#f8fafc;
+      border-top:1px solid var(--line);
+      font-weight:700;
+      color:#344054;
+    }
+    .model-map-group:first-child { border-top:0; }
+    .model-map-row {
+      display:grid;
+      grid-template-columns:minmax(220px, 1fr) minmax(150px, 220px) minmax(220px, 320px);
+      gap:12px;
+      align-items:center;
+      padding:10px 12px;
+      border-top:1px solid #eef2f6;
+    }
+    .model-map-label strong { display:block; color:var(--text); }
+    .model-map-label span { display:block; color:var(--muted); font-size:12px; margin-top:3px; word-break:break-word; }
+    .model-map-kind {
+      color:var(--muted);
+      font-size:12px;
+      font-weight:700;
+    }
+    .model-map select {
+      width:100%;
+      margin:0;
+      padding:8px;
+      border:1px solid var(--line);
+      border-radius:4px;
+      background:#fff;
+    }
     .raw-json-toggle {
       width:auto;
       padding:8px 10px;
@@ -6225,7 +6264,9 @@ def render_building_elements_home() -> str:
       try {
         addOptionalFile(form, "products_reference", $("productReferenceFile"));
         addRequiredFile(form, "file", $("elementSourceFile"), t("elements.importFile"));
-        form.append("mapping_json", $("elementMapping").value || "{}");
+        const mapping = collectElementMapping();
+        $("elementMapping").value = JSON.stringify(mapping, null, 2);
+        form.append("mapping_json", JSON.stringify(mapping));
         const payload = await postForm("/api/building-elements/preview", form);
         renderElementPreview(payload);
         $("elementStatus").textContent = t("status.previewReady");
@@ -6244,7 +6285,65 @@ def render_building_elements_home() -> str:
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       }[char]));
     }
+    function renderElementMappingEditor(payload) {
+      const tables = payload.tables || [];
+      const table = tables[0] || {};
+      const columns = table.columns || [];
+      const fields = payload.model?.fields || [];
+      const suggested = table.suggested_mapping?.mapping || {};
+      const suggestedByTarget = {};
+      for (const [source, target] of Object.entries(suggested)) {
+        if (!suggestedByTarget[target]) suggestedByTarget[target] = source;
+      }
+      if (!fields.length) {
+        return `<div class="notice">Nie odczytano struktury pól z modelu elementów budowlanych.</div>`;
+      }
+      const groups = {};
+      for (const field of fields) {
+        const group = field.group || "Model";
+        if (!groups[group]) groups[group] = [];
+        groups[group].push(field);
+      }
+      const options = (selected) => [
+        `<option value="">-- nie mapuj teraz --</option>`,
+        ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
+      ].join("");
+      const groupHtml = Object.entries(groups).map(([group, groupFields]) => `
+        <div class="model-map-group">${escapeHtml(group)}</div>
+        ${groupFields.map((field) => `
+          <div class="model-map-row">
+            <div class="model-map-label">
+              <strong>${escapeHtml(field.label || field.key)}</strong>
+              <span>${escapeHtml(field.key)}</span>
+            </div>
+            <div class="model-map-kind">${escapeHtml(field.kind || "")}${field.required ? " / wymagane" : ""}</div>
+            <select data-element-target="${escapeHtml(field.key)}" onchange="syncElementMappingTextarea()">
+              ${options(suggestedByTarget[field.key] || "")}
+            </select>
+          </div>
+        `).join("")}
+      `).join("");
+      const relationItems = (payload.model?.relations || []).map((relation) => `<li>${escapeHtml(relation.label)}: model ${escapeHtml(relation.source_model_id)} -> ${escapeHtml(relation.target_model_id)}</li>`).join("");
+      return `
+        <h3>Struktura modelu PIM i mapowanie kolumn</h3>
+        <p>Wybierz, która kolumna z pliku importowanego zasila każde pole z modelu. Możesz zostawić puste pola i wrócić do nich później.</p>
+        <div class="model-map">${groupHtml}</div>
+        <h3>Relacje z modelu</h3>
+        <ul class="tree-list">${relationItems || "<li>Brak relacji zagnieżdżonych w modelu.</li>"}</ul>
+      `;
+    }
+    function collectElementMapping() {
+      const mapping = {};
+      for (const select of document.querySelectorAll("[data-element-target]")) {
+        if (select.value) mapping[select.value] = select.dataset.elementTarget;
+      }
+      return mapping;
+    }
+    function syncElementMappingTextarea() {
+      $("elementMapping").value = JSON.stringify(collectElementMapping(), null, 2);
+    }
     function renderElementAnalysis(payload) {
+      lastElementAnalysis = payload;
       setRawJson(payload);
       const tables = payload.tables || [];
       const fields = payload.model?.fields || [];
@@ -6252,6 +6351,7 @@ def render_building_elements_home() -> str:
       const rows = tables.reduce((sum, table) => sum + (table.rows || 0), 0);
       const reference = payload.product_reference || {};
       const tableItems = tables.map((table) => `<li>${escapeHtml(table.name)}: ${table.rows || 0} wierszy, ${(table.columns || []).length} kolumn</li>`).join("");
+      const mappingEditor = renderElementMappingEditor(payload);
       $("elementSummary").className = "panel";
       $("elementSummary").innerHTML = `
         <h3>Analiza elementów budowlanych</h3>
@@ -6265,7 +6365,9 @@ def render_building_elements_home() -> str:
         <p>${escapeHtml(reference.message || "")}</p>
         <h3>Wczytane tabele</h3>
         <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
+        ${mappingEditor}
       `;
+      syncElementMappingTextarea();
     }
     function renderElementPreview(payload) {
       setRawJson(payload);
