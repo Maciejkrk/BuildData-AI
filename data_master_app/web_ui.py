@@ -6135,6 +6135,23 @@ def render_building_elements_home() -> str:
     .model-tree-header span { display:block; color:var(--muted); font-size:12px; margin-top:3px; }
     .model-tree-children { margin-left:22px; border-left:3px solid #99f6e4; }
     .model-tree-empty { padding:10px 12px; color:var(--muted); font-size:12px; }
+    .model-level-config {
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+      gap:10px;
+      padding:10px 12px;
+      background:#fbfcfd;
+      border-bottom:1px solid #eef2f6;
+    }
+    .model-level-config label { margin:0; }
+    .model-level-config select {
+      width:100%;
+      margin-top:5px;
+      padding:8px;
+      border:1px solid var(--line);
+      border-radius:4px;
+      background:#fff;
+    }
     .model-map-details {
       grid-column:1 / -1;
       border:1px solid #eef2f6;
@@ -6566,6 +6583,22 @@ def render_building_elements_home() -> str:
         `<option value="">-- nie mapuj teraz --</option>`,
         ...(columnsForElementTable(tableName) || []).map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
       ].join("");
+      function levelConfig(levelKey) {
+        return currentElementMapping._levels?.[levelKey] || {};
+      }
+      function levelTable(levelKey) {
+        return levelConfig(levelKey).table || "";
+      }
+      function parentLevelKeyFor(node) {
+        return node.parent_relation_key || (lastElementAnalysis?.model?.hierarchy?.key || `model.${lastElementAnalysis?.model?.root_model_id || "root"}`);
+      }
+      function levelNameMapped(levelKey) {
+        const fieldKey = levelConfig(levelKey).level_name_field || "";
+        return Boolean(fieldKey && currentElementMapping[fieldKey]?.column);
+      }
+      function nodeUnlocked(node) {
+        return node.type !== "relation" || levelNameMapped(parentLevelKeyFor(node));
+      }
       function elementSourceValues(tableName, columnName) {
         if (!tableName || !columnName) return [];
         const table = (lastElementAnalysis?.tables || []).find((item) => item.name === tableName);
@@ -6589,14 +6622,15 @@ def render_building_elements_home() -> str:
         }).join("");
         return `<option value="">-- nie importuj bez mapy --</option>${options}`;
       }
-      function renderElementChoiceMap(field, tableName, columnName, choiceMap = {}) {
+      function renderElementChoiceMap(field, tableName, columnName, choiceMap = {}, disabled = false) {
         if (!["single_choice", "multi_choice"].includes(field.kind)) return "";
+        const disabledAttr = disabled ? " disabled" : "";
         const values = elementSourceValues(tableName, columnName);
         const optionPills = (field.options || []).map((option) => `<span class="pill">${escapeHtml(elementOptionText(option))}</span>`).join(" ");
         const rows = values.map((value) => `
           <tr>
             <td class="choice-map-value">${escapeHtml(value)}</td>
-            <td><select data-element-choice-source="${escapeHtml(field.key)}" data-choice-value="${escapeHtml(value)}" onchange="syncElementChoiceMap('${escapeHtml(field.key)}')">${elementOptionSelect(field, choiceMap[value] || "")}</select></td>
+            <td><select data-element-choice-source="${escapeHtml(field.key)}" data-choice-value="${escapeHtml(value)}" onchange="syncElementChoiceMap('${escapeHtml(field.key)}')"${disabledAttr}>${elementOptionSelect(field, choiceMap[value] || "")}</select></td>
           </tr>
         `).join("");
         return `
@@ -6606,63 +6640,118 @@ def render_building_elements_home() -> str:
             <div class="helper">Opcje PIM: ${optionPills || "brak opcji w eksporcie modelu"}</div>
             ${columnName
               ? `<table class="choice-map-table"><thead><tr><th>Wartość z pliku klienta</th><th>Opcja PIM</th></tr></thead><tbody>${rows || `<tr><td colspan="2">Brak wartości w próbce danych.</td></tr>`}</tbody></table>`
-              : `<div class="helper">Wybierz tabelę i kolumnę, aby zmapować wartości klienta na opcje PIM.</div>`}
+              : `<div class="helper">Wybierz kolumnę, aby zmapować wartości klienta na opcje PIM.</div>`}
           </div>
         `;
       }
-      function fieldHtml(field) {
+      function fieldHtml(field, nodeKey, enabled = true) {
         const existing = currentElementMapping[field.key] || {};
-        const selectedColumn = existing.column || suggestedByTarget[field.key] || "";
-        const selectedTable = existing.table || (selectedColumn ? firstTable : "");
+        const selectedTable = levelTable(nodeKey);
+        const selectedColumn = existing.column || (selectedTable === firstTable ? suggestedByTarget[field.key] || "" : "");
         const cleanup = existing.cleanup || {};
+        const disabledAttr = enabled ? "" : " disabled";
         return `
-          <div class="model-map-row" data-element-field-row="${escapeHtml(field.key)}">
+          <div class="model-map-row" data-element-field-row="${escapeHtml(field.key)}" data-element-field-level="${escapeHtml(nodeKey)}">
             <div class="model-map-label">
               <strong>${escapeHtml(field.label || field.key)}</strong>
               <span>${escapeHtml(field.key)}</span>
             </div>
             <div class="model-map-kind">${escapeHtml(field.kind || "")}${field.required ? " / wymagane" : ""}</div>
-            <select data-element-table="${escapeHtml(field.key)}" onchange="refreshElementMappingState(this)">
-              ${tableOptions(selectedTable)}
-            </select>
-            <select data-element-column="${escapeHtml(field.key)}" onchange="refreshElementFieldState('${escapeHtml(field.key)}')">
+            <div class="model-map-kind">Arkusz levelu: <strong>${escapeHtml(selectedTable || "nie wybrano")}</strong></div>
+            <select data-element-column="${escapeHtml(field.key)}" onchange="refreshElementFieldState('${escapeHtml(field.key)}')"${disabledAttr}>
               ${columnOptions(selectedColumn, selectedTable)}
             </select>
             <details class="model-map-details">
               <summary>Szczegóły mapowania i czyszczenia</summary>
               <div class="model-cleanup">
-                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="trim" ${cleanup.trim === false ? "" : "checked"} onchange="syncElementMappingState()"> trim</label>
-                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="decimalComma" ${cleanup.decimalComma ? "checked" : ""} onchange="syncElementMappingState()"> przecinek -> kropka</label>
-                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="parseNumber" ${cleanup.parseNumber ? "checked" : ""} onchange="syncElementMappingState()"> tylko liczba</label>
-                <label>usuń tekst<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="removeText" value="${escapeHtml(cleanup.removeText || "")}" oninput="syncElementMappingState()"></label>
-                <label>separator<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitBy" value="${escapeHtml(cleanup.splitBy || "")}" oninput="syncElementMappingState()"></label>
-                <label>część<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitPart" type="number" min="1" value="${escapeHtml(cleanup.splitPart || "")}" oninput="syncElementMappingState()"></label>
-                <label>przelicznik<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="unitConversionFactor" value="${escapeHtml(cleanup.unitConversionFactor || "")}" oninput="syncElementMappingState()"></label>
-                <label>jednostka docelowa<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="targetUnit" value="${escapeHtml(cleanup.targetUnit || field.unit || "")}" oninput="syncElementMappingState()"></label>
-                ${renderElementChoiceMap(field, selectedTable, selectedColumn, cleanup.choiceMap || {})}
+                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="trim" ${cleanup.trim === false ? "" : "checked"} onchange="syncElementMappingState()"${disabledAttr}> trim</label>
+                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="decimalComma" ${cleanup.decimalComma ? "checked" : ""} onchange="syncElementMappingState()"${disabledAttr}> przecinek -> kropka</label>
+                <label><input type="checkbox" data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="parseNumber" ${cleanup.parseNumber ? "checked" : ""} onchange="syncElementMappingState()"${disabledAttr}> tylko liczba</label>
+                <label>usuń tekst<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="removeText" value="${escapeHtml(cleanup.removeText || "")}" oninput="syncElementMappingState()"${disabledAttr}></label>
+                <label>separator<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitBy" value="${escapeHtml(cleanup.splitBy || "")}" oninput="syncElementMappingState()"${disabledAttr}></label>
+                <label>część<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="splitPart" type="number" min="1" value="${escapeHtml(cleanup.splitPart || "")}" oninput="syncElementMappingState()"${disabledAttr}></label>
+                <label>przelicznik<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="unitConversionFactor" value="${escapeHtml(cleanup.unitConversionFactor || "")}" oninput="syncElementMappingState()"${disabledAttr}></label>
+                <label>jednostka docelowa<input data-cleanup="${escapeHtml(field.key)}" data-cleanup-key="targetUnit" value="${escapeHtml(cleanup.targetUnit || field.unit || "")}" oninput="syncElementMappingState()"${disabledAttr}></label>
+                ${renderElementChoiceMap(field, selectedTable, selectedColumn, cleanup.choiceMap || {}, !enabled)}
               </div>
             </details>
           </div>
         `;
       }
+      function levelConfigHtml(node) {
+        const config = levelConfig(node.key);
+        const selectedTable = config.table || "";
+        const columns = columnsForElementTable(selectedTable);
+        const unlocked = nodeUnlocked(node);
+        const disabledAttr = unlocked ? "" : " disabled";
+        const columnOptionsForLevel = (selected) => [
+          `<option value="">-- wybierz kolumnę --</option>`,
+          ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
+        ].join("");
+        const nameFieldOptions = [
+          `<option value="">-- wybierz pole nazwy levela --</option>`,
+          ...(node.fields || []).map((field) => `<option value="${escapeHtml(field.key)}" ${field.key === config.level_name_field ? "selected" : ""}>${escapeHtml(field.label || field.key)}</option>`)
+        ].join("");
+        const parentLevelKey = parentLevelKeyFor(node);
+        const parentColumns = columnsForElementTable(levelTable(parentLevelKey));
+        const parentColumnOptions = (selected) => [
+          `<option value="">-- wybierz kolumnę --</option>`,
+          ...parentColumns.map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
+        ].join("");
+        const parentControls = node.type === "relation" ? `
+          <label>Parent tego poziomu
+            <select data-element-level="${escapeHtml(node.key)}" data-level-key="parent_level_key" onchange="syncElementMappingState()"${disabledAttr}>
+              <option value="${escapeHtml(parentLevelKey)}">${escapeHtml(node.parent_relation_key ? "Poziom nadrzędny" : "Model główny")}</option>
+            </select>
+          </label>
+          <label>Kolumna ID parenta w poziomie nadrzędnym
+            <select data-element-level="${escapeHtml(node.key)}" data-level-key="parent_id_column" onchange="syncElementMappingState()"${disabledAttr}>${parentColumnOptions(config.parent_id_column || "")}</select>
+          </label>
+          <label>Kolumna wskazująca parenta w tym poziomie
+            <select data-element-level="${escapeHtml(node.key)}" data-level-key="child_parent_id_column" onchange="syncElementMappingState()"${disabledAttr}>${columnOptionsForLevel(config.child_parent_id_column || "")}</select>
+          </label>
+        ` : "";
+        return `
+          <div class="model-level-config">
+            ${unlocked ? "" : `<div class="notice">Najpierw zmapuj nazwę levela w poziomie nadrzędnym. Dopiero wtedy można parentować ten poziom.</div>`}
+            <label>Arkusz / tabela dla tego levela
+              <select data-element-level="${escapeHtml(node.key)}" data-level-key="table" onchange="refreshElementLevelState('${escapeHtml(node.key)}')"${disabledAttr}>
+                ${tableOptions(selectedTable)}
+              </select>
+            </label>
+            <label>Level name z mapowania
+              <select data-element-level="${escapeHtml(node.key)}" data-level-key="level_name_field" onchange="refreshElementLevelState('${escapeHtml(node.key)}')"${disabledAttr}>
+                ${nameFieldOptions}
+              </select>
+            </label>
+            <label>Kolumna ID tego levela
+              <select data-element-level="${escapeHtml(node.key)}" data-level-key="id_column" onchange="syncElementMappingState()"${disabledAttr}>${columnOptionsForLevel(config.id_column || "")}</select>
+            </label>
+            ${parentControls}
+          </div>
+        `;
+      }
       function nodeHtml(node) {
-        const fieldsHtml = (node.fields || []).map(fieldHtml).join("");
+        const unlocked = nodeUnlocked(node);
+        const fieldsHtml = (node.fields || []).map((field) => fieldHtml(field, node.key, unlocked)).join("");
         const childrenHtml = (node.children || []).map((child) => nodeHtml(child)).join("");
         const meta = node.type === "relation"
           ? `relacja, atrybut ${node.attribute_id}, model ${node.source_model_id} -> ${node.target_model_id}`
           : `model ${node.model_id}`;
         return `
-          <div class="model-tree-node">
+          <div class="model-tree-node" data-element-tree-node="${escapeHtml(node.key)}">
             <div class="model-tree-header">
               <strong>${escapeHtml(node.label || "Model")}</strong>
               <span>${escapeHtml(meta)}</span>
             </div>
+            ${levelConfigHtml(node)}
             ${fieldsHtml || `<div class="model-tree-empty">Brak pól bezpośrednio w tej gałęzi.</div>`}
             ${childrenHtml ? `<div class="model-tree-children">${childrenHtml}</div>` : ""}
           </div>
         `;
       }
-      const hierarchyHtml = payload.model?.hierarchy ? nodeHtml(payload.model.hierarchy) : fields.map(fieldHtml).join("");
+      const fallbackNode = { key: "model.fallback", type: "model", model_id: payload.model?.root_model_id || "", label: payload.model?.root_model_name || "Model", fields, children: [] };
+      const hierarchyHtml = nodeHtml(payload.model?.hierarchy || fallbackNode);
       return `
         <h3>Struktura modelu PIM i mapowanie kolumn</h3>
         <p>Mapujesz pola w hierarchii odczytanej z plików Models i Attributes. Wybierz tabelę i kolumnę dla konkretnej cechy w danej gałęzi modelu.</p>
@@ -6672,17 +6761,6 @@ def render_building_elements_home() -> str:
     function columnsForElementTable(tableName) {
       const table = (lastElementAnalysis?.tables || []).find((item) => item.name === tableName);
       return table?.columns || [];
-    }
-    function refreshElementColumnSelect(tableSelect) {
-      const target = tableSelect.dataset.elementTable;
-      const columnSelect = document.querySelector(`[data-element-column="${CSS.escape(target)}"]`);
-      if (!columnSelect) return;
-      const current = columnSelect.value;
-      const columns = columnsForElementTable(tableSelect.value);
-      columnSelect.innerHTML = [
-        `<option value="">-- nie mapuj teraz --</option>`,
-        ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === current ? "selected" : ""}>${escapeHtml(column)}</option>`)
-      ].join("");
     }
     function elementFieldByKey(key) {
       return (lastElementAnalysis?.model?.fields || []).find((field) => field.key === key);
@@ -6698,23 +6776,16 @@ def render_building_elements_home() -> str:
       holder.value = JSON.stringify(choiceMap);
       syncElementMappingState();
     }
-    function refreshElementFieldState(target) {
-      const row = document.querySelector(`[data-element-field-row="${CSS.escape(target)}"]`);
-      const field = elementFieldByKey(target);
-      if (!row || !field) {
-        syncElementMappingState();
-        return;
-      }
-      const tableName = row.querySelector(`[data-element-table="${CSS.escape(target)}"]`)?.value || "";
-      const columnName = row.querySelector(`[data-element-column="${CSS.escape(target)}"]`)?.value || "";
-      const cleanup = cleanupForTarget(target);
-      const container = row.querySelector(`[data-element-choice-container="${CSS.escape(target)}"]`);
-      if (container) container.outerHTML = renderElementChoiceMap(field, tableName, columnName, cleanup.choiceMap || {});
+    function rerenderElementMapping() {
+      if (!lastElementAnalysis) return;
       syncElementMappingState();
+      renderElementAnalysis(lastElementAnalysis);
     }
-    function refreshElementMappingState(tableSelect) {
-      refreshElementColumnSelect(tableSelect);
-      refreshElementFieldState(tableSelect.dataset.elementTable);
+    function refreshElementFieldState(target) {
+      rerenderElementMapping();
+    }
+    function refreshElementLevelState(levelKey) {
+      rerenderElementMapping();
     }
     function cleanupForTarget(target) {
       const cleanup = {};
@@ -6736,14 +6807,29 @@ def render_building_elements_home() -> str:
       }
       return cleanup;
     }
+    function collectElementLevels() {
+      const levels = {};
+      for (const input of document.querySelectorAll("[data-element-level]")) {
+        const level = input.dataset.elementLevel;
+        const key = input.dataset.levelKey;
+        if (!level || !key) continue;
+        if (!levels[level]) levels[level] = {};
+        if (input.value) levels[level][key] = input.value;
+      }
+      return levels;
+    }
     function collectElementMapping() {
-      const mapping = {};
-      for (const tableSelect of document.querySelectorAll("[data-element-table]")) {
-        const target = tableSelect.dataset.elementTable;
-        const columnSelect = document.querySelector(`[data-element-column="${CSS.escape(target)}"]`);
-        if (!target || !tableSelect.value || !columnSelect?.value) continue;
+      const levels = collectElementLevels();
+      const mapping = { _levels: levels };
+      for (const columnSelect of document.querySelectorAll("[data-element-column]")) {
+        const target = columnSelect.dataset.elementColumn;
+        const row = columnSelect.closest("[data-element-field-row]");
+        const levelKey = row?.dataset.elementFieldLevel || "";
+        const table = levels[levelKey]?.table || "";
+        if (!target || !table || !columnSelect.value) continue;
         mapping[target] = {
-          table: tableSelect.value,
+          level: levelKey,
+          table,
           column: columnSelect.value,
           cleanup: cleanupForTarget(target),
         };
