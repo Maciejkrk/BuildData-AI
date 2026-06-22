@@ -2138,7 +2138,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       select.innerHTML = models.length
         ? models.map(model => `<option value="${esc(model.id)}"${String(model.id) === String(activeProductRootModelId) ? " selected" : ""}>${esc(model.name || model.id)} (${esc(model.modelType || "Product")})</option>`).join("")
         : `<option value="">${esc(currentLang === "pl" ? "Brak modeli produktu" : "No product models")}</option>`;
-      select.disabled = !models.length || !isProductModelAccepted();
+      select.disabled = !models.length;
       if ($("productsRootModelId")) $("productsRootModelId").value = activeProductRootModelId || "";
     }
 
@@ -2170,7 +2170,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       await loadProductModelFields(productModelDefinitionFiles(), activeProductRootModelId);
       restoreProductMappingForActiveModel();
       renderProductRootModelSelect();
-      if (lastProductAnalysis) {
+      if (!isProductModelAccepted()) {
+        renderProductModelPreview();
+        $("productModelStatus").innerHTML = `<span class="ok">${esc(currentLang === "pl" ? "Wybrano model do edycji." : "Selected model for editing.")}</span> ${esc(productModelFileNames())}`;
+      } else if (lastProductAnalysis) {
         await analyzeFile("productsFile", "productsStatus", "products");
       } else {
         renderProductModelPreview();
@@ -2345,7 +2348,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           updateWorkflowGate();
           return;
         }
-        await loadProductModelFields(productModelDefinitionFiles());
+        await loadProductModelFields(productModelDefinitionFiles(), activeProductRootModelId);
         pimModelAccepted = true;
         acceptedProductModelSignature = productModelSignature(files);
         $("productModelStatus").innerHTML = `<span class="ok">${esc(t("model.accepted"))}</span> ${esc(productModelFileNames(files))}`;
@@ -6137,7 +6140,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     for (const inputId of ["productModelsFile", "productAttributesFile"]) {
       const modelInput = $(inputId);
       if (!modelInput) continue;
-      modelInput.addEventListener("change", () => {
+      modelInput.addEventListener("change", async () => {
         if (!confirmProductModelChange()) {
           modelInput.value = "";
           updateProductModelSelectionStatus();
@@ -6145,7 +6148,19 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         }
         resetAfterProductModelChange();
         updateProductModelSelectionStatus();
-        saveProductWorkspaceFilesState();
+        await saveProductWorkspaceFilesState();
+        if (!missingProductModelFiles().length) {
+          try {
+            $("productModelStatus").textContent = currentLang === "pl" ? "Odczytuję listę modeli..." : "Reading model list...";
+            await loadProductModelFields(productModelDefinitionFiles(), activeProductRootModelId);
+            renderProductModelPreview();
+            $("productModelStatus").innerHTML = `<span class="ok">${esc(currentLang === "pl" ? "Wybierz model produktu i zaakceptuj." : "Select a product model and accept it.")}</span> ${esc(productModelFileNames())}`;
+            updateWorkflowGate();
+            saveProductWorkspaceState();
+          } catch (error) {
+            $("productModelStatus").textContent = `${currentLang === "pl" ? "Nie udało się odczytać modeli: " : "Could not read models: "}${error.message}`;
+          }
+        }
       });
     }
     $("typicalFile").addEventListener("change", async () => {
