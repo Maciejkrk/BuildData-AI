@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from .building_elements_ui import render_building_elements_home
+from .colors_ui import render_colors_home
 from .products_ui import render_home
 
 def render_main_menu() -> str:
@@ -31,7 +32,7 @@ def render_main_menu() -> str:
     <h1>BuildData AI</h1>
   </header>
   <main>
-    <p class="intro">Wybierz niezależną sekcję pracy. Projekty produktów i elementów budowlanych są prowadzone osobno.</p>
+    <p class="intro">Wybierz niezależną sekcję pracy. Projekty produktów, elementów budowlanych i kolorów są prowadzone osobno.</p>
     <div class="choice-grid">
       <a class="choice" href="/products">
         <strong>Mapowanie Produktów</strong>
@@ -42,6 +43,11 @@ def render_main_menu() -> str:
         <strong>Mapowanie Building Elementów</strong>
         <span>Mapowanie hierarchii systemów, wariantów, warstw i relacji odczytanej z modelu PIM elementów budowlanych.</span>
         <span class="badge">BuildData AI Building Elements</span>
+      </a>
+      <a class="choice" href="/colors">
+        <strong>Import Kolorów</strong>
+        <span>Mapowanie kolorów prostych i tekstur. Bitmapy pozostają zewnętrznymi plikami, a eksport zapisuje tylko ich referencje.</span>
+        <span class="badge">BuildData AI Colors</span>
       </a>
     </div>
   </main>

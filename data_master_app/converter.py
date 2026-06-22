@@ -41,6 +41,8 @@ PRODUCT_ID_START = 900000
 BUILDING_ELEMENT_MODEL_TYPE = 74
 BUILDING_ELEMENT_TYPE_ID = 1
 BUILDING_ELEMENT_ID_START = 910000
+COLOR_TYPE_ID = 1
+COLOR_ID_START = 920000
 
 
 PIM_ATTR = {
@@ -139,6 +141,26 @@ BUILDING_ELEMENT_ATTR = {
     "default": 298,
     "bim_building_element_type": 299,
 }
+
+DEFAULT_COLOR_PARAMETERS = [
+    {"Name": "name", "DispName": "Name", "type": "VarChar", "options": None, "unit": None},
+    {"Name": "type", "DispName": "Type", "type": "Select", "options": [{"name": "Color", "value": "simple"}, {"name": "Texture", "value": "advanced"}], "unit": None},
+    {"Name": "description", "DispName": "Description", "type": "Longtext", "options": None, "unit": None},
+    {"Name": "r", "DispName": "R", "type": "Int", "options": None, "unit": None},
+    {"Name": "g", "DispName": "G", "type": "Int", "options": None, "unit": None},
+    {"Name": "b", "DispName": "B", "type": "Int", "options": None, "unit": None},
+    {"Name": "colorRGB", "DispName": "RGB / HEX", "type": "colorRGB", "options": None, "unit": None},
+    {"Name": "hbw", "DispName": "HBW", "type": "Int", "options": None, "unit": None},
+    {"Name": "RealWidth", "DispName": "Real width of loaded texture", "type": "Number", "options": None, "unit": "m"},
+    {"Name": "MainTexture", "DispName": "Main Texture", "type": "Files", "options": None, "unit": None},
+    {"Name": "Thumbnail", "DispName": "Thumbnail of the texture", "type": "Files", "options": None, "unit": None},
+    {"Name": "base_color_map", "DispName": "Base Color Map", "type": "Files", "options": None, "unit": None},
+    {"Name": "normal_map", "DispName": "Normal Map", "type": "Files", "options": None, "unit": None},
+    {"Name": "displacement_map", "DispName": "Displacement Map", "type": "Files", "options": None, "unit": None},
+    {"Name": "opacity_map", "DispName": "Opacity Map", "type": "Files", "options": None, "unit": None},
+    {"Name": "roughness", "DispName": "Roughness", "type": "Select", "options": [{"name": "Glossy", "value": "glossy"}, {"name": "Matte", "value": "matte"}, {"name": "Roughness Map", "value": "roughnessMap"}], "unit": None},
+    {"Name": "roughness_map", "DispName": "Roughness Map", "type": "Files", "options": None, "unit": None},
+]
 
 FIELD_TYPE_STRING_OPTION_ID = 265
 
@@ -424,6 +446,251 @@ def analyze_product_model_files(product_model_files: dict[str, bytes], product_r
         "product_models": model_choices,
         "target_fields": field_definitions_payload(fields),
     }
+
+
+def color_parameters_from_content(content: bytes | str | None = None) -> list[dict[str, Any]]:
+    if not content:
+        return [dict(item) for item in DEFAULT_COLOR_PARAMETERS]
+    payload = load_json_content(content)
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict) and item.get("Name")]
+    if isinstance(payload, dict):
+        for key in ("parameters", "colorParameters", "items"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict) and item.get("Name")]
+    return [dict(item) for item in DEFAULT_COLOR_PARAMETERS]
+
+
+def color_fields_payload(parameters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    result = []
+    for parameter in parameters:
+        name = str(parameter.get("Name") or "").strip()
+        if not name:
+            continue
+        param_type = str(parameter.get("type") or parameter.get("Type") or "VarChar").strip()
+        result.append(
+            {
+                "key": name,
+                "label": str(parameter.get("DispName") or name).strip() or name,
+                "type": param_type,
+                "unit": parameter.get("unit"),
+                "options": parameter.get("options") or [],
+                "is_file": normalize_lookup(param_type) == "files",
+            }
+        )
+    return result
+
+
+def analyze_colors_file(filename: str, content: bytes, color_parameters_content: bytes | str | None = None) -> dict[str, Any]:
+    tables = read_source_tables(filename, content)
+    parameters = color_parameters_from_content(color_parameters_content)
+    return {
+        "status": "colors_analyzed",
+        "filename": filename,
+        "fields": color_fields_payload(parameters),
+        "tables": [
+            {
+                "name": table.name,
+                "rows": len(table.rows),
+                "columns": columns_for_rows(table.rows),
+                "sample_rows": table.rows[:5],
+            }
+            for table in tables
+        ],
+    }
+
+
+def convert_colors_file(
+    filename: str,
+    content: bytes,
+    output_root: Path,
+    *,
+    color_mapping: dict[str, str] | None = None,
+    color_parameters_content: bytes | str | None = None,
+    table_name: str | None = None,
+) -> dict[str, Any]:
+    tables = read_source_tables(filename, content)
+    if not tables:
+        raise ValueError("Uploaded file does not contain readable color rows.")
+    table = next((item for item in tables if item.name == table_name), tables[0])
+    parameters = color_parameters_from_content(color_parameters_content)
+    parameter_by_name = {str(item.get("Name") or ""): item for item in parameters if item.get("Name")}
+    mapping = color_mapping or {}
+    colors = [
+        build_color_entry(row, index, mapping, parameter_by_name)
+        for index, row in enumerate(table.rows, start=1)
+        if any(value not in (None, "") for value in row.values())
+    ]
+    payload = {"Count": len(colors), "colors": colors}
+    job_id = make_job_id(f"colors:{filename}", content)
+    output_dir = output_root / job_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "colors.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    report = {
+        "source_filename": filename,
+        "table": table.name,
+        "source_rows": len(table.rows),
+        "colors_generated": len(colors),
+        "file_parameters_are_references": True,
+        "mapped_fields": {key: value for key, value in mapping.items() if value},
+    }
+    (output_dir / "colors_mapping_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "status": "colors_converted",
+        "job_id": job_id,
+        "colors_count": len(colors),
+        "files": {
+            "colors_json": f"/outputs/{job_id}/colors.json",
+            "mapping_report_json": f"/outputs/{job_id}/colors_mapping_report.json",
+        },
+        "report": report,
+    }
+
+
+def columns_for_rows(rows: list[dict[str, Any]]) -> list[str]:
+    columns: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for column in row:
+            if column not in seen:
+                seen.add(column)
+                columns.append(column)
+    return columns
+
+
+def build_color_entry(
+    row: dict[str, Any],
+    index: int,
+    mapping: dict[str, str],
+    parameter_by_name: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    color_id = COLOR_ID_START + index
+    parameters: list[dict[str, Any]] = []
+    files_parameters: list[dict[str, Any]] = []
+    rgb_value = mapped_row_value(row, mapping.get("colorRGB"))
+    rgb = parse_rgb_value(rgb_value)
+    for component, value in zip(("r", "g", "b"), rgb or (None, None, None)):
+        if value is not None and not mapped_row_value(row, mapping.get(component)):
+            add_color_parameter(parameters, color_id, component, value, parameter_by_name.get(component, {"type": "Int"}))
+    for parameter_name, source_column in mapping.items():
+        if not source_column or parameter_name == "colorRGB":
+            continue
+        value = mapped_row_value(row, source_column)
+        if value in (None, ""):
+            continue
+        parameter_def = parameter_by_name.get(parameter_name, {"Name": parameter_name, "type": "VarChar"})
+        if normalize_lookup(parameter_def.get("type")) == "files":
+            files_parameters.extend(color_file_parameters(color_id, parameter_name, value))
+            continue
+        add_color_parameter(parameters, color_id, parameter_name, value, parameter_def)
+    if not any(item["parameterName"] == "type" for item in parameters):
+        file_mode = bool(files_parameters)
+        add_color_parameter(parameters, color_id, "type", "advanced" if file_mode else "simple", parameter_by_name.get("type", {"type": "Select"}))
+    return {
+        "Id": color_id,
+        "TypeId": COLOR_TYPE_ID,
+        "dataVersions": [
+            {
+                "VersionId": 1,
+                "parameters": parameters,
+                "filesParameters": files_parameters,
+            }
+        ],
+    }
+
+
+def mapped_row_value(row: dict[str, Any], source_column: str | None) -> Any:
+    if not source_column:
+        return None
+    return row.get(source_column)
+
+
+def add_color_parameter(parameters: list[dict[str, Any]], color_id: int, name: str, value: Any, definition: dict[str, Any]) -> None:
+    param_type = normalize_lookup(definition.get("type") or definition.get("Type") or "VarChar")
+    item = {
+        "ColorId": color_id,
+        "VersionId": 1,
+        "parameterName": name,
+        "TextValue": None,
+        "varcharValue": None,
+        "IntValue": None,
+        "NumberValue": None,
+        "BooleanValue": False,
+    }
+    if param_type in {"int", "integer"}:
+        item["IntValue"] = int_value(value)
+    elif param_type in {"number", "float", "decimal"}:
+        item["NumberValue"] = parse_number(value)
+    elif param_type in {"select", "checkboxes"}:
+        item["TextValue"] = normalize_color_option(value, definition)
+    elif param_type in {"longtext", "text", "textarea"}:
+        item["TextValue"] = str(value).strip()
+    else:
+        item["varcharValue"] = str(value).strip()
+    if item["TextValue"] is not None or item["varcharValue"] is not None or item["IntValue"] is not None or item["NumberValue"] is not None:
+        parameters.append(item)
+
+
+def normalize_color_option(value: Any, definition: dict[str, Any]) -> str:
+    raw = str(value or "").strip()
+    raw_key = normalize_lookup(raw)
+    for option in definition.get("options") or []:
+        if not isinstance(option, dict):
+            continue
+        if raw_key in {normalize_lookup(option.get("value")), normalize_lookup(option.get("name"))}:
+            return str(option.get("value") or option.get("name") or raw).strip()
+    if raw_key in {"color", "kolor", "simple", "prosty"}:
+        return "simple"
+    if raw_key in {"texture", "tekstura", "advanced", "zlozony", "złożony"}:
+        return "advanced"
+    return raw
+
+
+def color_file_parameters(color_id: int, parameter_name: str, value: Any) -> list[dict[str, Any]]:
+    values = split_multi_value(value)
+    result = []
+    for order, file_ref in enumerate(values):
+        text = str(file_ref).strip()
+        if not text:
+            continue
+        is_url = text.lower().startswith(("http://", "https://"))
+        result.append(
+            {
+                "Id": color_id * 1000 + len(result) + 1,
+                "ElementId": color_id,
+                "VersionId": 1,
+                "parameterName": parameter_name,
+                "dispName": None,
+                "fileName": None if is_url else Path(text).name,
+                "fileUrl": text if is_url else None,
+                "OrderDisplayOrder": order,
+            }
+        )
+    return result
+
+
+def split_multi_value(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value or "").strip()
+    if not text:
+        return []
+    return [item.strip() for item in re.split(r"[;\n|]+", text) if item.strip()]
+
+
+def parse_rgb_value(value: Any) -> tuple[int, int, int] | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    hex_match = re.fullmatch(r"#?([0-9a-fA-F]{6})", text)
+    if hex_match:
+        raw = hex_match.group(1)
+        return int(raw[0:2], 16), int(raw[2:4], 16), int(raw[4:6], 16)
+    numbers = [int_value(item) for item in re.findall(r"\d+", text)[:3]]
+    if len(numbers) == 3 and all(item is not None for item in numbers):
+        return tuple(max(0, min(255, int(item))) for item in numbers)  # type: ignore[return-value]
+    return None
 
 
 def convert_uploaded_file(

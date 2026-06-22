@@ -9,8 +9,8 @@ import json
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
-from .converter import analyze_product_model_files, analyze_uploaded_file, convert_products_file
-from .web_ui import render_building_elements_home, render_home, render_main_menu
+from .converter import analyze_colors_file, analyze_product_model_files, analyze_uploaded_file, convert_colors_file, convert_products_file
+from .web_ui import render_building_elements_home, render_colors_home, render_home, render_main_menu
 from mapping_studio.services.building_preview import preview_building_elements_from_tables
 from mapping_studio.services.mapping_analyzer import analyze_source_tables, bundle_payload
 from mapping_studio.services.pim_model_loader import load_building_element_model, load_product_model
@@ -56,6 +56,11 @@ def health() -> dict[str, Any]:
 @app.get("/building-elements", response_class=HTMLResponse)
 def building_elements_home() -> HTMLResponse:
     return html_response(render_building_elements_home())
+
+
+@app.get("/colors", response_class=HTMLResponse)
+def colors_home() -> HTMLResponse:
+    return html_response(render_colors_home())
 
 
 @app.get("/elements")
@@ -223,6 +228,45 @@ async def building_elements_preview_api(
                 product_index = build_product_reference_index(reference_content)
         mapping = json.loads(mapping_json or "{}")
         return preview_building_elements_from_tables(tables, mapping, product_index)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/colors/analyze")
+async def analyze_colors_api(
+    file: UploadFile = File(...),
+    color_parameters: UploadFile | None = File(None),
+) -> dict[str, Any]:
+    try:
+        content = await file.read()
+        if not content:
+            raise ValueError("Uploaded file is empty.")
+        parameters_content = await color_parameters.read() if color_parameters is not None else None
+        return analyze_colors_file(file.filename or "colors", content, parameters_content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/colors/convert")
+async def convert_colors_api(
+    file: UploadFile = File(...),
+    color_parameters: UploadFile | None = File(None),
+    color_mapping: str = Form("{}"),
+    table_name: str | None = Form(None),
+) -> dict[str, Any]:
+    try:
+        content = await file.read()
+        if not content:
+            raise ValueError("Uploaded file is empty.")
+        parameters_content = await color_parameters.read() if color_parameters is not None else None
+        return convert_colors_file(
+            file.filename or "colors",
+            content,
+            OUTPUT_DIR,
+            color_mapping=json.loads(color_mapping or "{}"),
+            color_parameters_content=parameters_content,
+            table_name=table_name,
+        )
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

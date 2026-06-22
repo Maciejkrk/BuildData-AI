@@ -10,6 +10,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from data_master_app.converter import (
+    analyze_colors_file,
     analyze_product_model_files,
     analyze_uploaded_file,
     apply_enrichment_session_to_rows,
@@ -17,6 +18,7 @@ from data_master_app.converter import (
     build_pim_product,
     category_ids,
     convert_products_file,
+    convert_colors_file,
     convert_systems_file,
     convert_uploaded_file,
     map_source_row,
@@ -319,6 +321,42 @@ class ConverterTests(unittest.TestCase):
         product_attrs = data["products"][0]["dataVersions"][0]["productAttributes"]
         self.assertTrue(any(attr["AttributeId"] == 225 and attr["varcharValue"] == "FAST TEST" for attr in product_attrs))
         self.assertTrue(any(attr["AttributeId"] == 230 and attr["IntValue"] == 260 for attr in product_attrs))
+
+    def test_converts_color_rows_to_colors_json_with_file_references(self):
+        payload = json.dumps(
+            [
+                {"Name": "E1-10", "Type": "Color", "RGB": "#9b5d74"},
+                {"Name": "FG 01", "Type": "Texture", "Main": "textures/fg01/basecolor.png", "Normal": "https://example.test/fg01-normal.png"},
+            ]
+        ).encode("utf-8")
+
+        analysis = analyze_colors_file("colors.json", payload)
+        self.assertEqual(analysis["fields"][0]["key"], "name")
+        self.assertIn("Name", analysis["tables"][0]["columns"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = convert_colors_file(
+                "colors.json",
+                payload,
+                Path(tmp),
+                color_mapping={
+                    "name": "Name",
+                    "type": "Type",
+                    "colorRGB": "RGB",
+                    "MainTexture": "Main",
+                    "normal_map": "Normal",
+                },
+            )
+            colors_path = Path(tmp) / result["job_id"] / "colors.json"
+            data = json.loads(colors_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(data["Count"], 2)
+        first_params = data["colors"][0]["dataVersions"][0]["parameters"]
+        self.assertTrue(any(item["parameterName"] == "r" and item["IntValue"] == 155 for item in first_params))
+        second_version = data["colors"][1]["dataVersions"][0]
+        self.assertTrue(any(item["parameterName"] == "type" and item["TextValue"] == "advanced" for item in second_version["parameters"]))
+        self.assertTrue(any(item["parameterName"] == "MainTexture" and item["fileName"] == "basecolor.png" for item in second_version["filesParameters"]))
+        self.assertTrue(any(item["parameterName"] == "normal_map" and item["fileUrl"] == "https://example.test/fg01-normal.png" for item in second_version["filesParameters"]))
 
     def test_maps_system_rows(self):
         mapped = map_system_row(
