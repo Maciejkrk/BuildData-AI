@@ -1766,6 +1766,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         console.warn("Could not clear product files state", error);
       }
     }
+    function isPageReload() {
+      const navigation = performance.getEntriesByType?.("navigation")?.[0];
+      return navigation?.type === "reload";
+    }
     async function saveProductWorkspaceFilesState() {
       try {
         const previous = await getProductWorkspaceItem(PRODUCT_WORKSPACE_FILES_KEY) || {};
@@ -6322,16 +6326,21 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       generateEnrichedProductsMenuButton.onclick = () => generateAndSaveProductsAs();
     }
 
-    if (activeProductModelId && $("productModelId")) $("productModelId").value = activeProductModelId;
-    if (activeProductModelId && $("productsProductModelId")) $("productsProductModelId").value = activeProductModelId;
-    if (INITIAL_ANALYSIS && INITIAL_ANALYSIS.source_id && $("productsSourceId")) $("productsSourceId").value = INITIAL_ANALYSIS.source_id;
-    if (INITIAL_ANALYSIS && INITIAL_ANALYSIS.analysis) {
-      $("productsStatus").textContent = t("analysis.ready");
-      renderAnalysis(INITIAL_ANALYSIS.analysis, INITIAL_ANALYSIS.mode || "products");
-    } else {
-      restoreProductWorkspaceState();
+    async function initializeProductPage() {
+      if (activeProductModelId && $("productModelId")) $("productModelId").value = activeProductModelId;
+      if (activeProductModelId && $("productsProductModelId")) $("productsProductModelId").value = activeProductModelId;
+      if (INITIAL_ANALYSIS && INITIAL_ANALYSIS.source_id && $("productsSourceId")) $("productsSourceId").value = INITIAL_ANALYSIS.source_id;
+      if (INITIAL_ANALYSIS && INITIAL_ANALYSIS.analysis) {
+        $("productsStatus").textContent = t("analysis.ready");
+        renderAnalysis(INITIAL_ANALYSIS.analysis, INITIAL_ANALYSIS.mode || "products");
+      } else if (isPageReload()) {
+        await clearProductWorkspaceStorage();
+      } else {
+        await restoreProductWorkspaceState();
+      }
+      applyLanguage();
     }
-    applyLanguage();
+    initializeProductPage();
   </script>
 </body>
 </html>""".replace("__INITIAL_PRODUCT_MODEL_JSON__", initial_model_json).replace("__INITIAL_ANALYSIS_JSON__", initial_analysis_json).replace("__INITIAL_PRODUCT_MODEL_STATUS__", initial_status).replace("__INITIAL_REPORT_HTML__", initial_report_html).replace("__REPORT_EMPTY_HIDDEN__", report_empty_hidden).replace("__INITIAL_SUMMARY__", initial_summary).replace("__MODEL_READY_DISABLED__", model_ready_disabled).replace("__PRODUCT_MODEL_ID_VALUE__", product_model_id_value).replace("__PRODUCTS_STATUS__", products_status).replace("__PRODUCTS_SOURCE_ID__", html.escape(str((initial_analysis or {}).get("source_id") or "")))

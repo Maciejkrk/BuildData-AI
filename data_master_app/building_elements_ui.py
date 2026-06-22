@@ -415,6 +415,28 @@ def render_building_elements_home() -> str:
       db.close();
       return value;
     }
+    async function deleteElementWorkspaceItem(key) {
+      const db = await openElementWorkspaceDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("items", "readwrite");
+        tx.objectStore("items").delete(key);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    }
+    async function clearElementWorkspaceStorage() {
+      sessionStorage.removeItem(ELEMENT_WORKSPACE_KEY);
+      try {
+        await deleteElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY);
+      } catch (error) {
+        console.warn("Could not clear building-elements files state", error);
+      }
+    }
+    function isPageReload() {
+      const navigation = performance.getEntriesByType?.("navigation")?.[0];
+      return navigation?.type === "reload";
+    }
     async function saveElementWorkspaceFilesState() {
       try {
         const previous = await getElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY) || {};
@@ -1049,8 +1071,15 @@ def render_building_elements_home() -> str:
         saveElementWorkspaceState();
       });
     }
-    restoreElementWorkspaceState();
-    applyLanguage();
+    async function initializeElementPage() {
+      if (isPageReload()) {
+        await clearElementWorkspaceStorage();
+      } else {
+        await restoreElementWorkspaceState();
+      }
+      applyLanguage();
+    }
+    initializeElementPage();
   </script>
 </body>
 </html>"""
