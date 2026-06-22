@@ -6405,8 +6405,11 @@ def render_building_elements_home() -> str:
       </div>
       <div class="panel">
         <h3 data-i18n="elements.files">Model, produkty i dane</h3>
-        <label><span data-i18n="elements.modelFiles">buildingElementsModels.json + buildingElementsAttributes.json</span>
-          <input id="elementModelFiles" type="file" multiple accept=".json">
+        <label><span data-i18n="elements.modelsFile">buildingElementsModels.json</span>
+          <input id="elementModelsFile" type="file" accept=".json">
+        </label>
+        <label><span data-i18n="elements.attributesFile">buildingElementsAttributes.json</span>
+          <input id="elementAttributesFile" type="file" accept=".json">
         </label>
         <button type="button" class="secondary" onclick="loadElementModelHierarchy()" data-i18n="elements.loadModel">Wczytaj hierarchię modelu</button>
         <label><span data-i18n="elements.productsReference">Referencyjne products.json</span>
@@ -6451,7 +6454,8 @@ def render_building_elements_home() -> str:
         "elements.help": "Ten moduł służy do mapowania elementów budowlanych. Relacje do produktów wymagają referencyjnego pliku products.json z mapowania produktów.",
         "elements.notice": "To jest ekran roboczy dla hierarchii elementów budowlanych: leveli, parentów, wariantów i pól modelu PIM.",
         "elements.files": "Model, produkty i dane",
-        "elements.modelFiles": "buildingElementsModels.json + buildingElementsAttributes.json",
+        "elements.modelsFile": "buildingElementsModels.json",
+        "elements.attributesFile": "buildingElementsAttributes.json",
         "elements.loadModel": "Wczytaj hierarchię modelu",
         "elements.productsReference": "Referencyjne products.json (opcjonalne do analizy, wymagane do eksportu relacji)",
         "elements.importFile": "Plik importowany",
@@ -6482,7 +6486,8 @@ def render_building_elements_home() -> str:
         "elements.help": "This module starts building-element mapping. Product relations require a reference products.json exported from product mapping.",
         "elements.notice": "This is the first working screen for building elements. It will be expanded to the same operational depth as product mapping.",
         "elements.files": "Model, products and data",
-        "elements.modelFiles": "buildingElementsModels.json + buildingElementsAttributes.json",
+        "elements.modelsFile": "buildingElementsModels.json",
+        "elements.attributesFile": "buildingElementsAttributes.json",
         "elements.loadModel": "Load model hierarchy",
         "elements.productsReference": "Reference products.json (optional for analysis, required for relation export)",
         "elements.importFile": "Imported file",
@@ -6567,7 +6572,7 @@ def render_building_elements_home() -> str:
     async function saveElementWorkspaceFilesState() {
       try {
         const previous = await getElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY) || {};
-        const modelFiles = [...$("elementModelFiles").files];
+        const modelFiles = selectedElementModelFiles();
         const sourceFile = $("elementSourceFile").files[0] || null;
         const productsReferenceFile = $("productReferenceFile").files[0] || null;
         const payload = {
@@ -6632,6 +6637,26 @@ def render_building_elements_home() -> str:
     }
     function addFilesFromList(form, name, files) {
       [...(files || [])].forEach((file) => form.append(name, file));
+    }
+    function selectedElementModelFiles() {
+      return [
+        $("elementModelsFile")?.files?.[0] || null,
+        $("elementAttributesFile")?.files?.[0] || null,
+      ].filter(Boolean);
+    }
+    function elementModelFileFromCache(kind) {
+      const pattern = kind === "models" ? /models[.]json$/i : /attributes[.]json$/i;
+      return (loadedElementProjectFiles.modelFiles || []).find((file) => pattern.test(file?.name || "")) || null;
+    }
+    function effectiveElementModelFiles() {
+      const selected = selectedElementModelFiles();
+      if (selected.length) {
+        return [
+          $("elementModelsFile")?.files?.[0] || elementModelFileFromCache("models"),
+          $("elementAttributesFile")?.files?.[0] || elementModelFileFromCache("attributes"),
+        ].filter(Boolean);
+      }
+      return loadedElementProjectFiles.modelFiles || [];
     }
     function addRequiredFile(form, name, input, label) {
       const file = input.files[0];
@@ -6711,8 +6736,7 @@ def render_building_elements_home() -> str:
     }
     async function elementProjectPayload() {
       syncElementMappingState();
-      const modelFiles = [...$("elementModelFiles").files];
-      const effectiveModelFiles = modelFiles.length ? modelFiles : loadedElementProjectFiles.modelFiles;
+      const effectiveModelFiles = effectiveElementModelFiles();
       const sourceFile = $("elementSourceFile").files[0] || loadedElementProjectFiles.sourceFile;
       const productsReferenceFile = $("productReferenceFile").files[0] || loadedElementProjectFiles.productsReferenceFile;
       if (!effectiveModelFiles.length) throw new Error(t("project.missing"));
@@ -6767,11 +6791,10 @@ def render_building_elements_home() -> str:
         $("elementStatus").textContent = currentLang === "pl"
           ? "Proszę czekać, trwa odczyt hierarchii modelu."
           : "Please wait, model hierarchy is loading.";
-        if (!$("elementModelFiles").files.length && !loadedElementProjectFiles.modelFiles.length) {
+        if (!selectedElementModelFiles().length && !loadedElementProjectFiles.modelFiles.length) {
           await restoreElementWorkspaceFilesState();
         }
-        const selectedModelFiles = [...$("elementModelFiles").files];
-        const modelFiles = selectedModelFiles.length ? selectedModelFiles : loadedElementProjectFiles.modelFiles;
+        const modelFiles = effectiveElementModelFiles();
         if (modelFiles.length < 2) throw new Error(currentLang === "pl" ? "Wczytaj oba pliki modelu: Models i Attributes." : "Load both model files: Models and Attributes.");
         addFilesFromList(form, "files", modelFiles);
         const payload = await postForm("/api/building-elements/model", form);
@@ -6793,11 +6816,10 @@ def render_building_elements_home() -> str:
         $("elementStatus").textContent = currentLang === "pl"
           ? "Proszę czekać, trwa analiza pliku klienta."
           : "Please wait, customer file analysis is running.";
-        if ((!$("elementModelFiles").files.length && !loadedElementProjectFiles.modelFiles.length) || (!$("elementSourceFile").files[0] && !loadedElementProjectFiles.sourceFile)) {
+        if ((!selectedElementModelFiles().length && !loadedElementProjectFiles.modelFiles.length) || (!$("elementSourceFile").files[0] && !loadedElementProjectFiles.sourceFile)) {
           await restoreElementWorkspaceFilesState();
         }
-        const selectedModelFiles = [...$("elementModelFiles").files];
-        const modelFiles = selectedModelFiles.length ? selectedModelFiles : loadedElementProjectFiles.modelFiles;
+        const modelFiles = effectiveElementModelFiles();
         if (modelFiles.length < 2) throw new Error(currentLang === "pl" ? "Wczytaj oba pliki modelu: Models i Attributes." : "Load both model files: Models and Attributes.");
         addFilesFromList(form, "model_files", modelFiles);
         addOptionalProjectFile(form, "products_reference", $("productReferenceFile"), loadedElementProjectFiles.productsReferenceFile);
@@ -7123,7 +7145,7 @@ def render_building_elements_home() -> str:
       const file = $("elementProjectFile").files[0];
       if (file) loadElementProjectFromFile(file);
     });
-    for (const inputId of ["elementModelFiles", "productReferenceFile", "elementSourceFile"]) {
+    for (const inputId of ["elementModelsFile", "elementAttributesFile", "productReferenceFile", "elementSourceFile"]) {
       $(inputId).addEventListener("change", async () => {
         await saveElementWorkspaceFilesState();
         saveElementWorkspaceState();
