@@ -219,6 +219,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       font-weight: 700;
       font-size: 12px;
     }
+    .links a.primary-download { background: var(--accent); }
+    .links a.excel-download { background: #166534; }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -978,6 +980,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         </label>
         <button type="button" class="secondary" id="saveProjectBtn" data-i18n="project.save"__MODEL_READY_DISABLED__>Zapisz projekt mapowania na dysku</button>
         <button type="button" class="secondary" id="generateEnrichedProductsMenuBtn" data-i18n="enrichment.saveEnriched"__MODEL_READY_DISABLED__>Zapisz uzupełniony products.json</button>
+        <button type="button" class="secondary" id="clearProductSessionBtn" data-i18n="project.clearSession">Rozpocznij nową sesję produktów</button>
         <label><span data-i18n="project.load">Otwórz projekt mapowania z dysku</span>
           <input id="loadProjectFile" type="file" accept=".json">
         </label>
@@ -1069,6 +1072,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let acceptedProductModelSignature = "";
     const PRODUCT_WORKSPACE_KEY = "buildDataAiProductsWorkspace";
     const PRODUCT_WORKSPACE_FILES_KEY = "products-files";
+    const PRODUCT_WORKSPACE_STATE_VERSION = 2;
     const REQUIRED_PRODUCT_MODEL_FILES = [
       { key: "productsmodels", label: "productsModels.json" },
       { key: "productsattributes", label: "productsAttributes.json" }
@@ -1116,6 +1120,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "project.help": "Zapisuje decyzje mapowania, czyszczenia i reguły wierszy, żeby można było wrócić do tej samej pracy dla kolejnych plików klienta.",
         "project.name": "Nazwa projektu",
         "project.save": "Zapisz projekt mapowania na dysku",
+        "project.clearSession": "Rozpocznij nową sesję produktów",
         "project.load": "Otwórz projekt mapowania z dysku",
         "project.notSaved": "Projekt nie jest jeszcze zapisany.",
         "typical.title": "Uzupełnianie zmapowanych danych",
@@ -1401,6 +1406,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "project.help": "Saves mapping, cleanup and row hierarchy decisions so the same work can be reused for later customer files.",
         "project.name": "Project name",
         "project.save": "Save mapping project to disk",
+        "project.clearSession": "Start a new product session",
         "project.load": "Open mapping project from disk",
         "project.notSaved": "The project is not saved yet.",
         "typical.title": "Mapped Data Enrichment",
@@ -1678,6 +1684,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     function saveProductWorkspaceState() {
       try {
         const payload = {
+          stateVersion: PRODUCT_WORKSPACE_STATE_VERSION,
           projectName: $("projectName")?.value || "",
           analysis: lastProductAnalysis,
           mapping: productMapping,
@@ -1725,6 +1732,24 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       db.close();
       return value;
     }
+    async function deleteProductWorkspaceItem(key) {
+      const db = await openProductWorkspaceDb();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("items", "readwrite");
+        tx.objectStore("items").delete(key);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+    }
+    async function clearProductWorkspaceStorage() {
+      sessionStorage.removeItem(PRODUCT_WORKSPACE_KEY);
+      try {
+        await deleteProductWorkspaceItem(PRODUCT_WORKSPACE_FILES_KEY);
+      } catch (error) {
+        console.warn("Could not clear product files state", error);
+      }
+    }
     async function saveProductWorkspaceFilesState() {
       try {
         const previous = await getProductWorkspaceItem(PRODUCT_WORKSPACE_FILES_KEY) || {};
@@ -1761,11 +1786,17 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         const raw = sessionStorage.getItem(PRODUCT_WORKSPACE_KEY);
         if (!raw || INITIAL_ANALYSIS?.analysis) return;
         const payload = JSON.parse(raw);
+        if (payload.stateVersion !== PRODUCT_WORKSPACE_STATE_VERSION) {
+          await clearProductWorkspaceStorage();
+          loadedProjectFiles = { productModelFiles: [], productsFile: null, typicalDataFile: null };
+          return;
+        }
         if (payload.projectName && $("projectName")) $("projectName").value = payload.projectName;
         if (payload.status && $("productsStatus")) $("productsStatus").textContent = payload.status;
         if (!pimModelAccepted && loadedProjectFiles.productModelFiles.length) {
           await loadProductModelFields(loadedProjectFiles.productModelFiles);
           acceptedProductModelSignature = productModelSignature(loadedProjectFiles.productModelFiles);
+          pimModelAccepted = true;
         }
         enrichmentSession = payload.enrichmentSession || enrichmentSession;
         mappingWorkspaceTab = payload.mappingWorkspaceTab || mappingWorkspaceTab;
@@ -1784,6 +1815,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         }
         if (payload.analysis) renderAnalysis(payload.analysis, "products");
         renderRestoredGeneratedLinks();
+        updateWorkflowGate();
       } catch (error) {
         console.warn("Could not restore product workspace state", error);
       }
@@ -2121,6 +2153,16 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           ? "Zmiana modelu produktu rozpocznie nowy projekt i wyczyści aktualne mapowanie oraz sesję uzupełniania. Zapisz obecny projekt przed zmianą. Czy kontynuować?"
           : "Changing the product model starts a new project and clears the current mapping and enrichment session. Save the current project before changing it. Continue?"
       );
+    }
+
+    async function startNewProductSession() {
+      await clearProductWorkspaceStorage();
+      resetAfterProductModelChange();
+      for (const id of ["productModelsFile", "productAttributesFile"]) {
+        if ($(id)) $(id).value = "";
+      }
+      updateProductModelSelectionStatus();
+      $("projectStatus").textContent = currentLang === "pl" ? "Rozpoczęto nową sesję produktów." : "Started a new product session.";
     }
 
     function enrichmentReady() {
@@ -5882,10 +5924,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 
     function renderConversion(data, mode, showPanel = true) {
       const links = [];
-      if (data.files.products_json) links.push(`<a href="${esc(data.files.products_json)}" target="_blank">products.json</a>`);
-      if (data.files.mapping_report_json) links.push(`<a href="${esc(data.files.mapping_report_json)}" target="_blank">mapping_report.json</a>`);
-      if (data.files.mapping_report_xlsx) links.push(`<a href="${esc(data.files.mapping_report_xlsx)}" target="_blank">mapping_report.xlsx</a>`);
-      if (data.files.enrichment_session_json) links.push(`<a href="${esc(data.files.enrichment_session_json)}" target="_blank">enrichment_session.json</a>`);
+      if (data.files.products_json) links.push(`<a class="primary-download" href="${esc(data.files.products_json)}" download="products.json">Pobierz products.json</a>`);
+      if (data.files.mapping_report_xlsx) links.push(`<a class="excel-download" href="${esc(data.files.mapping_report_xlsx)}" download="mapping_report.xlsx">Pobierz raport Excel</a>`);
+      if (data.files.mapping_report_json) links.push(`<a href="${esc(data.files.mapping_report_json)}" download="mapping_report.json">Pobierz raport JSON</a>`);
+      if (data.files.enrichment_session_json) links.push(`<a href="${esc(data.files.enrichment_session_json)}" download="enrichment_session.json">Pobierz sesję uzupełniania</a>`);
       if (!showPanel) return links.join("");
       const warnings = data.report?.warnings || {};
       const html = `
@@ -5966,6 +6008,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
     if ($("projectName")) $("projectName").addEventListener("input", saveProductWorkspaceState);
     $("saveProjectBtn").addEventListener("click", () => saveProject());
+    if ($("clearProductSessionBtn")) $("clearProductSessionBtn").addEventListener("click", () => startNewProductSession());
     $("loadProjectFile").addEventListener("change", () => {
       const file = $("loadProjectFile").files[0];
       if (file) loadProjectFromFile(file);

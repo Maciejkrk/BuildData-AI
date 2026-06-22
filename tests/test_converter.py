@@ -153,6 +153,8 @@ class ConverterTests(unittest.TestCase):
         self.assertIn('id="productsForm" action="/analyze-products-page" method="post" enctype="multipart/form-data"', body)
         self.assertIn('id="productsFile" name="file" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">', body)
         self.assertIn('type="submit" class="secondary" id="analyzeProductsBtn"', body)
+        self.assertIn('id="clearProductSessionBtn"', body)
+        self.assertIn("Pobierz raport Excel", body)
         self.assertNotIn('id="productsForm" action="/analyze"', body)
 
         files_response = product_model_files(location.split("=", 1)[1])
