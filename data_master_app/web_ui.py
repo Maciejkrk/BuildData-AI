@@ -57,13 +57,13 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     if initial_analysis:
         initial_report_html = render_initial_analysis_report(initial_analysis)
     report_empty_hidden = " hidden" if initial_report_html else ""
-    initial_summary = "Mapping: products" if initial_analysis else ("Model produktu" if initial_model_accepted else ("BĹ‚Ä…d modelu" if initial_model.get("error") else "Brak akcji"))
+    initial_summary = "Mapping: products" if initial_analysis else ("Model produktu" if initial_model_accepted else ("Błąd modelu" if initial_model.get("error") else "Brak akcji"))
     initial_status = "Wczytaj i zaakceptuj wymagane pliki modelu PIM."
     model_ready_disabled = "" if initial_model_accepted else " disabled"
     product_model_id_value = html.escape(str(initial_model.get("model_id") or "")) if initial_model_accepted else ""
-    products_status = "Gotowe do importu produktĂłw." if initial_model_accepted else "Najpierw zaakceptuj model produktu PIM."
+    products_status = "Gotowe do importu produktów." if initial_model_accepted else "Najpierw zaakceptuj model produktu PIM."
     if initial_model.get("error"):
-        initial_status = f"Nie udaĹ‚o siÄ™ zaakceptowaÄ‡ modelu: {html.escape(str(initial_model['error']))}"
+        initial_status = f"Nie udało się zaakceptować modelu: {html.escape(str(initial_model['error']))}"
     elif initial_model_accepted:
         files = ", ".join(html.escape(str(file)) for file in (initial_model.get("files") or []))
         initial_status = f"Model produktu został zaakceptowany. Wczytane pola modelu: {len(initial_model.get('target_fields') or [])}. Pliki: {files}"
@@ -983,7 +983,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     <aside>
       <form id="productModelPanel" class="panel" action="/product-model-accept" method="post" enctype="multipart/form-data">
         <h2 data-i18n="model.title">Model produktu PIM</h2>
-        <div class="muted" data-i18n="model.help">Najpierw wczytaj dwa pliki z PIM: productsModels.json i productsAttributes.json. One tworzÄ… obowiÄ…zujÄ…cy model produktu dla caĹ‚ego procesu.</div>
+        <div class="muted" data-i18n="model.help">Najpierw wczytaj dwa pliki z PIM: productsModels.json i productsAttributes.json. One tworzą obowiązujący model produktu dla całego procesu.</div>
         <input id="productModelId" type="hidden" name="product_model_id" value="__PRODUCT_MODEL_ID_VALUE__">
         <div class="model-file-grid">
           <label><span data-i18n="model.modelsFile">productsModels.json</span>
@@ -993,18 +993,18 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             <input id="productAttributesFile" name="products_attributes_file" type="file" accept=".json" required onchange="window.productModelFileChanged && window.productModelFileChanged()">
           </label>
         </div>
-        <div class="gate-warning" data-i18n="model.warning">Zmiana tych plikĂłw kasuje aktualnÄ… strukturÄ™ mapowania, podglÄ…d i wygenerowany products.json. Dalsze funkcje sÄ… dostÄ™pne dopiero po zaakceptowaniu modelu.</div>
+        <div class="gate-warning" data-i18n="model.warning">Zmiana tych plików kasuje aktualną strukturę mapowania, podgląd i wygenerowany products.json. Dalsze funkcje są dostępne dopiero po zaakceptowaniu modelu.</div>
         <button type="submit" id="acceptProductModelBtn" data-i18n="model.accept" disabled>Zaakceptuj model produktu</button>
         <div id="productModelStatus" class="status">__INITIAL_PRODUCT_MODEL_STATUS__</div>
       </form>
 
       <div id="productsPanel" class="panel">
         <h2 data-i18n="products.title">1. Produkty</h2>
-        <div class="muted" data-i18n="products.help">Analizuj plik, przypisz kolumny do modelu produktu i typoszeregu, ustaw czyszczenie wartoĹ›ci, potem generuj products.json.</div>
+        <div class="muted" data-i18n="products.help">Analizuj plik, przypisz kolumny do modelu produktu i typoszeregu, ustaw czyszczenie wartości, potem generuj products.json.</div>
         <form id="productsForm" action="/analyze-products-page" method="post" enctype="multipart/form-data">
           <input id="productsProductModelId" type="hidden" name="product_model_id" value="__PRODUCT_MODEL_ID_VALUE__">
           <input id="productsSourceId" type="hidden" name="products_source_id" value="__PRODUCTS_SOURCE_ID__">
-          <label><span data-i18n="products.file">Plik produktĂłw</span>
+          <label><span data-i18n="products.file">Plik produktów</span>
             <input id="productsFile" name="file" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv"__MODEL_READY_DISABLED__>
           </label>
           <button type="submit" class="secondary" id="analyzeProductsBtn" name="_action" value="analyze" data-i18n="products.analyze"__MODEL_READY_DISABLED__>Analizuj i mapuj produkty</button>
@@ -1016,13 +1016,13 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 
       <div id="projectPanel" class="panel">
         <h2 data-i18n="project.title">Projekt mapowania</h2>
-        <div class="muted" data-i18n="project.help">Zapisuje decyzje mapowania, czyszczenia i reguĹ‚y wierszy, ĹĽeby moĹĽna byĹ‚o wrĂłciÄ‡ do tej samej pracy dla kolejnych plikĂłw klienta.</div>
+        <div class="muted" data-i18n="project.help">Zapisuje decyzje mapowania, czyszczenia i reguły wierszy, żeby można było wrócić do tej samej pracy dla kolejnych plików klienta.</div>
         <label><span data-i18n="project.name">Nazwa projektu</span>
           <input id="projectName" type="text" value="import-produktow"__MODEL_READY_DISABLED__>
         </label>
         <button type="button" class="secondary" id="saveProjectBtn" data-i18n="project.save"__MODEL_READY_DISABLED__>Zapisz projekt mapowania na dysku</button>
-        <button type="button" class="secondary" id="generateEnrichedProductsMenuBtn" data-i18n="enrichment.saveEnriched"__MODEL_READY_DISABLED__>Zapisz uzupeĹ‚niony products.json</button>
-        <label><span data-i18n="project.load">OtwĂłrz projekt mapowania z dysku</span>
+        <button type="button" class="secondary" id="generateEnrichedProductsMenuBtn" data-i18n="enrichment.saveEnriched"__MODEL_READY_DISABLED__>Zapisz uzupełniony products.json</button>
+        <label><span data-i18n="project.load">Otwórz projekt mapowania z dysku</span>
           <input id="loadProjectFile" type="file" accept=".json">
         </label>
         <div id="projectStatus" class="status" data-i18n="project.notSaved">Projekt nie jest jeszcze zapisany.</div>
@@ -1038,11 +1038,11 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 
     <section>
       <div class="toolbar">
-        <strong data-i18n="report.title">Mapowanie i podglÄ…d</strong>
+        <strong data-i18n="report.title">Mapowanie i podgląd</strong>
         <span id="summary" class="muted" data-i18n="report.idle">__INITIAL_SUMMARY__</span>
       </div>
       <div class="content">
-        <div id="reportEmpty" class="muted" data-i18n="report.empty"__REPORT_EMPTY_HIDDEN__>Po analizie pojawi siÄ™ docelowa struktura modelu. Dla kaĹĽdej cechy PIM wybierz kolumnÄ™ z pliku importowanego, czyszczenie, jednostkÄ™ albo mapÄ™ odpowiedzi sĹ‚ownikowych.</div>
+        <div id="reportEmpty" class="muted" data-i18n="report.empty"__REPORT_EMPTY_HIDDEN__>Po analizie pojawi się docelowa struktura modelu. Dla każdej cechy PIM wybierz kolumnę z pliku importowanego, czyszczenie, jednostkę albo mapę odpowiedzi słownikowych.</div>
         <div id="report">__INITIAL_REPORT_HTML__</div>
       </div>
     </section>
@@ -1066,7 +1066,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (status) {
         status.innerHTML = missing.length
           ? "Wybrane pliki: " + (selected.length ? selected.join(", ") : "brak") + "<br>Brakuje: " + missing.join(", ")
-          : "Wybrane pliki: " + selected.join(", ") + ". MoĹĽesz zaakceptowaÄ‡ model.";
+          : "Wybrane pliki: " + selected.join(", ") + ". Możesz zaakceptować model.";
       }
     };
   </script>
@@ -1124,7 +1124,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "nav.buildingElements": "Elementy budowlane",
         "app.subtitle": "Mapowanie danych produktowych i eksport products.json",
         "model.title": "Model produktu PIM",
-        "model.help": "Najpierw wczytaj dwa pliki z PIM: productsModels.json i productsAttributes.json. One tworzÄ… obowiÄ…zujÄ…cy model produktu dla caĹ‚ego procesu.",
+        "model.help": "Najpierw wczytaj dwa pliki z PIM: productsModels.json i productsAttributes.json. One tworzą obowiązujący model produktu dla całego procesu.",
         "model.file": "Pliki modelu produktu PIM JSON",
         "model.modelsFile": "Plik productsModels.json",
         "model.attributesFile": "Plik productsAttributes.json",
@@ -1132,113 +1132,113 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "model.default": "Wczytaj i zaakceptuj wymagane pliki modelu PIM.",
         "model.required": "Wczytaj i zaakceptuj wymagane pliki modelu PIM.",
         "model.selected": "Wybrano pliki modelu produktu",
-        "model.warning": "Zmiana tych plikĂłw kasuje aktualnÄ… strukturÄ™ mapowania, podglÄ…d i wygenerowany products.json. Dalsze funkcje sÄ… dostÄ™pne dopiero po zaakceptowaniu modelu.",
+        "model.warning": "Zmiana tych plików kasuje aktualną strukturę mapowania, podgląd i wygenerowany products.json. Dalsze funkcje są dostępne dopiero po zaakceptowaniu modelu.",
         "model.accept": "Zaakceptuj model produktu",
         "model.accepted": "Model produktu został zaakceptowany. Możesz rozpocząć import danych klienta.",
         "model.previewTitle": "Model produktu PIM",
-        "model.previewHelp": "To jest docelowa struktura produktu odczytana z plikĂłw modelu PIM. ReguĹ‚y i mapowanie pojawiÄ… siÄ™ po wczytaniu pliku danych klienta.",
+        "model.previewHelp": "To jest docelowa struktura produktu odczytana z plików modelu PIM. Reguły i mapowanie pojawią się po wczytaniu pliku danych klienta.",
         "model.previewSummary": "Model produktu",
         "model.fieldsLoaded": "Wczytane pola modelu",
-        "model.missingFiles": "Brakuje wymaganych plikĂłw: ",
-        "model.changed": "Pliki modelu zostaĹ‚y zmienione. Dotychczasowe mapowanie i wygenerowane dane zostaĹ‚y wyczyszczone. Zaakceptuj model ponownie.",
+        "model.missingFiles": "Brakuje wymaganych plików: ",
+        "model.changed": "Pliki modelu zostały zmienione. Dotychczasowe mapowanie i wygenerowane dane zostały wyczyszczone. Zaakceptuj model ponownie.",
         "gate.locked": "Najpierw zaakceptuj model produktu PIM.",
         "products.title": "1. Produkty",
-        "products.help": "Analizuj plik, przypisz kolumny do modelu produktu i typoszeregu, ustaw czyszczenie wartoĹ›ci, potem generuj products.json.",
-        "products.file": "Plik produktĂłw",
+        "products.help": "Analizuj plik, przypisz kolumny do modelu produktu i typoszeregu, ustaw czyszczenie wartości, potem generuj products.json.",
+        "products.file": "Plik produktów",
         "products.analyze": "Analizuj i mapuj produkty",
         "products.generate": "Generuj products.json z mapowania",
         "products.outputTitle": "Wynik products.json",
-        "products.outputHelp": "To zapisuje wĹ‚aĹ›ciwy plik danych produktu. Projekt mapowania zapisuje tylko ustawienia pracy.",
+        "products.outputHelp": "To zapisuje właściwy plik danych produktu. Projekt mapowania zapisuje tylko ustawienia pracy.",
         "products.saveAs": "Zapisz products.json jako...",
         "products.saveMissing": "Najpierw wygeneruj products.json z aktualnego mapowania.",
-        "products.saveFailed": "Nie udaĹ‚o siÄ™ zapisaÄ‡ products.json.",
+        "products.saveFailed": "Nie udało się zapisać products.json.",
         "products.saved": "Zapisano products.json:",
-        "products.ready": "Gotowe do importu produktĂłw.",
+        "products.ready": "Gotowe do importu produktów.",
         "project.title": "Projekt mapowania",
-        "project.help": "Zapisuje decyzje mapowania, czyszczenia i reguĹ‚y wierszy, ĹĽeby moĹĽna byĹ‚o wrĂłciÄ‡ do tej samej pracy dla kolejnych plikĂłw klienta.",
+        "project.help": "Zapisuje decyzje mapowania, czyszczenia i reguły wierszy, żeby można było wrócić do tej samej pracy dla kolejnych plików klienta.",
         "project.name": "Nazwa projektu",
         "project.save": "Zapisz projekt mapowania na dysku",
-        "project.load": "OtwĂłrz projekt mapowania z dysku",
+        "project.load": "Otwórz projekt mapowania z dysku",
         "project.notSaved": "Projekt nie jest jeszcze zapisany.",
-        "typical.title": "UzupeĹ‚nianie zmapowanych danych",
-        "typical.help": "Wczytaj dane typowe w formacie wynikowego products.json albo dopisz brakujÄ…ce wartoĹ›ci rÄ™cznie. Sesja uzupeĹ‚niania jest zapisywana razem z projektem mapowania.",
+        "typical.title": "Uzupełnianie zmapowanych danych",
+        "typical.help": "Wczytaj dane typowe w formacie wynikowego products.json albo dopisz brakujące wartości ręcznie. Sesja uzupełniania jest zapisywana razem z projektem mapowania.",
         "typical.file": "Plik danych typowych",
         "typical.optional": "Opcjonalnie: wybierz plik z danymi typowymi.",
-        "typical.waitForMapping": "Najpierw wczytaj plik importowany i utwĂłrz mapowanie produktĂłw.",
-        "enrichment.title": "UzupeĹ‚nianie zmapowanych danych",
-        "enrichment.help": "Tu zapisujesz dodatkowÄ… sesjÄ™ uzupeĹ‚niania. WartoĹ›ci rÄ™czne i ĹşrĂłdĹ‚a typowe sÄ… pamiÄ™tane osobno od mapowania kolumn.",
+        "typical.waitForMapping": "Najpierw wczytaj plik importowany i utwórz mapowanie produktów.",
+        "enrichment.title": "Uzupełnianie zmapowanych danych",
+        "enrichment.help": "Tu zapisujesz dodatkową sesję uzupełniania. Wartości ręczne i źródła typowe są pamiętane osobno od mapowania kolumn.",
         "enrichment.typicalLoaded": "Plik danych typowych poprawny",
-        "enrichment.typicalInvalid": "Plik danych typowych musi byÄ‡ JSON-em w formacie wynikowego products.json.",
+        "enrichment.typicalInvalid": "Plik danych typowych musi być JSON-em w formacie wynikowego products.json.",
         "enrichment.productsFound": "produkty",
         "enrichment.attributesFound": "atrybuty",
-        "enrichment.manualTitle": "Dopisz wartoĹ›Ä‡ rÄ™cznie",
+        "enrichment.manualTitle": "Dopisz wartość ręcznie",
         "enrichment.targetField": "Cecha z modelu PIM",
-        "enrichment.value": "WartoĹ›Ä‡ do wpisania",
+        "enrichment.value": "Wartość do wpisania",
         "enrichment.scope": "Zakres",
-        "enrichment.scopeCurrent": "Aktualnie oglÄ…dany produkt",
+        "enrichment.scopeCurrent": "Aktualnie oglądany produkt",
         "enrichment.scopeAll": "Wszystkie produkty",
         "enrichment.scopeSelectedProducts": "Wybrane produkty z listy",
         "enrichment.scopeMatchByFeature": "Dopasuj produkty po tej samej cesze",
         "enrichment.mode": "Tryb",
-        "enrichment.missingOnly": "UzupeĹ‚nij tylko puste",
-        "enrichment.replace": "ZastÄ…p istniejÄ…ce wartoĹ›ci",
-        "enrichment.addManual": "Dodaj do sesji rÄ™cznej",
-        "enrichment.session": "Sesja uzupeĹ‚niania",
-        "enrichment.noEntries": "Brak rÄ™cznych uzupeĹ‚nieĹ„.",
+        "enrichment.missingOnly": "Uzupełnij tylko puste",
+        "enrichment.replace": "Zastąp istniejące wartości",
+        "enrichment.addManual": "Dodaj do sesji ręcznej",
+        "enrichment.session": "Sesja uzupełniania",
+        "enrichment.noEntries": "Brak ręcznych uzupełnień.",
         "enrichment.noTypical": "Nie wczytano danych typowych.",
-        "enrichment.remove": "UsuĹ„",
+        "enrichment.remove": "Usuń",
         "enrichment.savedWithProject": "Sesja zostanie zapisana z projektem mapowania i przekazana do generowania products.json.",
         "enrichment.mappingTab": "Mapowanie produktu",
-        "enrichment.enrichmentTab": "UzupeĹ‚nianie danych",
+        "enrichment.enrichmentTab": "Uzupełnianie danych",
         "enrichment.workflowTabs": "Etap pracy",
-        "enrichment.fileMappingStep": "1. Plik uzupeĹ‚nieĹ„ i mapowanie",
-        "enrichment.applyStep": "2. Zastosowanie uzupeĹ‚nieĹ„",
-        "enrichment.fileSelector": "Lista plikĂłw uzupeĹ‚nieĹ„",
-        "enrichment.loadExternalFile": "Wczytaj plik uzupeĹ‚nieĹ„",
-        "enrichment.sourceMode": "Typ ĹşrĂłdĹ‚a uzupeĹ‚nieĹ„",
-        "enrichment.sourceMapped": "Zmapowany products.json z modelem ĹşrĂłdĹ‚owym",
+        "enrichment.fileMappingStep": "1. Plik uzupełnień i mapowanie",
+        "enrichment.applyStep": "2. Zastosowanie uzupełnień",
+        "enrichment.fileSelector": "Lista plików uzupełnień",
+        "enrichment.loadExternalFile": "Wczytaj plik uzupełnień",
+        "enrichment.sourceMode": "Typ źródła uzupełnień",
+        "enrichment.sourceMapped": "Zmapowany products.json z modelem źródłowym",
         "enrichment.sourceRaw": "Surowy plik do mapowania od nowa",
-        "enrichment.supplementFile": "Plik uzupeĹ‚nieĹ„ do mapowania",
-        "enrichment.supplementMapLater": "Ten plik musi zostaÄ‡ zmapowany do aktualnego modelu produktu. Mapowanie uzupeĹ‚nieĹ„ jest osobnym etapem i nie nadpisuje gĹ‚Ăłwnego mapowania produktĂłw.",
-        "enrichment.mapSupplement": "Mapuj plik uzupeĹ‚nieĹ„",
-        "enrichment.prepareSupplement": "Zaakceptuj mapowanie uzupeĹ‚nieĹ„",
-        "enrichment.supplementReady": "Dane uzupeĹ‚nieĹ„ sÄ… przygotowane do wyboru produktu wzorcowego.",
-        "enrichment.supplementMappingTitle": "Mapowanie pliku uzupeĹ‚nieĹ„",
-        "enrichment.backToProducts": "WrĂłÄ‡ do mapowania produktĂłw",
-        "enrichment.noSupplementMapping": "Najpierw zmapuj plik uzupeĹ‚nieĹ„.",
-        "enrichment.noSupplementFile": "Najpierw wybierz plik uzupeĹ‚nieĹ„.",
-        "enrichment.supplementPrepared": "Mapowanie uzupeĹ‚nieĹ„ zostaĹ‚o zaakceptowane. Wybierz produkt wzorcowy i cechy do dopisania.",
-        "enrichment.sourceModels": "Model ĹşrĂłdĹ‚owy danych typowych",
-        "enrichment.loadSourceModels": "Wczytaj productsModels.json ĹşrĂłdĹ‚a",
-        "enrichment.loadSourceAttributes": "Wczytaj productsAttributes.json ĹşrĂłdĹ‚a",
+        "enrichment.supplementFile": "Plik uzupełnień do mapowania",
+        "enrichment.supplementMapLater": "Ten plik musi zostać zmapowany do aktualnego modelu produktu. Mapowanie uzupełnień jest osobnym etapem i nie nadpisuje głównego mapowania produktów.",
+        "enrichment.mapSupplement": "Mapuj plik uzupełnień",
+        "enrichment.prepareSupplement": "Zaakceptuj mapowanie uzupełnień",
+        "enrichment.supplementReady": "Dane uzupełnień są przygotowane do wyboru produktu wzorcowego.",
+        "enrichment.supplementMappingTitle": "Mapowanie pliku uzupełnień",
+        "enrichment.backToProducts": "Wróć do mapowania produktów",
+        "enrichment.noSupplementMapping": "Najpierw zmapuj plik uzupełnień.",
+        "enrichment.noSupplementFile": "Najpierw wybierz plik uzupełnień.",
+        "enrichment.supplementPrepared": "Mapowanie uzupełnień zostało zaakceptowane. Wybierz produkt wzorcowy i cechy do dopisania.",
+        "enrichment.sourceModels": "Model źródłowy danych typowych",
+        "enrichment.loadSourceModels": "Wczytaj productsModels.json źródła",
+        "enrichment.loadSourceAttributes": "Wczytaj productsAttributes.json źródła",
         "enrichment.loadRawFile": "Wczytaj surowy plik",
         "enrichment.loaded": "wczytano",
         "enrichment.notLoaded": "nie wczytano",
         "enrichment.mappedProductsFile": "Zmapowany products.json",
         "enrichment.rawFile": "Surowy plik",
-        "enrichment.rawModeHelp": "Surowy plik wymaga osobnego mapowania do aktualnego modelu przed uĹĽyciem jako dane typowe.",
-        "enrichment.sourceModelMissing": "Dodaj model ĹşrĂłdĹ‚owy, jeĹ›li plik pochodzi z innego modelu niĹĽ aktualny.",
-        "enrichment.sourceModelLoaded": "Wczytano model ĹşrĂłdĹ‚owy danych typowych.",
-        "enrichment.attributeMap": "Mapowanie cech ĹşrĂłdĹ‚owych do aktualnego modelu",
-        "enrichment.sourceAttribute": "Cecha ĹşrĂłdĹ‚owa",
+        "enrichment.rawModeHelp": "Surowy plik wymaga osobnego mapowania do aktualnego modelu przed użyciem jako dane typowe.",
+        "enrichment.sourceModelMissing": "Dodaj model źródłowy, jeśli plik pochodzi z innego modelu niż aktualny.",
+        "enrichment.sourceModelLoaded": "Wczytano model źródłowy danych typowych.",
+        "enrichment.attributeMap": "Mapowanie cech źródłowych do aktualnego modelu",
+        "enrichment.sourceAttribute": "Cecha źródłowa",
         "enrichment.targetAttribute": "Cecha w aktualnym modelu",
-        "enrichment.noAttributeMap": "Brak cech do mapowania albo plik uzupeĹ‚nieĹ„ nie zostaĹ‚ jeszcze wczytany.",
-        "enrichment.preserveExisting": "Nie zmieniaj istniejÄ…cych danych",
-        "enrichment.noVariantFill": "UzupeĹ‚nianie dotyczy cech produktu. Warianty typoszeregu nie sÄ… uzupeĹ‚niane osobno.",
-        "enrichment.clearSession": "UsuĹ„ dopisane dane",
-        "enrichment.sessionCleared": "Sesja uzupeĹ‚nieĹ„ zostaĹ‚a wyczyszczona.",
-        "enrichment.typicalSection": "Mapowanie pliku uzupeĹ‚nieĹ„",
-        "enrichment.manualSection": "UzupeĹ‚nianie rÄ™czne",
-        "enrichment.chooseTypicalFile": "Wczytaj plik uzupeĹ‚nieĹ„",
+        "enrichment.noAttributeMap": "Brak cech do mapowania albo plik uzupełnień nie został jeszcze wczytany.",
+        "enrichment.preserveExisting": "Nie zmieniaj istniejących danych",
+        "enrichment.noVariantFill": "Uzupełnianie dotyczy cech produktu. Warianty typoszeregu nie są uzupełniane osobno.",
+        "enrichment.clearSession": "Usuń dopisane dane",
+        "enrichment.sessionCleared": "Sesja uzupełnień została wyczyszczona.",
+        "enrichment.typicalSection": "Mapowanie pliku uzupełnień",
+        "enrichment.manualSection": "Uzupełnianie ręczne",
+        "enrichment.chooseTypicalFile": "Wczytaj plik uzupełnień",
         "enrichment.currentProduct": "Aktualny produkt importowany",
-        "enrichment.typicalProduct": "Rekord z pliku uzupeĹ‚nieĹ„",
-        "enrichment.supplementMatchField": "Taka sama cecha w pliku uzupeĹ‚nieĹ„",
-        "enrichment.addTypicalMatch": "Zastosuj zmianÄ™ dla wskazanych produktĂłw",
-        "enrichment.saveEnriched": "Zapisz uzupeĹ‚niony products.json",
-        "enrichment.plannedTitle": "Zaplanowane uzupeĹ‚nienia dla tego produktu",
-        "enrichment.plannedEmpty": "Brak zaplanowanych uzupeĹ‚nieĹ„ dla aktualnego produktu.",
-        "enrichment.manualCurrentProduct": "Edycja rÄ™czna aktualnego produktu",
-        "enrichment.applyTypeSeriesAll": "Dopisz cechy typoszeregu do wszystkich wariantĂłw produktu",
+        "enrichment.typicalProduct": "Rekord z pliku uzupełnień",
+        "enrichment.supplementMatchField": "Taka sama cecha w pliku uzupełnień",
+        "enrichment.addTypicalMatch": "Zastosuj zmianę dla wskazanych produktów",
+        "enrichment.saveEnriched": "Zapisz uzupełniony products.json",
+        "enrichment.plannedTitle": "Zaplanowane uzupełnienia dla tego produktu",
+        "enrichment.plannedEmpty": "Brak zaplanowanych uzupełnień dla aktualnego produktu.",
+        "enrichment.manualCurrentProduct": "Edycja ręczna aktualnego produktu",
+        "enrichment.applyTypeSeriesAll": "Dopisz cechy typoszeregu do wszystkich wariantów produktu",
         "enrichment.askTypeSeriesAll": "Dla cech typoszeregu wybierz, czy dopisa\u0107 warto\u015b\u0107 do wszystkich wariant\u00f3w produktu.",
         "enrichment.enableManualEdit": "W\u0142\u0105cz edycj\u0119 r\u0119czn\u0105",
         "enrichment.disableManualEdit": "Wy\u0142\u0105cz edycj\u0119 r\u0119czn\u0105",
@@ -1252,156 +1252,156 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "enrichment.collapsedMapping": "Zaakceptowane mapowanie uzupe\u0142nie\u0144",
         "enrichment.editSupplementMapping": "Popraw mapowanie",
         "enrichment.noTypicalProducts": "Najpierw wczytaj poprawny plik danych typowych.",
-        "enrichment.noMatches": "Brak przypisanych produktĂłw typowych.",
-        "enrichment.matchSaved": "Produkt typowy zostaĹ‚ przypisany do aktualnego produktu.",
-        "enrichment.modelCheckOk": "Dane typowe pasujÄ… do struktury modelu PIM.",
-        "enrichment.modelCheckWarn": "Uwaga: czÄ™Ĺ›Ä‡ atrybutĂłw danych typowych nie wystÄ™puje w aktualnym modelu PIM.",
-        "enrichment.manualModeHelp": "Wybierz produkt w podglÄ…dzie powyĹĽej, wpisz wartoĹ›Ä‡ i dodaj jÄ… do sesji rÄ™cznej. Przy generowaniu zostanie zapamiÄ™tane, ĹĽe ta wartoĹ›Ä‡ pochodzi z uzupeĹ‚nienia rÄ™cznego.",
-        "report.title": "Mapowanie i podglÄ…d",
+        "enrichment.noMatches": "Brak przypisanych produktów typowych.",
+        "enrichment.matchSaved": "Produkt typowy został przypisany do aktualnego produktu.",
+        "enrichment.modelCheckOk": "Dane typowe pasują do struktury modelu PIM.",
+        "enrichment.modelCheckWarn": "Uwaga: część atrybutów danych typowych nie występuje w aktualnym modelu PIM.",
+        "enrichment.manualModeHelp": "Wybierz produkt w podglądzie powyżej, wpisz wartość i dodaj ją do sesji ręcznej. Przy generowaniu zostanie zapamiętane, że ta wartość pochodzi z uzupełnienia ręcznego.",
+        "report.title": "Mapowanie i podgląd",
         "report.idle": "Brak akcji",
-        "report.empty": "Po analizie pojawi siÄ™ docelowa struktura modelu. Dla kaĹĽdej cechy PIM wybierz kolumnÄ™ z pliku importowanego, czyszczenie, jednostkÄ™ albo mapÄ™ odpowiedzi sĹ‚ownikowych.",
-        "mapping.ignore": "PomiĹ„ kolumnÄ™",
+        "report.empty": "Po analizie pojawi się docelowa struktura modelu. Dla każdej cechy PIM wybierz kolumnę z pliku importowanego, czyszczenie, jednostkę albo mapę odpowiedzi słownikowych.",
+        "mapping.ignore": "Pomiń kolumnę",
         "mapping.targetField": "Docelowe pole modelu",
-        "mapping.unitManual": "Jednostka ĹşrĂłdĹ‚owa wpisana rÄ™cznie",
-        "mapping.unitColumn": "Jednostka ĹşrĂłdĹ‚owa z kolumny",
+        "mapping.unitManual": "Jednostka źródłowa wpisana ręcznie",
+        "mapping.unitColumn": "Jednostka źródłowa z kolumny",
         "mapping.targetUnit": "Jednostka w modelu",
         "mapping.noTargetUnit": "Brak jednostki w modelu",
-        "mapping.unitConversionFactor": "FormuĹ‚a przeliczenia do jednostki modelu",
-        "mapping.unitConversionHelp": "Wynik = wartoĹ›Ä‡ * mnoĹĽnik. Np. 0.001 dla mm -> m. Zostaw 1 albo puste, jeĹ›li wartoĹ›Ä‡ jest juĹĽ w jednostce modelu.",
-        "mapping.removeText": "UsuĹ„ tekst z wartoĹ›ci",
-        "mapping.replaceText": "ZamieĹ„ tekst",
+        "mapping.unitConversionFactor": "Formuła przeliczenia do jednostki modelu",
+        "mapping.unitConversionHelp": "Wynik = wartość * mnożnik. Np. 0.001 dla mm -> m. Zostaw 1 albo puste, jeśli wartość jest już w jednostce modelu.",
+        "mapping.removeText": "Usuń tekst z wartości",
+        "mapping.replaceText": "Zamień tekst",
         "mapping.replaceWith": "Na tekst",
-        "mapping.splitBy": "Podziel wartoĹ›Ä‡ po tekĹ›cie",
-        "mapping.splitPart": "WeĹş czÄ™Ĺ›Ä‡ nr",
-        "mapping.addExtraction": "Dodaj kolejnÄ… wartoĹ›Ä‡ z tej kolumny",
+        "mapping.splitBy": "Podziel wartość po tekście",
+        "mapping.splitPart": "Weź część nr",
+        "mapping.addExtraction": "Dodaj kolejną wartość z tej kolumny",
         "mapping.extraction": "Ekstrakcja",
         "mapping.trim": "Usuń spacje z początku i końca",
-        "mapping.decimalComma": "ZamieĹ„ przecinek dziesiÄ™tny na kropkÄ™",
-        "mapping.parseNumber": "Zostaw tylko liczbÄ™",
+        "mapping.decimalComma": "Zamień przecinek dziesiętny na kropkę",
+        "mapping.parseNumber": "Zostaw tylko liczbę",
         "mapping.before": "Przed",
         "mapping.after": "Po",
-        "mapping.confidence": "PewnoĹ›Ä‡",
+        "mapping.confidence": "Pewność",
         "mapping.missing": "Braki",
         "mapping.clientColumn": "Kolumna klienta",
         "mapping.modelField": "Cecha modelu PIM",
-        "mapping.productSection": "Mapowanie cech ogĂłlnych produktu",
+        "mapping.productSection": "Mapowanie cech ogólnych produktu",
         "mapping.typeSeriesSection": "Mapowanie typoszeregu",
-        "mapping.emptySection": "Brak pĂłl modelu w tej sekcji.",
+        "mapping.emptySection": "Brak pól modelu w tej sekcji.",
         "mapping.sourceColumn": "Kolumna z pliku importowanego",
         "mapping.mappedColumn": "zmapowana kolumna",
         "mapping.noSource": "Nie importuj tej cechy",
         "mapping.mappingCleanup": "Mapowanie i czyszczenie",
-        "mapping.valuePreview": "PodglÄ…d wartoĹ›ci",
-        "mapping.moreRecords": "PokaĹĽ kolejne rekordy",
+        "mapping.valuePreview": "Podgląd wartości",
+        "mapping.moreRecords": "Pokaż kolejne rekordy",
         "mapping.rowNumber": "Wiersz",
-        "mapping.rowValue": "WartoĹ›Ä‡",
-        "mapping.usedByRules": "Kolumny i pola modelu obsĹ‚ugiwane przez reguĹ‚y sÄ… ukryte z rÄ™cznego mapowania",
-        "mapping.checkApplied": "Struktura modelu zostaĹ‚a przeliczona dla aktualnych reguĹ‚ i mapowania.",
+        "mapping.rowValue": "Wartość",
+        "mapping.usedByRules": "Kolumny i pola modelu obsługiwane przez reguły są ukryte z ręcznego mapowania",
+        "mapping.checkApplied": "Struktura modelu została przeliczona dla aktualnych reguł i mapowania.",
         "model.mapped": "zmapowane",
         "model.empty": "puste",
         "model.status": "Status",
         "model.sourceColumn": "kolumna",
-        "model.sourceRule": "reguĹ‚a",
-        "model.moreValues": "wiÄ™cej wartoĹ›ci",
+        "model.sourceRule": "reguła",
+        "model.moreValues": "więcej wartości",
         "model.singleChoice": "jedna z wielu",
         "model.multiChoice": "wiele z wielu",
         "model.options": "opcje",
         "rows.title": "Reguły wierszy i hierarchii",
-        "rows.help": "UĹĽyj tego, gdy plik ma osobne wiersze produktĂłw i osobne wiersze wariantĂłw. WskaĹĽ typ wiersza oraz relacjÄ™ ID produktu -> Parent ID wariantu.",
+        "rows.help": "Użyj tego, gdy plik ma osobne wiersze produktów i osobne wiersze wariantów. Wskaż typ wiersza oraz relację ID produktu -> Parent ID wariantu.",
         "rows.openMenu": "Reguły wierszy i hierarchii",
-        "rows.closeMenu": "Zamknij reguĹ‚y",
-        "rows.menuHint": "OtwĂłrz tylko wtedy, gdy import ma wiersze grup, produktĂłw albo relacje parent-child.",
-        "rows.summaryEmpty": "Brak aktywnych reguĹ‚.",
-        "rows.summary": "Aktywne reguĹ‚y",
-        "rows.typeColumn": "Kolumna okreĹ›lajÄ…ca typ wiersza",
-        "rows.typeColumnHelp": "Kolumna zawierajÄ…ca definicjÄ™ typu wiersza, np. Product albo Article.",
+        "rows.closeMenu": "Zamknij reguły",
+        "rows.menuHint": "Otwórz tylko wtedy, gdy import ma wiersze grup, produktów albo relacje parent-child.",
+        "rows.summaryEmpty": "Brak aktywnych reguł.",
+        "rows.summary": "Aktywne reguły",
+        "rows.typeColumn": "Kolumna określająca typ wiersza",
+        "rows.typeColumnHelp": "Kolumna zawierająca definicję typu wiersza, np. Product albo Article.",
         "rows.mode": "Typ relacji wierszy",
         "rows.modeProductVariants": "Produkt -> warianty typoszeregu",
         "rows.modeHelp": "Wiersz oznaczony jako produkt tworzy produkt, a wiersz oznaczony jako wariant tworzy wiersz tabeli typoszeregu.",
-        "rows.productValues": "WartoĹ›Ä‡ w kolumnie oznaczajÄ…ca produkt",
-        "rows.productValuesHelp": "Wpisz albo wybierz wartoĹ›Ä‡ z kolumny typu wiersza, np. Product albo PR. Ten wiersz utworzy produkt.",
-        "rows.groupValues": "WartoĹ›Ä‡ w kolumnie oznaczajÄ…ca wariant",
-        "rows.groupValuesHelp": "Wpisz albo wybierz wartoĹ›Ä‡ z kolumny typu wiersza, np. Article albo AR. Ten wiersz utworzy wariant w tabeli typoszeregu.",
+        "rows.productValues": "Wartość w kolumnie oznaczająca produkt",
+        "rows.productValuesHelp": "Wpisz albo wybierz wartość z kolumny typu wiersza, np. Product albo PR. Ten wiersz utworzy produkt.",
+        "rows.groupValues": "Wartość w kolumnie oznaczająca wariant",
+        "rows.groupValuesHelp": "Wpisz albo wybierz wartość z kolumny typu wiersza, np. Article albo AR. Ten wiersz utworzy wariant w tabeli typoszeregu.",
         "rows.productIdColumn": "Kolumna ID produktu",
-        "rows.productIdColumnHelp": "WartoĹ›Ä‡ z tej kolumny identyfikuje wiersz produktu, do ktĂłrego majÄ… byÄ‡ przypiÄ™te warianty.",
+        "rows.productIdColumnHelp": "Wartość z tej kolumny identyfikuje wiersz produktu, do którego mają być przypięte warianty.",
         "rows.variantParentIdColumn": "Kolumna Parent ID wariantu",
-        "rows.variantParentIdColumnHelp": "WartoĹ›Ä‡ z tej kolumny w wierszu wariantu musi wskazywaÄ‡ ID produktu nadrzÄ™dnego.",
+        "rows.variantParentIdColumnHelp": "Wartość z tej kolumny w wierszu wariantu musi wskazywać ID produktu nadrzędnego.",
         "rows.prefixColumn": "Kolumna z ID do rozpoznawania prefiksu",
-        "rows.prefixColumnHelp": "UĹĽyj tego, gdy grupy i produkty odrĂłĹĽnia poczÄ…tek ID, np. PR dla grup i AR dla produktĂłw.",
-        "rows.productPrefixes": "Prefiksy oznaczajÄ…ce produkt",
-        "rows.productPrefixesHelp": "Np. AR. MoĹĽesz wpisaÄ‡ kilka wartoĹ›ci po przecinku.",
-        "rows.groupPrefixes": "Prefiksy oznaczajÄ…ce wariant",
-        "rows.groupPrefixesHelp": "Np. AR. MoĹĽesz wpisaÄ‡ kilka wartoĹ›ci po przecinku.",
-        "rows.mappingHint": "NazwÄ™ produktu, kod produktu, nazwÄ™ wariantu i inne cechy przypisz niĹĽej w zwykĹ‚ym mapowaniu pĂłl modelu.",
+        "rows.prefixColumnHelp": "Użyj tego, gdy grupy i produkty odróżnia początek ID, np. PR dla grup i AR dla produktów.",
+        "rows.productPrefixes": "Prefiksy oznaczające produkt",
+        "rows.productPrefixesHelp": "Np. AR. Możesz wpisać kilka wartości po przecinku.",
+        "rows.groupPrefixes": "Prefiksy oznaczające wariant",
+        "rows.groupPrefixesHelp": "Np. AR. Możesz wpisać kilka wartości po przecinku.",
+        "rows.mappingHint": "Nazwę produktu, kod produktu, nazwę wariantu i inne cechy przypisz niżej w zwykłym mapowaniu pól modelu.",
         "rows.rule": "Reguła",
-        "rows.addRule": "Dodaj reguĹ‚Ä™",
-        "rows.applyRules": "Zastosuj reguĹ‚y",
+        "rows.addRule": "Dodaj regułę",
+        "rows.applyRules": "Zastosuj reguły",
         "rows.applied": "Reguły zostały zastosowane. Wskazane kolumny są teraz ukryte z ręcznego mapowania.",
-        "rows.removeRule": "UsuĹ„ reguĹ‚Ä™",
+        "rows.removeRule": "Usuń regułę",
         "rows.statsProductRows": "Wiersze produktu",
         "rows.statsVariantRows": "Wiersze wariantu",
-        "rows.statsMatchedVariants": "Warianty dopiÄ™te po Parent ID",
-        "rows.statsOrphanVariants": "Warianty bez pasujÄ…cego produktu",
-        "mapping.check": "SprawdĹş aktualne mapowanie",
+        "rows.statsMatchedVariants": "Warianty dopięte po Parent ID",
+        "rows.statsOrphanVariants": "Warianty bez pasującego produktu",
+        "mapping.check": "Sprawdź aktualne mapowanie",
         "mapping.checkTitle": "Wynik aktualnego mapowania",
-        "mapping.checkHelp": "To jest wynik dla prĂłbki danych po zastosowaniu aktualnych reguĹ‚ wierszy, mapowania kolumn i czyszczenia.",
-        "mapping.detectedProducts": "Rozpoznane produkty z prĂłbki",
+        "mapping.checkHelp": "To jest wynik dla próbki danych po zastosowaniu aktualnych reguł wierszy, mapowania kolumn i czyszczenia.",
+        "mapping.detectedProducts": "Rozpoznane produkty z próbki",
         "mapping.checkedAt": "Sprawdzono",
-        "mapping.noPreviewRows": "Brak rozpoznanych produktĂłw w prĂłbce.",
-        "mapping.rawPreview": "PodglÄ…d JSON",
-        "mapping.duplicateTarget": "To pole docelowe jest przypisane wiÄ™cej niĹĽ raz. ZmieĹ„ jedno mapowanie albo ustaw je jako ignorowane.",
-        "mapping.duplicateTargetBlocked": "Nie moĹĽna zapisaÄ‡ ani wygenerowaÄ‡ danych: usuĹ„ podwĂłjne mapowania pĂłl docelowych.",
+        "mapping.noPreviewRows": "Brak rozpoznanych produktów w próbce.",
+        "mapping.rawPreview": "Podgląd JSON",
+        "mapping.duplicateTarget": "To pole docelowe jest przypisane więcej niż raz. Zmień jedno mapowanie albo ustaw je jako ignorowane.",
+        "mapping.duplicateTargetBlocked": "Nie można zapisać ani wygenerować danych: usuń podwójne mapowania pól docelowych.",
         "mapping.choiceMatched": "Dopasowane opcje",
-        "mapping.choiceUnmatched": "Poza sĹ‚ownikiem - nie zostanie zaimportowane bez mapy wartoĹ›ci",
-        "mapping.choiceMap": "Mapa wartoĹ›ci klienta do opcji PIM",
-        "mapping.choiceMapHelp": "Jedna para w linii, np. termo = Izolacja termiczna. Lewa strona to wartoĹ›Ä‡ z pliku importowanego, prawa strona to opcja z modelu PIM. WartoĹ›ci spoza sĹ‚ownika bez takiej mapy sÄ… pomijane w imporcie.",
+        "mapping.choiceUnmatched": "Poza słownikiem - nie zostanie zaimportowane bez mapy wartości",
+        "mapping.choiceMap": "Mapa wartości klienta do opcji PIM",
+        "mapping.choiceMapHelp": "Jedna para w linii, np. termo = Izolacja termiczna. Lewa strona to wartość z pliku importowanego, prawa strona to opcja z modelu PIM. Wartości spoza słownika bez takiej mapy są pomijane w imporcie.",
         "mapping.choiceOptions": "Opcje PIM",
-        "mapping.choiceClientValue": "WartoĹ›Ä‡ klienta",
+        "mapping.choiceClientValue": "Wartość klienta",
         "mapping.choicePimOption": "Opcja PIM",
         "mapping.choiceDoNotImport": "Nie importuj bez mapy",
-        "mapping.choicePickSource": "Wybierz kolumnÄ™, aby zobaczyÄ‡ wartoĹ›ci z danych klienta.",
-        "preview.title": "Na ĹĽywo: wynik mapowania",
+        "mapping.choicePickSource": "Wybierz kolumnę, aby zobaczyć wartości z danych klienta.",
+        "preview.title": "Na żywo: wynik mapowania",
         "preview.help": "Pierwszy rozpoznany produkt po mapowaniu, czyszczeniu i dziedziczeniu kontekstu z wierszy grup.",
-        "preview.sample": "z prĂłbki",
+        "preview.sample": "z próbki",
         "preview.productFields": "Pola produktu",
         "preview.typeSeries": "Tabela typoszeregu",
         "preview.field": "Pole",
         "preview.variantFeature": "Cecha wariantu",
-        "preview.cleanedValue": "WartoĹ›Ä‡ po czyszczeniu",
+        "preview.cleanedValue": "Wartość po czyszczeniu",
         "preview.unit": "Jednostka",
-        "preview.source": "ĹąrĂłdĹ‚o",
+        "preview.source": "Źródło",
         "preview.context": "kontekst",
         "preview.fromGroupRow": "z wiersza grupy",
         "preview.previousProduct": "Poprzedni produkt",
-        "preview.nextProduct": "NastÄ™pny produkt",
+        "preview.nextProduct": "Następny produkt",
         "preview.productCounter": "Produkt",
         "preview.chooseProduct": "Wybierz produkt",
         "none": "Brak",
-        "missing.productFields": "Brak przypisanych pĂłl produktu.",
-        "missing.typeSeries": "Brak przypisanych pĂłl typoszeregu.",
+        "missing.productFields": "Brak przypisanych pól produktu.",
+        "missing.typeSeries": "Brak przypisanych pól typoszeregu.",
         "analysis.running": "Analiza trwa.",
-        "analysis.ready": "Analiza gotowa. SprawdĹş mapowanie i podglÄ…d po prawej.",
+        "analysis.ready": "Analiza gotowa. Sprawdź mapowanie i podgląd po prawej.",
         "analysis.chooseFile": "Wybierz plik do analizy.",
         "analysis.noTables": "Brak tabel do analizy.",
-        "status.error": "BĹ‚Ä…d",
+        "status.error": "Błąd",
         "project.analyzeFirst": "Najpierw przeanalizuj plik i ustaw mapowanie.",
-        "project.saveFailed": "Nie udaĹ‚o siÄ™ zapisaÄ‡ projektu.",
+        "project.saveFailed": "Nie udało się zapisać projektu.",
         "project.saved": "Zapisano projekt na dysku:",
         "project.download": "pobierz projekt JSON",
-        "project.downloaded": "Projekt zostaĹ‚ pobrany jako plik JSON. JeĹ›li przeglÄ…darka pyta o lokalizacjÄ™ pobierania, wybierz docelowy katalog.",
+        "project.downloaded": "Projekt został pobrany jako plik JSON. Jeśli przeglądarka pyta o lokalizację pobierania, wybierz docelowy katalog.",
         "project.loaded": "Wczytano projekt:",
-        "project.loadFailed": "Nie udaĹ‚o siÄ™ wczytaÄ‡ projektu mapowania.",
+        "project.loadFailed": "Nie udało się wczytać projektu mapowania.",
         "project.loadedComplete": "Projekt zawiera zapisane pliki modelu i dane klienta.",
-        "project.legacyMissingFiles": "Ten projekt nie zawiera zapisanych plikĂłw. WskaĹĽ ponownie pliki modelu PIM i plik danych klienta.",
-        "project.missingModelFiles": "W projekcie brakuje plikĂłw modelu PIM:",
-        "project.missingProductsFile": "W projekcie brakuje pliku danych klienta. WskaĹĽ go ponownie.",
-        "quality.title": "JakoĹ›Ä‡ danych",
+        "project.legacyMissingFiles": "Ten projekt nie zawiera zapisanych plików. Wskaż ponownie pliki modelu PIM i plik danych klienta.",
+        "project.missingModelFiles": "W projekcie brakuje plików modelu PIM:",
+        "project.missingProductsFile": "W projekcie brakuje pliku danych klienta. Wskaż go ponownie.",
+        "quality.title": "Jakość danych",
         "quality.column": "Kolumna",
-        "quality.filled": "UzupeĹ‚nione",
+        "quality.filled": "Uzupełnione",
         "quality.missing": "Braki",
         "quality.missingRows": "Wiersze z brakami",
-        "quality.typical": "Typowe wartoĹ›ci",
-        "sample.title": "PrĂłbka danych z pliku"
+        "quality.typical": "Typowe wartości",
+        "sample.title": "Próbka danych z pliku"
       },
       en: {
         "nav.products": "Products",
@@ -1839,7 +1839,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       } catch (_) {
         label = label.replace(new RegExp("^https?://"), "");
       }
-      return label.length > limit ? `${label.slice(0, limit - 1)}â€¦` : label;
+      return label.length > limit ? `${label.slice(0, limit - 1)}…` : label;
     }
 
     function renderLinkedText(value, options = {}) {
@@ -1847,7 +1847,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (!text) return "";
       const limit = options.limit || 900;
       const compact = text.length > limit;
-      const visibleText = compact ? `${text.slice(0, limit)}â€¦` : text;
+      const visibleText = compact ? `${text.slice(0, limit)}…` : text;
       const linked = [];
       const urlPattern = /https?:\\/\\/[^\\s"'<>]+/g;
       let lastIndex = 0;
@@ -2147,7 +2147,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (!pimModelAccepted && !productMappingProfile && !activeTable) return true;
       return window.confirm(
         currentLang === "pl"
-          ? "Zmiana modelu produktu rozpocznie nowy projekt i wyczyĹ›ci aktualne mapowanie oraz sesjÄ™ uzupeĹ‚niania. Zapisz obecny projekt przed zmianÄ…. Czy kontynuowaÄ‡?"
+          ? "Zmiana modelu produktu rozpocznie nowy projekt i wyczyści aktualne mapowanie oraz sesję uzupełniania. Zapisz obecny projekt przed zmianą. Czy kontynuować?"
           : "Changing the product model starts a new project and clears the current mapping and enrichment session. Save the current project before changing it. Continue?"
       );
     }
@@ -2164,14 +2164,14 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if ($("projectPanel")) $("projectPanel").hidden = false;
       for (const button of document.querySelectorAll("[data-workspace-tab='enrichment']")) {
         button.disabled = !enrichmentReady();
-        button.title = enrichmentReady() ? "" : (currentLang === "pl" ? "Najpierw wczytaj i przeanalizuj plik produktĂłw." : "Load and analyze the products file first.");
+        button.title = enrichmentReady() ? "" : (currentLang === "pl" ? "Najpierw wczytaj i przeanalizuj plik produktów." : "Load and analyze the products file first.");
       }
     }
 
     function setWorkspaceTab(tab) {
       if (tab === "enrichment" && !enrichmentReady()) {
         const target = $("mappingCheckTopResult");
-        if (target) target.innerHTML = `<div class="warn">${esc(currentLang === "pl" ? "UzupeĹ‚nianie danych bÄ™dzie dostÄ™pne po analizie pliku produktĂłw." : "Data enrichment becomes available after analyzing the products file.")}</div>`;
+        if (target) target.innerHTML = `<div class="warn">${esc(currentLang === "pl" ? "Uzupełnianie danych będzie dostępne po analizie pliku produktów." : "Data enrichment becomes available after analyzing the products file.")}</div>`;
         return;
       }
       mappingWorkspaceTab = tab || "mapping";
@@ -2193,13 +2193,13 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       files.forEach((modelFile) => body.append("product_model_files", modelFile));
       const response = await fetch("/product-model", { method: "POST", body });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "Nie udaĹ‚o siÄ™ odczytaÄ‡ modelu produktu." : "Could not read the product model."));
+      if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "Nie udało się odczytać modelu produktu." : "Could not read the product model."));
       activeProductModelFields = data.target_fields || [];
       activeProductModelId = data.model_id || "";
       if ($("productModelId")) $("productModelId").value = activeProductModelId;
       if ($("productsProductModelId")) $("productsProductModelId").value = activeProductModelId;
       if (!activeProductModelFields.length) {
-        throw new Error(currentLang === "pl" ? "Model produktu nie zawiera pĂłl do mapowania." : "The product model does not contain mappable fields.");
+        throw new Error(currentLang === "pl" ? "Model produktu nie zawiera pól do mapowania." : "The product model does not contain mappable fields.");
       }
       return data;
     }
@@ -2244,7 +2244,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         acceptedProductModelSignature = "";
         activeProductModelFields = [];
         activeProductModelId = "";
-        $("productModelStatus").textContent = `${currentLang === "pl" ? "Nie udaĹ‚o siÄ™ zaakceptowaÄ‡ modelu: " : "Could not accept model: "}${error.message}`;
+        $("productModelStatus").textContent = `${currentLang === "pl" ? "Nie udało się zaakceptować modelu: " : "Could not accept model: "}${error.message}`;
         updateWorkflowGate();
       } finally {
         acceptingProductModel = false;
@@ -2612,7 +2612,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     function productTargetValueOptions(targetPath) {
-      return `<option value="">${esc(currentLang === "pl" ? "wybierz wartoĹ›Ä‡" : "choose value")}</option>` + valuesForProductTarget(targetPath).map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join("");
+      return `<option value="">${esc(currentLang === "pl" ? "wybierz wartość" : "choose value")}</option>` + valuesForProductTarget(targetPath).map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join("");
     }
 
     function mainProductValueForPath(entry, targetPath) {
@@ -2787,7 +2787,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
 
     function targetFieldOptionsForSourceAttribute(source) {
       const sourceLabel = sourceAttributeLabel(source.attributeId).toLowerCase();
-      return [`<option value="">${esc(currentLang === "pl" ? "Nie uĹĽywaj" : "Do not use")}</option>`]
+      return [`<option value="">${esc(currentLang === "pl" ? "Nie używaj" : "Do not use")}</option>`]
         .concat((targetFieldsForMode("products") || []).filter(field => field?.key).map(field => {
           const targetId = attributeIdFromFieldKey(field.key);
           const sameId = targetId && Number(targetId) === Number(source.attributeId);
@@ -3010,7 +3010,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           if (!fieldsByPath.has(path)) fieldsByPath.set(path, typicalAttributeLabel(attr));
         }
       }
-      const noneOption = `<option value=""${selected ? "" : " selected"}>${esc(currentLang === "pl" ? "wybierz cechÄ™" : "choose feature")}</option>`;
+      const noneOption = `<option value=""${selected ? "" : " selected"}>${esc(currentLang === "pl" ? "wybierz cechę" : "choose feature")}</option>`;
       return noneOption + Array.from(fieldsByPath.entries()).map(([path, label]) =>
         `<option value="${esc(path)}"${path === selected ? " selected" : ""}>${esc(cleanModelLabel(label || path))}</option>`
       ).join("");
@@ -3154,7 +3154,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         const validation = validateTypicalProductsPayload(payload);
         if (!validation.ok) {
           throw new Error(currentLang === "pl"
-            ? "Nie rozpoznano produktĂłw i cech w pliku danych typowych. Oczekiwany jest JSON z products[].dataVersions[].productAttributes albo products[].productAttributes."
+            ? "Nie rozpoznano produktów i cech w pliku danych typowych. Oczekiwany jest JSON z products[].dataVersions[].productAttributes albo products[].productAttributes."
             : "No products and features were recognized in the typical-data file. Expected JSON with products[].dataVersions[].productAttributes or products[].productAttributes.");
         }
         typicalProductsPayloadForEnrichment = validation.products;
@@ -3428,11 +3428,11 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         return `<tr>
           <td><strong>${esc(cleanModelLabel(field.label || field.key))}</strong><br><span class="muted">${esc(displayGroupName(field.group || ""))}</span></td>
           <td>${renderLinkedText(existing, { limit: 260 }) || `<span class="muted">${esc(t("model.empty"))}</span>`}</td>
-          <td><input type="text" data-manual-target="${esc(field.key)}" placeholder="${esc(currentLang === "pl" ? "dopisz wartoĹ›Ä‡" : "add value")}"></td>
+          <td><input type="text" data-manual-target="${esc(field.key)}" placeholder="${esc(currentLang === "pl" ? "dopisz wartość" : "add value")}"></td>
         </tr>`;
       }).join("");
       return `<table class="manual-edit-table">
-        <thead><tr><th>${esc(t("preview.field"))}</th><th>${esc(currentLang === "pl" ? "Aktualna wartoĹ›Ä‡" : "Current value")}</th><th>${esc(currentLang === "pl" ? "WartoĹ›Ä‡ rÄ™czna" : "Manual value")}</th></tr></thead>
+        <thead><tr><th>${esc(t("preview.field"))}</th><th>${esc(currentLang === "pl" ? "Aktualna wartość" : "Current value")}</th><th>${esc(currentLang === "pl" ? "Wartość ręczna" : "Manual value")}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
     }
@@ -3605,7 +3605,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       const supplementMatchPath = $("supplementMatchField")?.value || "";
       if (!mainMatchPath || !supplementMatchPath || !selectedTargetPaths.length) {
         if ($("enrichmentActionStatus")) $("enrichmentActionStatus").textContent = currentLang === "pl"
-          ? "Wybierz cechÄ™ identyfikujÄ…cÄ… w mapowaniu gĹ‚Ăłwnym, takÄ… samÄ… cechÄ™ w pliku uzupeĹ‚nieĹ„ oraz cechÄ™ do dopisania."
+          ? "Wybierz cechę identyfikującą w mapowaniu głównym, taką samą cechę w pliku uzupełnień oraz cechę do dopisania."
           : "Choose the identifying feature in main mapping, the same feature in enrichment file, and the feature to apply.";
         return;
       }
@@ -3645,7 +3645,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         });
       }
       if ($("enrichmentActionStatus")) $("enrichmentActionStatus").textContent = currentLang === "pl"
-        ? `Dopisano dane dla ${matches.length} produktĂłw dopasowanych po tej samej cesze.`
+        ? `Dopisano dane dla ${matches.length} produktów dopasowanych po tej samej cesze.`
         : `Applied data to ${matches.length} products matched by the same feature.`;
       renderEnrichmentSessionList();
       renderProductPreview();
@@ -3664,7 +3664,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (!selectedTypicalProducts.length) return;
       if (!selectedAttributes.length) {
         if ($("enrichmentActionStatus")) $("enrichmentActionStatus").textContent = currentLang === "pl"
-          ? "Wybierz przynajmniej jednÄ… zmapowanÄ… cechÄ™ z pliku uzupeĹ‚nieĹ„."
+          ? "Wybierz przynajmniej jedną zmapowaną cechę z pliku uzupełnień."
           : "Choose at least one mapped feature from the enrichment file.";
         return;
       }
@@ -3785,7 +3785,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       body.append("file", file);
       if (supplementMapping) body.append("product_mapping", JSON.stringify(supplementMapping));
       body.append("product_mapping_profile", JSON.stringify(supplementMappingProfile));
-      if (status) status.textContent = currentLang === "pl" ? "PrzygotowujÄ™ dane uzupeĹ‚nieĹ„." : "Preparing enrichment data.";
+      if (status) status.textContent = currentLang === "pl" ? "Przygotowuję dane uzupełnień." : "Preparing enrichment data.";
       try {
         const response = await fetch("/convert-products", { method: "POST", body });
         const data = await response.json();
@@ -3920,10 +3920,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           <div class="enrichment-section">
             <h3>${esc(currentLang === "pl" ? "Produkty edytowane" : "Edited products")}</h3>
             <div class="enrichment-grid">
-            <label>${esc(currentLang === "pl" ? "Nazwa produktu wyĹ›wietlana w podglÄ…dzie na ĹĽywo" : "Product shown in live preview")}
+            <label>${esc(currentLang === "pl" ? "Nazwa produktu wyświetlana w podglądzie na żywo" : "Product shown in live preview")}
               <input id="enrichmentCurrentProduct" type="text" value="${esc(currentProductKeyForEnrichment())}" readonly>
             </label>
-            <label>${esc(currentLang === "pl" ? "Zakres produktĂłw do edycji" : "Products to edit")}
+            <label>${esc(currentLang === "pl" ? "Zakres produktów do edycji" : "Products to edit")}
               <select id="typicalMatchScope">
                 <option value="selected_products" selected>${esc(currentLang === "pl" ? "Wybrane z listy" : "Selected from list")}</option>
                 <option value="all_products">${esc(currentLang === "pl" ? "Wszystkie produkty" : "All products")}</option>
@@ -3931,21 +3931,21 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             </label>
             </div>
             <div data-selected-products-row>
-              <div class="muted">${esc(currentLang === "pl" ? "Lista produktĂłw z moĹĽliwoĹ›ciÄ… wielokrotnego wyboru" : "Product list with multi-selection")}</div>
+              <div class="muted">${esc(currentLang === "pl" ? "Lista produktów z możliwością wielokrotnego wyboru" : "Product list with multi-selection")}</div>
               <div id="typicalTargetProducts" class="product-checkbox-list">${productCheckboxesForEnrichmentTargets()}</div>
             </div>
             <label class="inline-check">
               <input id="enableEnrichmentFilter" type="checkbox">
-              <span>${esc(currentLang === "pl" ? "UĹĽyj dodatkowego filtra po cesze produktu" : "Use an additional product-feature filter")}</span>
+              <span>${esc(currentLang === "pl" ? "Użyj dodatkowego filtra po cesze produktu" : "Use an additional product-feature filter")}</span>
             </label>
             <div class="enrichment-grid">
-            <label data-enrichment-filter-row>${esc(currentLang === "pl" ? "Cecha identyfikujÄ…ca produkty do zmiany" : "Feature identifying products to change")}
+            <label data-enrichment-filter-row>${esc(currentLang === "pl" ? "Cecha identyfikująca produkty do zmiany" : "Feature identifying products to change")}
               <select id="enrichmentFilterField">${allTargetFieldSelectOptions("")}</select>
             </label>
             <label data-enrichment-filter-row>${esc(currentLang === "pl" ? "Warto\u015b\u0107 cechy" : "Feature value")}
               <select id="enrichmentFilterValue" disabled>${productTargetValueOptions("")}</select>
             </label>
-            <label data-enrichment-match-row>${esc(currentLang === "pl" ? "Cecha identyfikujÄ…ca w mapowaniu gĹ‚Ăłwnym" : "Identifying feature in main mapping")}
+            <label data-enrichment-match-row>${esc(currentLang === "pl" ? "Cecha identyfikująca w mapowaniu głównym" : "Identifying feature in main mapping")}
               <select id="enrichmentMatchField">${allTargetFieldSelectOptions("")}</select>
             </label>
             <label data-enrichment-match-row>${esc(t("enrichment.supplementMatchField"))}
@@ -3954,12 +3954,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             </div>
           </div>
           <div class="enrichment-section">
-            <h3>${esc(currentLang === "pl" ? "Produkt z pliku uzupeĹ‚nieĹ„" : "Product from enrichment file")}</h3>
+            <h3>${esc(currentLang === "pl" ? "Produkt z pliku uzupełnień" : "Product from enrichment file")}</h3>
             <div class="enrichment-grid">
-            <label data-source-product-row>${esc(currentLang === "pl" ? "Cecha uĹĽywana do wyboru produktu ĹşrĂłdĹ‚owego" : "Feature used to choose the source product")}
+            <label data-source-product-row>${esc(currentLang === "pl" ? "Cecha używana do wyboru produktu źródłowego" : "Feature used to choose the source product")}
               <select id="typicalSourceLabelFieldVisible">${typicalSourceLabelFieldOptions()}</select>
             </label>
-            <label data-source-product-row>${esc(currentLang === "pl" ? "Produkt ĹşrĂłdĹ‚owy z pliku uzupeĹ‚nieĹ„" : "Source product from enrichment file")}
+            <label data-source-product-row>${esc(currentLang === "pl" ? "Produkt źródłowy z pliku uzupełnień" : "Source product from enrichment file")}
               <select id="typicalSourceProduct"${supplementReady ? "" : " disabled"}>${typicalSourceProductOptions()}</select>
             </label>
             <label>${esc(currentLang === "pl" ? "Cecha z pliku uzupe\u0142nie\u0144 do dopisania" : "Feature from enrichment file to apply")}
@@ -3975,11 +3975,11 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             </label>
           </div>
           <div id="typicalSourceProductPreview" data-source-product-row>${renderTypicalSourceProductPreview()}</div>
-          <h3>${esc(currentLang === "pl" ? "Dane z pliku uzupeĹ‚nieĹ„ do dopisania" : "Enrichment-file data to apply")}</h3>
+          <h3>${esc(currentLang === "pl" ? "Dane z pliku uzupełnień do dopisania" : "Enrichment-file data to apply")}</h3>
           <div class="notice">${esc(t("enrichment.askTypeSeriesAll"))}</div>
           <div id="typicalAttributePicker" hidden>${renderTypicalAttributePicker()}</div>
           <div class="enrichment-actions-row">
-            <button type="button" class="secondary" id="undoLastEnrichmentBtn">${esc(currentLang === "pl" ? "Cofnij ostatniÄ… zmianÄ™" : "Undo last change")}</button>
+            <button type="button" class="secondary" id="undoLastEnrichmentBtn">${esc(currentLang === "pl" ? "Cofnij ostatnią zmianę" : "Undo last change")}</button>
             <button type="button" id="addTypicalMatchBtn"${typicalProductsForEnrichment.length ? "" : " disabled"}>${esc(t("enrichment.addTypicalMatch"))}</button>
             <button type="button" class="secondary" id="clearEnrichmentSessionBtn">${esc(t("enrichment.clearSession"))}</button>
           </div>
@@ -4092,7 +4092,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "product identity": "Identyfikacja produktu",
         "classification": "Klasyfikacja",
         "descriptions": "Opisy",
-        "documents and references": "Dokumenty i odnoĹ›niki",
+        "documents and references": "Dokumenty i odnośniki",
         "packages": "Opakowania",
         "type series": "Typoszereg"
       },
@@ -4116,25 +4116,25 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "name": "nazwa",
         "code": "kod",
         "unit": "jednostka",
-        "value": "wartoĹ›Ä‡",
+        "value": "wartość",
         "description": "opis",
         "manufacturer": "producent",
         "product_url": "link do strony www",
-        "properties": "wĹ‚aĹ›ciwoĹ›ci",
+        "properties": "właściwości",
         "application": "zastosowanie",
-        "usage_method": "sposĂłb uĹĽycia",
+        "usage_method": "sposób użycia",
         "norms": "normy",
-        "raw_text": "tekst ĹşrĂłdĹ‚owy",
+        "raw_text": "tekst źródłowy",
         "weight": "waga",
-        "capacity": "pojemnoĹ›Ä‡",
+        "capacity": "pojemność",
         "variant_code": "kod wariantu",
         "variant_name": "nazwa wariantu",
-        "thickness": "gruboĹ›Ä‡",
+        "thickness": "grubość",
         "lambda_value": "lambda",
-        "density": "gÄ™stoĹ›Ä‡",
+        "density": "gęstość",
         "vapor_permeability_mu": "mu",
-        "specific_heat": "ciepĹ‚o wĹ‚aĹ›ciwe",
-        "additional_properties": "pozostaĹ‚e cechy"
+        "specific_heat": "ciepło właściwe",
+        "additional_properties": "pozostałe cechy"
       },
       en: {
         "product": "Product",
@@ -4909,7 +4909,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       for (const entry of enrichmentSession.manual_entries || []) {
         if (entry.scope !== "current_product" || normalizeMatchKey(entry.product_key) !== normalizedProductKey) continue;
         rows.push({
-          source: currentLang === "pl" ? "rÄ™cznie" : "manual",
+          source: currentLang === "pl" ? "ręcznie" : "manual",
           label: labelForTarget(entry.target_path),
           target_path: entry.target_path,
           is_type_series: targetPathIsTypeSeries(entry.target_path),
@@ -4925,7 +4925,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       const rows = plannedEnrichmentsForProduct(productKey).filter(item => item.is_type_series);
       if (!rows.length) return "";
       return `<table>
-        <thead><tr><th>${esc(currentLang === "pl" ? "Wariant" : "Variant")}</th><th>${esc(t("preview.field"))}</th><th>${esc(t("preview.cleanedValue"))}</th><th>${esc(currentLang === "pl" ? "ĹąrĂłdĹ‚o" : "Source")}</th></tr></thead>
+        <thead><tr><th>${esc(currentLang === "pl" ? "Wariant" : "Variant")}</th><th>${esc(t("preview.field"))}</th><th>${esc(t("preview.cleanedValue"))}</th><th>${esc(currentLang === "pl" ? "Źródło" : "Source")}</th></tr></thead>
         <tbody>${rows.map(row => `<tr class="enrichment-added"><td>${esc(row.apply_to_all_variants ? (currentLang === "pl" ? "wszystkie" : "all") : String((row.type_series_row_index ?? 0) + 1))}</td><td>${esc(row.label)}</td><td>${renderLinkedText(row.value, { limit: 260 })}</td><td>${esc(row.source)}</td></tr>`).join("")}</tbody>
       </table>`;
     }
@@ -4935,7 +4935,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       return `<div class="planned-enrichment">
         <h2 class="title">${esc(t("enrichment.plannedTitle"))}</h2>
         <table>
-          <thead><tr><th>${esc(currentLang === "pl" ? "ĹąrĂłdĹ‚o" : "Source")}</th><th>${esc(t("preview.field"))}</th><th>${esc(t("preview.cleanedValue"))}</th></tr></thead>
+          <thead><tr><th>${esc(currentLang === "pl" ? "Źródło" : "Source")}</th><th>${esc(t("preview.field"))}</th><th>${esc(t("preview.cleanedValue"))}</th></tr></thead>
           <tbody>${rows.map(row => `<tr><td>${esc(row.source)}</td><td>${esc(row.label)}</td><td>${renderLinkedText(row.value, { limit: 360 })}</td></tr>`).join("") || `<tr><td colspan="3">${esc(t("enrichment.plannedEmpty"))}</td></tr>`}</tbody>
         </table>
       </div>`;
@@ -5265,13 +5265,13 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             </label>
             ${choiceMapEditor}
             <label>${esc(t("mapping.removeText"))}
-              <input type="text" data-cleanup="removeText" value="${esc(cleanup.removeText || "")}" placeholder="np. gruboĹ›Ä‡, ok., mm">
+              <input type="text" data-cleanup="removeText" value="${esc(cleanup.removeText || "")}" placeholder="np. grubość, ok., mm">
             </label>
             <label>${esc(t("mapping.replaceText"))}
               <input type="text" data-cleanup="replaceFrom" value="${esc(cleanup.replaceFrom || "")}" placeholder="tekst do zamiany">
             </label>
             <label>${esc(t("mapping.replaceWith"))}
-              <input type="text" data-cleanup="replaceTo" value="${esc(cleanup.replaceTo || "")}" placeholder="nowa wartoĹ›Ä‡">
+              <input type="text" data-cleanup="replaceTo" value="${esc(cleanup.replaceTo || "")}" placeholder="nowa wartość">
             </label>
             <label>${esc(t("mapping.splitBy"))}
               <input type="text" data-cleanup="splitBy" value="${esc(cleanup.splitBy || "")}" placeholder="np. /, x, ;">
@@ -5340,13 +5340,13 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             </label>
             ${renderChoiceMapEditor(selectedField, table, column, profileItem?.choice_map || {}, effectiveCleanup)}
             <label>${esc(t("mapping.removeText"))}
-              <input type="text" data-cleanup="removeText" value="${esc(cleanup.removeText || "")}" placeholder="np. gruboĹ›Ä‡, ok., mm">
+              <input type="text" data-cleanup="removeText" value="${esc(cleanup.removeText || "")}" placeholder="np. grubość, ok., mm">
             </label>
             <label>${esc(t("mapping.replaceText"))}
               <input type="text" data-cleanup="replaceFrom" value="${esc(cleanup.replaceFrom || "")}" placeholder="tekst do zamiany">
             </label>
             <label>${esc(t("mapping.replaceWith"))}
-              <input type="text" data-cleanup="replaceTo" value="${esc(cleanup.replaceTo || "")}" placeholder="nowa wartoĹ›Ä‡">
+              <input type="text" data-cleanup="replaceTo" value="${esc(cleanup.replaceTo || "")}" placeholder="nowa wartość">
             </label>
             <label>${esc(t("mapping.splitBy"))}
               <input type="text" data-cleanup="splitBy" value="${esc(cleanup.splitBy || "")}" placeholder="np. /, x, ;">
@@ -5840,7 +5840,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         }`;
         if (loadedProjectFiles.productsFile && pimModelAccepted) {
           $("productsStatus").textContent = currentLang === "pl"
-            ? `Wczytano plik danych klienta z projektu: ${loadedProjectFiles.productsFile.name}. AnalizujÄ™ plik.`
+            ? `Wczytano plik danych klienta z projektu: ${loadedProjectFiles.productsFile.name}. Analizuję plik.`
             : `Loaded customer data file from project: ${loadedProjectFiles.productsFile.name}. Analyzing file.`;
           await analyzeFile("productsFile", "productsStatus", "products");
         } else if (pimModelAccepted && activeProductModelFields.length) {
@@ -5926,7 +5926,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             <tr><th>${esc(currentLang === "pl" ? "katalog" : "directory")}</th><td>${esc(data.output_dir)}</td></tr>
           </tbody></table>
           <div class="links">${links.join("")}</div>
-          <div class="warn"><strong>${esc(currentLang === "pl" ? "OstrzeĹĽenia" : "Warnings")}</strong><pre>${esc(JSON.stringify(warnings, null, 2))}</pre></div>
+          <div class="warn"><strong>${esc(currentLang === "pl" ? "Ostrzeżenia" : "Warnings")}</strong><pre>${esc(JSON.stringify(warnings, null, 2))}</pre></div>
         </div>`;
       showReport(html, currentLang === "pl" ? `Konwersja: ${mode}` : `Conversion: ${mode}`);
       return links.join("");
@@ -5950,7 +5950,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       try {
         const response = await fetch("/analyze", { method: "POST", body });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "BĹ‚Ä…d analizy." : "Analysis error."));
+        if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "Błąd analizy." : "Analysis error."));
         $(statusId).textContent = t("analysis.ready");
         renderAnalysis(data, mode);
         if (mode === "products") saveProductWorkspaceState();
@@ -6038,7 +6038,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if ($("productsFile").files[0]) {
         saveProductWorkspaceFilesState();
         $("productsStatus").textContent = currentLang === "pl"
-          ? `Wybrano ${$("productsFile").files[0].name}. AnalizujÄ™ plik.`
+          ? `Wybrano ${$("productsFile").files[0].name}. Analizuję plik.`
           : `Selected ${$("productsFile").files[0].name}. Analyzing file.`;
         analyzeFile("productsFile", "productsStatus", "products");
       }
@@ -6050,7 +6050,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       }
       const file = fileForInput("productsFile");
       if (!file && !$("productsSourceId")?.value) {
-        $("productsStatus").textContent = currentLang === "pl" ? "Wybierz plik produktĂłw." : "Choose a products file.";
+        $("productsStatus").textContent = currentLang === "pl" ? "Wybierz plik produktów." : "Choose a products file.";
         return false;
       }
       collectMapping("products");
@@ -6078,17 +6078,17 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (activeProductModelId) {
         body.append("product_model_id", activeProductModelId);
       }
-      $("productsStatus").textContent = currentLang === "pl" ? "Konwersja produktĂłw trwa." : "Product conversion is running.";
+      $("productsStatus").textContent = currentLang === "pl" ? "Konwersja produktów trwa." : "Product conversion is running.";
       $("productsLinks").innerHTML = "";
       if ($("productsLinksInline")) $("productsLinksInline").innerHTML = "";
       try {
         const response = await fetch("/convert-products", { method: "POST", body });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "BĹ‚Ä…d konwersji produktĂłw." : "Product conversion error."));
+        if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "Błąd konwersji produktów." : "Product conversion error."));
         generatedProductsJobId = data.job_id;
         generatedProductsUrl = data.files?.products_json || "";
         $("productsStatus").innerHTML = currentLang === "pl"
-          ? `<span class="ok">Produkty zapisane.</span> products.json jest gotowy do uĹĽycia.`
+          ? `<span class="ok">Produkty zapisane.</span> products.json jest gotowy do użycia.`
           : `<span class="ok">Products saved.</span> products.json is ready to use.`;
         const conversionLinks = renderConversion(data, "products", false);
         $("productsLinks").innerHTML = conversionLinks;
@@ -7139,7 +7139,7 @@ def render_building_elements_home() -> str:
 def render_initial_model_report(initial_model: dict) -> str:
     if initial_model.get("error"):
         return f"""<div class="panel">
-          <h2>BĹ‚Ä…d modelu produktu PIM</h2>
+          <h2>Błąd modelu produktu PIM</h2>
           <div class="warn">{html.escape(str(initial_model.get("error")))}</div>
         </div>"""
     fields = initial_model.get("target_fields") or []
@@ -7161,7 +7161,7 @@ def render_initial_model_report(initial_model: dict) -> str:
     files = ", ".join(html.escape(str(file)) for file in (initial_model.get("files") or []))
     return f"""<div class="panel">
       <h2>Model produktu PIM</h2>
-      <div class="muted">Model zostaĹ‚ odczytany z plikĂłw PIM. ReguĹ‚y i mapowanie pojawiÄ… siÄ™ po wczytaniu pliku danych klienta.</div>
+      <div class="muted">Model został odczytany z plików PIM. Reguły i mapowanie pojawią się po wczytaniu pliku danych klienta.</div>
       <div class="mapping-check-meta">
         <span class="pill">Wczytane pola modelu: {len(fields)}</span>
         <span class="pill">{files}</span>
@@ -7209,7 +7209,7 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
             target_groups.append(f"""<div class="structure-group type-series-structure">
               <strong>{html.escape(group)}</strong>
               <table>
-                <thead><tr><th>Cecha wariantu</th><th>Status</th><th>ĹąrĂłdĹ‚o</th><th>WartoĹ›Ä‡ po czyszczeniu</th></tr></thead>
+                <thead><tr><th>Cecha wariantu</th><th>Status</th><th>Źródło</th><th>Wartość po czyszczeniu</th></tr></thead>
                 <tbody>{rows}</tbody>
               </table>
             </div>""")
@@ -7225,7 +7225,7 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
             target_groups.append(f"""<div class="structure-group"><strong>{html.escape(group)}</strong>{rows}</div>""")
 
     def options_html(selected: str, include_category: bool = False) -> str:
-        options = [("ignore", "PomiĹ„")]
+        options = [("ignore", "Pomiń")]
         if include_category:
             options.append(("product.category[].value", "Grupa produktu / kategoria"))
         options.extend((str(field.get("key") or ""), str(field.get("label") or field.get("key") or "")) for field in target_fields)
@@ -7254,14 +7254,14 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
     ) + "</datalist>"
     row_rules = f"""<div class="mapping-tools">
       <button type="button" class="secondary" id="rowRulesToggle">Reguły wierszy i hierarchii</button>
-      <button type="button" class="secondary" id="checkMappingBtn">SprawdĹş aktualne mapowanie</button>
-      <span class="rule-summary" id="rowRulesSummary">Brak aktywnych reguĹ‚.</span>
+      <button type="button" class="secondary" id="checkMappingBtn">Sprawdź aktualne mapowanie</button>
+      <span class="rule-summary" id="rowRulesSummary">Brak aktywnych reguł.</span>
     </div>
     <div id="rowRulesPanel" class="panel rule-menu">
       <div class="rule-menu-header">
         <div>
           <h2>Reguły wierszy i hierarchii</h2>
-          <div class="muted">Ustal, ktĂłre wiersze sÄ… produktem, a ktĂłre wariantem typoszeregu.</div>
+          <div class="muted">Ustal, które wiersze są produktem, a które wariantem typoszeregu.</div>
         </div>
         <button type="button" class="secondary" id="rowRulesClose">Zamknij menu</button>
       </div>
@@ -7269,22 +7269,22 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
         <div class="row-rule panel" data-rule-index="0">
           <h2>Reguła 1</h2>
           <div class="rule-grid">
-            <label>Tryb reguĹ‚y
+            <label>Tryb reguły
               <input type="hidden" data-row-rule="rowMode" value="product_variants">
               <div class="readonly-value">Produkt -> warianty typoszeregu</div>
             </label>
             <label>Kolumna typu wiersza <select data-row-rule="rowTypeColumn">{column_options}</select></label>
-            <label>WartoĹ›Ä‡ w kolumnie oznaczajÄ…ca produkt <input type="text" data-row-rule="productRowValues" list="serverRowTypeValues" placeholder="Product"></label>
-            <label>WartoĹ›Ä‡ w kolumnie oznaczajÄ…ca wariant <input type="text" data-row-rule="groupRowValues" list="serverRowTypeValues" placeholder="Article"></label>
+            <label>Wartość w kolumnie oznaczająca produkt <input type="text" data-row-rule="productRowValues" list="serverRowTypeValues" placeholder="Product"></label>
+            <label>Wartość w kolumnie oznaczająca wariant <input type="text" data-row-rule="groupRowValues" list="serverRowTypeValues" placeholder="Article"></label>
             <label>Kolumna ID produktu <select data-row-rule="idColumn">{column_options}</select></label>
             <label>Kolumna Parent ID wariantu <select data-row-rule="parentIdColumn">{column_options}</select></label>
             {type_values_datalist}
-            <div class="notice">NazwÄ™ produktu, kod produktu, nazwÄ™ wariantu i inne cechy przypisz niĹĽej w zwykĹ‚ym mapowaniu pĂłl modelu.</div>
+            <div class="notice">Nazwę produktu, kod produktu, nazwę wariantu i inne cechy przypisz niżej w zwykłym mapowaniu pól modelu.</div>
           </div>
         </div>
       </div>
       <div class="mapping-tools">
-        <button type="button" id="applyRowRulesBtn">Zastosuj reguĹ‚y</button>
+        <button type="button" id="applyRowRulesBtn">Zastosuj reguły</button>
       </div>
       <div id="mappingCheckResult"></div>
     </div>"""
@@ -7299,7 +7299,7 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
             f"""<div class="mapping-row" data-source-column="{html.escape(str(column))}">
               <div>
                 <div class="source-name">{html.escape(str(column))}</div>
-                <div class="source-meta">PewnoĹ›Ä‡: {confidence_value}%<br>Braki: {html.escape(str(missing_rows))}</div>
+                <div class="source-meta">Pewność: {confidence_value}%<br>Braki: {html.escape(str(missing_rows))}</div>
               </div>
               <div>
                 <label>Pole docelowe
@@ -7310,16 +7310,16 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
                   <label>Jednostka <input type="text" data-cleanup="unit" placeholder="np. mm, W/mK, kg/m3"></label>
                   <label>Jednostka z kolumny <select data-cleanup="unitSourceColumn">{column_options}</select></label>
                   <label>Jednostka w modelu <input type="hidden" data-cleanup="targetUnit" value=""><div class="readonly-unit">Brak jednostki w modelu</div></label>
-                  <label>MnoĹĽnik do jednostki modelu <input type="text" data-cleanup="unitConversionFactor" placeholder="1"></label>
-                  <label>Mapa sĹ‚ownikowa <textarea data-cleanup="choiceMap" placeholder="wartoĹ›Ä‡ klienta = opcja PIM"></textarea></label>
-                  <label>UsuĹ„ tekst <input type="text" data-cleanup="removeText" placeholder="np. gruboĹ›Ä‡, ok., mm"></label>
-                  <label>ZamieĹ„ tekst <input type="text" data-cleanup="replaceFrom" placeholder="tekst do zamiany"></label>
-                  <label>Na <input type="text" data-cleanup="replaceTo" placeholder="nowa wartoĹ›Ä‡"></label>
+                  <label>Mnożnik do jednostki modelu <input type="text" data-cleanup="unitConversionFactor" placeholder="1"></label>
+                  <label>Mapa słownikowa <textarea data-cleanup="choiceMap" placeholder="wartość klienta = opcja PIM"></textarea></label>
+                  <label>Usuń tekst <input type="text" data-cleanup="removeText" placeholder="np. grubość, ok., mm"></label>
+                  <label>Zamień tekst <input type="text" data-cleanup="replaceFrom" placeholder="tekst do zamiany"></label>
+                  <label>Na <input type="text" data-cleanup="replaceTo" placeholder="nowa wartość"></label>
                   <label>Podziel po <input type="text" data-cleanup="splitBy" placeholder="np. /, x, ;"></label>
-                  <label>CzÄ™Ĺ›Ä‡ po podziale <input type="text" data-cleanup="splitPart" value="1"></label>
+                  <label>Część po podziale <input type="text" data-cleanup="splitPart" value="1"></label>
                   <div class="checkbox-row"><input type="checkbox" data-cleanup="trim" checked> Usuń spacje z początku i końca</div>
-                  <div class="checkbox-row"><input type="checkbox" data-cleanup="decimalComma"> ZamieĹ„ przecinek dziesiÄ™tny</div>
-                  <div class="checkbox-row"><input type="checkbox" data-cleanup="parseNumber"> Odczytaj liczbÄ™</div>
+                  <div class="checkbox-row"><input type="checkbox" data-cleanup="decimalComma"> Zamień przecinek dziesiętny</div>
+                  <div class="checkbox-row"><input type="checkbox" data-cleanup="parseNumber"> Odczytaj liczbę</div>
                 </div>
               </div>
               <div>
@@ -7332,8 +7332,8 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
         )
     source = html.escape(str(initial_analysis.get("filename") or "plik klienta"))
     return f"""<div class="panel mapping-check-panel">
-      <h2>Mapowanie produktĂłw</h2>
-      <div class="muted">Plik {source} zostaĹ‚ odczytany. PoniĹĽej jest docelowa struktura modelu oraz kolumny klienta z sugestiami mapowania.</div>
+      <h2>Mapowanie produktów</h2>
+      <div class="muted">Plik {source} został odczytany. Poniżej jest docelowa struktura modelu oraz kolumny klienta z sugestiami mapowania.</div>
       <div class="mapping-check-meta">
         <span class="pill">Tabela: {html.escape(str(best.get("name") or ""))}</span>
         <span class="pill">Wiersze: {html.escape(str(best.get("rows") or 0))}</span>
@@ -7349,7 +7349,7 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
         <div class="mapping-head">
           <div>Kolumna klienta</div>
           <div>Mapowanie i czyszczenie</div>
-          <div>PodglÄ…d wartoĹ›ci</div>
+          <div>Podgląd wartości</div>
         </div>
         {"".join(mapping_rows)}
       </div>
