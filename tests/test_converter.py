@@ -154,7 +154,7 @@ class ConverterTests(unittest.TestCase):
         self.assertIn('id="productsFile" name="file" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">', body)
         self.assertIn('type="submit" class="secondary" id="analyzeProductsBtn"', body)
         self.assertIn('id="clearProductSessionBtn"', body)
-        self.assertIn("Pobierz raport Excel", body)
+        self.assertIn("Pobierz Excel do akceptacji produktów", body)
         self.assertNotIn('id="productsForm" action="/analyze"', body)
 
         files_response = product_model_files(location.split("=", 1)[1])
@@ -609,9 +609,12 @@ class ConverterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = convert_products_file("products.json", payload, Path(tmp), product_mapping_profile=profile)
             report_path = Path(tmp) / result["job_id"] / "mapping_report.xlsx"
+            acceptance_path = Path(tmp) / result["job_id"] / "products_acceptance.xlsx"
             workbook = load_workbook(report_path)
+            acceptance_workbook = load_workbook(acceptance_path)
 
         self.assertIn("mapping_report_xlsx", result["files"])
+        self.assertIn("products_acceptance_xlsx", result["files"])
         self.assertIn("Mapowanie", workbook.sheetnames)
         self.assertIn("Mapy opcji", workbook.sheetnames)
         rows = list(workbook["Mapowanie"].iter_rows(values_only=True))
@@ -619,6 +622,14 @@ class ConverterTests(unittest.TestCase):
         self.assertTrue(any(row[2] == "product.name.value" and row[3] == "Nazwa produktu" for row in rows[1:]))
         option_rows = list(workbook["Mapy opcji"].iter_rows(values_only=True))
         self.assertTrue(any(row[3] == "Zaprawy" and row[4] == "Zaprawy klejowe" for row in option_rows[1:]))
+        self.assertIn("Produkty", acceptance_workbook.sheetnames)
+        self.assertIn("Cechy produktów", acceptance_workbook.sheetnames)
+        product_rows = list(acceptance_workbook["Produkty"].iter_rows(values_only=True))
+        self.assertIn("status_akceptacji", product_rows[0])
+        self.assertIn("uwagi_klienta", product_rows[0])
+        self.assertTrue(any(row[2] == "FAST A" for row in product_rows[1:]))
+        detail_rows = list(acceptance_workbook["Cechy produktów"].iter_rows(values_only=True))
+        self.assertIn("poprawiona_wartość", detail_rows[0])
 
     def test_product_export_uses_dynamic_type_series_ids_from_pim_model(self):
         model_files = {

@@ -12,6 +12,7 @@ from openpyxl.utils import get_column_letter
 HEADER_FILL = PatternFill("solid", fgColor="D9EAD3")
 TECH_FILL = PatternFill("solid", fgColor="E7E6E6")
 WARNING_FILL = PatternFill("solid", fgColor="FCE4D6")
+ACCEPT_FILL = PatternFill("solid", fgColor="D9EAF7")
 
 
 def mapping_report_xlsx_bytes(report: dict[str, Any]) -> bytes:
@@ -47,6 +48,188 @@ def mapping_report_xlsx_bytes(report: dict[str, Any]) -> bytes:
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
+
+
+def product_acceptance_xlsx_bytes(
+    products_payload: dict[str, Any],
+    *,
+    source_file: str = "",
+    attribute_labels: dict[int, str] | None = None,
+) -> bytes:
+    """Create a client-facing workbook for reviewing generated products."""
+    attribute_labels = attribute_labels or {}
+    products = products_payload.get("products") or []
+    workbook = Workbook()
+    instruction = workbook.active
+    instruction.title = "Instrukcja"
+    _write_rows(
+        instruction,
+        [
+            ["BuildData AI - akceptacja produktów", ""],
+            ["Plik źródłowy", source_file],
+            ["Liczba produktów", len(products)],
+            ["", ""],
+            ["Jak używać", "Arkusz 'Produkty' pokazuje produkty jeden po drugim. Uzupełnij status akceptacji i uwagi klienta."],
+            ["Poprawki", "W arkuszu 'Cechy produktów' można wpisać poprawioną wartość przy konkretnej cesze produktu."],
+            ["Import zwrotny", "Nie zmieniaj kolumn technicznych product_id, attribute_id, parent_attribute_id i row_i."],
+        ],
+    )
+    instruction["A1"].font = Font(bold=True, size=14)
+
+    _product_acceptance_overview_sheet(workbook, products, attribute_labels)
+    _product_acceptance_details_sheet(workbook, products, attribute_labels)
+    _product_acceptance_json_sheet(workbook, products_payload)
+
+    for sheet in workbook.worksheets:
+        _format_sheet(sheet)
+        for cell in sheet[1]:
+            if cell.value in {"status_akceptacji", "uwagi_klienta", "poprawiona_wartość"}:
+                cell.fill = ACCEPT_FILL
+
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def _product_acceptance_overview_sheet(workbook: Workbook, products: list[dict[str, Any]], attribute_labels: dict[int, str]) -> None:
+    rows = [[
+        "lp",
+        "product_id",
+        "nazwa_produktu",
+        "kod_produktu",
+        "liczba_cech",
+        "status_akceptacji",
+        "uwagi_klienta",
+    ]]
+    for index, product in enumerate(products, start=1):
+        attrs = _product_attrs(product)
+        rows.append([
+            index,
+            product.get("Id", ""),
+            _product_identity_value(attrs, attribute_labels, "name"),
+            _product_identity_value(attrs, attribute_labels, "code"),
+            len([attr for attr in attrs if _attribute_display_value(attr) not in ("", None)]),
+            "",
+            "",
+        ])
+    _write_rows(workbook.create_sheet("Produkty"), rows)
+
+
+def _product_acceptance_details_sheet(workbook: Workbook, products: list[dict[str, Any]], attribute_labels: dict[int, str]) -> None:
+    rows = [[
+        "lp",
+        "product_id",
+        "nazwa_produktu",
+        "attribute_id",
+        "parent_attribute_id",
+        "row_i",
+        "cecha",
+        "wartość",
+        "typ_wartości",
+        "status_akceptacji",
+        "poprawiona_wartość",
+        "uwagi_klienta",
+    ]]
+    for product_index, product in enumerate(products, start=1):
+        attrs = _product_attrs(product)
+        product_name = _product_identity_value(attrs, attribute_labels, "name")
+        for attr in attrs:
+            value = _attribute_display_value(attr)
+            if value in ("", None):
+                continue
+            attribute_id = _int_or_text(attr.get("AttributeId"))
+            rows.append([
+                product_index,
+                product.get("Id", ""),
+                product_name,
+                attribute_id,
+                attr.get("ParentAttributeId") or 0,
+                attr.get("RowI") or 0,
+                attribute_labels.get(attribute_id, f"Atrybut {attribute_id}"),
+                value,
+                _attribute_value_type(attr),
+                "",
+                "",
+                "",
+            ])
+    _write_rows(workbook.create_sheet("Cechy produktów"), rows)
+
+
+def _product_acceptance_json_sheet(workbook: Workbook, products_payload: dict[str, Any]) -> None:
+    sheet = workbook.create_sheet("__products_json")
+    sheet.sheet_state = "hidden"
+    _write_rows(
+        sheet,
+        [
+            ["schema", "builddata.products_acceptance.xlsx.v1"],
+            ["products_json", json.dumps(products_payload, ensure_ascii=False, indent=2)],
+        ],
+    )
+
+
+def _product_attrs(product: dict[str, Any]) -> list[dict[str, Any]]:
+    if isinstance(product.get("productAttributes"), list):
+        return product.get("productAttributes") or []
+    versions = product.get("dataVersions") or product.get("DataVersions") or []
+    if versions and isinstance(versions[0], dict):
+        return versions[0].get("productAttributes") or versions[0].get("ProductAttributes") or []
+    return []
+
+
+def _product_identity_value(attrs: list[dict[str, Any]], attribute_labels: dict[int, str], kind: str) -> str:
+    preferred_ids = {225, 116, 501} if kind == "name" else {226, 318}
+    preferred_words = {"nazwa", "name"} if kind == "name" else {"kod", "code", "pim id", "external"}
+    for attr in attrs:
+        attribute_id = _int_or_text(attr.get("AttributeId"))
+        if attribute_id in preferred_ids:
+            value = _attribute_display_value(attr)
+            if value:
+                return str(value)
+    for attr in attrs:
+        attribute_id = _int_or_text(attr.get("AttributeId"))
+        label = str(attribute_labels.get(attribute_id, "")).lower()
+        if any(word in label for word in preferred_words):
+            value = _attribute_display_value(attr)
+            if value:
+                return str(value)
+    if kind == "name":
+        for attr in attrs:
+            if (attr.get("ParentAttributeId") or 0) == 0:
+                value = _attribute_display_value(attr)
+                if value:
+                    return str(value)
+    return ""
+
+
+def _attribute_display_value(attr: dict[str, Any]) -> Any:
+    for key in ("varcharValue", "TextValue", "NumberValue", "IntValue", "IntValue2"):
+        value = attr.get(key)
+        if value not in (None, ""):
+            return value
+    if attr.get("BooleanValue") is not None:
+        return "tak" if bool(attr.get("BooleanValue")) else "nie"
+    return ""
+
+
+def _attribute_value_type(attr: dict[str, Any]) -> str:
+    for key, label in (
+        ("varcharValue", "tekst"),
+        ("TextValue", "długi tekst"),
+        ("NumberValue", "liczba"),
+        ("IntValue", "liczba całkowita"),
+        ("IntValue2", "liczba całkowita 2"),
+        ("BooleanValue", "tak/nie"),
+    ):
+        if attr.get(key) not in (None, ""):
+            return label
+    return ""
+
+
+def _int_or_text(value: Any) -> Any:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return value
 
 
 def _mapping_sheet(workbook: Workbook, report: dict[str, Any]) -> None:

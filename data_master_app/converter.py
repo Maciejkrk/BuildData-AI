@@ -31,7 +31,7 @@ from .mapping import (
     skip_pim_attribute,
     value_kind_from_attribute,
 )
-from .report_export import mapping_report_xlsx_bytes
+from .report_export import mapping_report_xlsx_bytes, product_acceptance_xlsx_bytes
 
 
 PRODUCT_MODEL_TYPE = 66
@@ -849,6 +849,17 @@ def convert_products_file(
         encoding="utf-8",
     )
     (output_dir / "mapping_report.xlsx").write_bytes(mapping_report_xlsx_bytes(report))
+    (output_dir / "products_acceptance.xlsx").write_bytes(
+        product_acceptance_xlsx_bytes(
+            products_payload,
+            source_file=filename,
+            attribute_labels=product_acceptance_attribute_labels(
+                export_schema,
+                product_mapping_profile,
+                product_model_files,
+            ),
+        )
+    )
     if enrichment_session:
         (output_dir / "enrichment_session.json").write_text(
             json.dumps(
@@ -873,12 +884,61 @@ def convert_products_file(
         "output_dir": str(output_dir),
         "files": {
             "products_json": f"/outputs/{job_id}/products.json",
+            "products_acceptance_xlsx": f"/outputs/{job_id}/products_acceptance.xlsx",
             "mapping_report_json": f"/outputs/{job_id}/mapping_report.json",
             "mapping_report_xlsx": f"/outputs/{job_id}/mapping_report.xlsx",
             **({"enrichment_session_json": f"/outputs/{job_id}/enrichment_session.json"} if enrichment_session else {}),
         },
         "report": report,
     }
+
+
+def product_acceptance_attribute_labels(
+    export_schema: PimExportSchema,
+    product_mapping_profile: dict[str, Any] | None = None,
+    product_model_files: dict[str, bytes | str] | None = None,
+) -> dict[int, str]:
+    labels: dict[int, str] = {
+        PIM_ATTR["product_name"]: "Nazwa produktu",
+        PIM_ATTR["external_id"]: "Kod produktu",
+        PIM_ATTR["unit"]: "Jednostka",
+        PIM_ATTR["categories"]: "Kategoria",
+        PIM_ATTR["available"]: "Dostępny",
+        PIM_ATTR["new"]: "Nowość",
+    }
+    if product_model_files:
+        keyed_files = {pim_bundle_file_key(filename): content for filename, content in product_model_files.items()}
+        attributes_content = keyed_files.get("productsattributes")
+        if attributes_content is not None:
+            try:
+                attributes_payload = load_json_content(attributes_content)
+                for attribute in pim_items(attributes_payload, "attributes"):
+                    attribute_id = int_value(attribute.get("Id"))
+                    if attribute_id is None or is_deleted(attribute):
+                        continue
+                    label = (
+                        attribute.get("DispName")
+                        or attribute.get("AttributeName")
+                        or attribute.get("Name")
+                        or attribute.get("Code")
+                    )
+                    if label not in (None, ""):
+                        unit = attribute.get("Unit")
+                        labels[attribute_id] = f"{label} [{unit}]" if unit not in (None, "") else str(label)
+            except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
+                pass
+
+    for item in (product_mapping_profile or {}).values():
+        if not isinstance(item, dict):
+            continue
+        target_path = str(item.get("target_path") or "")
+        attribute_id = export_schema.product_attribute_id(target_path) or export_schema.type_series_attribute_id(target_path)
+        if attribute_id is None:
+            continue
+        target_label = item.get("target_label") or item.get("label")
+        if target_label not in (None, ""):
+            labels[attribute_id] = str(target_label)
+    return labels
 
 
 def convert_systems_file(

@@ -1036,6 +1036,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let productMappingProfile = null;
     let generatedProductsJobId = null;
     let generatedProductsUrl = "";
+    let generatedProductsAcceptanceXlsxUrl = "";
     let generatedMappingReportJsonUrl = "";
     let generatedMappingReportXlsxUrl = "";
     let mainProductTable = null;
@@ -1072,7 +1073,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let acceptedProductModelSignature = "";
     const PRODUCT_WORKSPACE_KEY = "buildDataAiProductsWorkspace";
     const PRODUCT_WORKSPACE_FILES_KEY = "products-files";
-    const PRODUCT_WORKSPACE_STATE_VERSION = 2;
+    const PRODUCT_WORKSPACE_STATE_VERSION = 3;
     const REQUIRED_PRODUCT_MODEL_FILES = [
       { key: "productsmodels", label: "productsModels.json" },
       { key: "productsattributes", label: "productsAttributes.json" }
@@ -1692,6 +1693,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           enrichmentSession,
           mappingWorkspaceTab,
           generatedProductsUrl,
+          generatedProductsAcceptanceXlsxUrl,
           generatedMappingReportJsonUrl,
           generatedMappingReportXlsxUrl,
           status: $("productsStatus")?.textContent || "",
@@ -1801,6 +1803,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         enrichmentSession = payload.enrichmentSession || enrichmentSession;
         mappingWorkspaceTab = payload.mappingWorkspaceTab || mappingWorkspaceTab;
         generatedProductsUrl = payload.generatedProductsUrl || "";
+        generatedProductsAcceptanceXlsxUrl = payload.generatedProductsAcceptanceXlsxUrl || "";
         generatedMappingReportJsonUrl = payload.generatedMappingReportJsonUrl || "";
         generatedMappingReportXlsxUrl = payload.generatedMappingReportXlsxUrl || "";
         productMapping = payload.mapping || productMapping;
@@ -2113,6 +2116,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       productMappingProfile = null;
       generatedProductsJobId = null;
       generatedProductsUrl = "";
+      generatedProductsAcceptanceXlsxUrl = "";
       generatedMappingReportJsonUrl = "";
       generatedMappingReportXlsxUrl = "";
       mainProductTable = null;
@@ -5925,7 +5929,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     function renderConversion(data, mode, showPanel = true) {
       const links = [];
       if (data.files.products_json) links.push(`<a class="primary-download" href="${esc(data.files.products_json)}" download="products.json">Pobierz products.json</a>`);
-      if (data.files.mapping_report_xlsx) links.push(`<a class="excel-download" href="${esc(data.files.mapping_report_xlsx)}" download="mapping_report.xlsx">Pobierz raport Excel</a>`);
+      if (data.files.products_acceptance_xlsx) links.push(`<a class="excel-download" href="${esc(data.files.products_acceptance_xlsx)}" download="products_acceptance.xlsx">Pobierz Excel do akceptacji produktów</a>`);
+      if (data.files.mapping_report_xlsx) links.push(`<a href="${esc(data.files.mapping_report_xlsx)}" download="mapping_report.xlsx">Pobierz raport mapowania Excel</a>`);
       if (data.files.mapping_report_json) links.push(`<a href="${esc(data.files.mapping_report_json)}" download="mapping_report.json">Pobierz raport JSON</a>`);
       if (data.files.enrichment_session_json) links.push(`<a href="${esc(data.files.enrichment_session_json)}" download="enrichment_session.json">Pobierz sesję uzupełniania</a>`);
       if (!showPanel) return links.join("");
@@ -5947,10 +5952,11 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     function renderRestoredGeneratedLinks() {
-      if (!generatedProductsUrl && !generatedMappingReportJsonUrl && !generatedMappingReportXlsxUrl) return;
+      if (!generatedProductsUrl && !generatedProductsAcceptanceXlsxUrl && !generatedMappingReportJsonUrl && !generatedMappingReportXlsxUrl) return;
       const conversionLinks = renderConversion({
         files: {
           products_json: generatedProductsUrl,
+          products_acceptance_xlsx: generatedProductsAcceptanceXlsxUrl,
           mapping_report_json: generatedMappingReportJsonUrl,
           mapping_report_xlsx: generatedMappingReportXlsxUrl,
         },
@@ -6054,6 +6060,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       productMappingProfile = null;
       generatedProductsJobId = null;
       generatedProductsUrl = "";
+      generatedProductsAcceptanceXlsxUrl = "";
       generatedMappingReportJsonUrl = "";
       generatedMappingReportXlsxUrl = "";
       supplementAnalysisTable = null;
@@ -6117,6 +6124,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "Błąd konwersji produktów." : "Product conversion error."));
         generatedProductsJobId = data.job_id;
         generatedProductsUrl = data.files?.products_json || "";
+        generatedProductsAcceptanceXlsxUrl = data.files?.products_acceptance_xlsx || "";
         generatedMappingReportJsonUrl = data.files?.mapping_report_json || "";
         generatedMappingReportXlsxUrl = data.files?.mapping_report_xlsx || "";
         $("productsStatus").innerHTML = currentLang === "pl"
@@ -6170,6 +6178,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         const projectName = $("projectName")?.value || "products";
         const saved = [];
         saved.push(await saveGeneratedFileAs(generatedProductsUrl, safeProductsFilename(projectName.replace(/project/i, "products")), "products.json"));
+        if (generatedProductsAcceptanceXlsxUrl) {
+          saved.push(await saveGeneratedFileAs(generatedProductsAcceptanceXlsxUrl, "products_acceptance.xlsx", "products_acceptance.xlsx"));
+        }
         if (generatedMappingReportXlsxUrl) {
           saved.push(await saveGeneratedFileAs(generatedMappingReportXlsxUrl, "mapping_report.xlsx", "mapping_report.xlsx"));
         }
