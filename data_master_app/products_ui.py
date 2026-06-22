@@ -5869,6 +5869,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       const links = [];
       if (data.files.products_json) links.push(`<a href="${esc(data.files.products_json)}" target="_blank">products.json</a>`);
       if (data.files.mapping_report_json) links.push(`<a href="${esc(data.files.mapping_report_json)}" target="_blank">mapping_report.json</a>`);
+      if (data.files.mapping_report_xlsx) links.push(`<a href="${esc(data.files.mapping_report_xlsx)}" target="_blank">mapping_report.xlsx</a>`);
       if (data.files.enrichment_session_json) links.push(`<a href="${esc(data.files.enrichment_session_json)}" target="_blank">enrichment_session.json</a>`);
       if (!showPanel) return links.join("");
       const warnings = data.report?.warnings || {};

@@ -31,6 +31,7 @@ from .mapping import (
     skip_pim_attribute,
     value_kind_from_attribute,
 )
+from .report_export import mapping_report_xlsx_bytes
 
 
 PRODUCT_MODEL_TYPE = 66
@@ -817,7 +818,15 @@ def convert_products_file(
     export_schema = export_schema_from_pim_bundle(product_model_files)
     products = [build_pim_product(mapped, index, export_schema=export_schema) for index, mapped in enumerate(mapped_rows, start=1)]
     typical_enrichment_report = apply_typical_products_to_products(products, typical_products_payload, enrichment_session)
-    report = build_mapping_report(filename, tables, product_rows, mapped_rows, products)
+    report = build_mapping_report(
+        filename,
+        tables,
+        product_rows,
+        mapped_rows,
+        products,
+        product_mapping=product_mapping,
+        product_mapping_profile=product_mapping_profile,
+    )
     if enrichment_report:
         report["enrichment"] = enrichment_report
     if typical_enrichment_report:
@@ -839,6 +848,7 @@ def convert_products_file(
         json.dumps(report, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    (output_dir / "mapping_report.xlsx").write_bytes(mapping_report_xlsx_bytes(report))
     if enrichment_session:
         (output_dir / "enrichment_session.json").write_text(
             json.dumps(
@@ -864,6 +874,7 @@ def convert_products_file(
         "files": {
             "products_json": f"/outputs/{job_id}/products.json",
             "mapping_report_json": f"/outputs/{job_id}/mapping_report.json",
+            "mapping_report_xlsx": f"/outputs/{job_id}/mapping_report.xlsx",
             **({"enrichment_session_json": f"/outputs/{job_id}/enrichment_session.json"} if enrichment_session else {}),
         },
         "report": report,
@@ -1750,6 +1761,8 @@ def build_mapping_report(
     system_mapped_rows: list[dict[str, Any]] | None = None,
     building_elements: list[dict[str, Any]] | None = None,
     system_warnings: dict[str, Any] | None = None,
+    product_mapping: dict[str, str] | None = None,
+    product_mapping_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     column_mapping: dict[str, str] = {}
     unmapped_columns: set[str] = set()
@@ -1792,6 +1805,8 @@ def build_mapping_report(
         "system_rows_selected": len(system_rows or []),
         "building_elements_generated": len(building_elements or []),
         "column_mapping": column_mapping,
+        "product_mapping": product_mapping or {},
+        "product_mapping_profile": product_mapping_profile or {},
         "system_column_mapping": system_column_mapping,
         "unmapped_columns": sorted(unmapped_columns),
         "system_unmapped_columns": sorted(system_unmapped_columns),

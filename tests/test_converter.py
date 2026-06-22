@@ -7,6 +7,8 @@ import asyncio
 from io import BytesIO
 from pathlib import Path
 
+from openpyxl import load_workbook
+
 from data_master_app.converter import (
     analyze_product_model_files,
     analyze_uploaded_file,
@@ -579,6 +581,42 @@ class ConverterTests(unittest.TestCase):
         urls = [attr["varcharValue"] for attr in attrs if attr["AttributeId"] == 273]
 
         self.assertEqual(urls, ["https://example.com/assets/packshot.png"])
+
+    def test_products_conversion_writes_client_mapping_report_xlsx(self):
+        payload = json.dumps([{"Name": "FAST A", "Category": "Zaprawy"}]).encode("utf-8")
+        profile = {
+            "Name": {
+                "source_column": "Name",
+                "target_path": "product.name.value",
+                "target_label": "Nazwa produktu",
+                "target_group": "Product identity",
+                "target_value_kind": "free_text",
+                "cleanup": {"trim": True},
+            },
+            "Category": {
+                "source_column": "Category",
+                "target_path": "product.category[].value",
+                "target_label": "Kategoria",
+                "target_group": "Product identity",
+                "target_value_kind": "multi_choice",
+                "choice_map": {"Zaprawy": "Zaprawy klejowe"},
+                "cleanup": {"trim": True},
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = convert_products_file("products.json", payload, Path(tmp), product_mapping_profile=profile)
+            report_path = Path(tmp) / result["job_id"] / "mapping_report.xlsx"
+            workbook = load_workbook(report_path)
+
+        self.assertIn("mapping_report_xlsx", result["files"])
+        self.assertIn("Mapowanie", workbook.sheetnames)
+        self.assertIn("Mapy opcji", workbook.sheetnames)
+        rows = list(workbook["Mapowanie"].iter_rows(values_only=True))
+        self.assertIn("target_path", rows[0])
+        self.assertTrue(any(row[2] == "product.name.value" and row[3] == "Nazwa produktu" for row in rows[1:]))
+        option_rows = list(workbook["Mapy opcji"].iter_rows(values_only=True))
+        self.assertTrue(any(row[3] == "Zaprawy" and row[4] == "Zaprawy klejowe" for row in option_rows[1:]))
 
     def test_product_export_uses_dynamic_type_series_ids_from_pim_model(self):
         model_files = {
