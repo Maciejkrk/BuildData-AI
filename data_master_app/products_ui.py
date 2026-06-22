@@ -964,7 +964,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             <input id="productsFile" name="file" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv"__MODEL_READY_DISABLED__>
           </label>
           <button type="submit" class="secondary" id="analyzeProductsBtn" name="_action" value="analyze" data-i18n="products.analyze"__MODEL_READY_DISABLED__>Analizuj i mapuj produkty</button>
-          <button type="button" id="generateProductsBtn" name="_action" value="convert" data-i18n="products.generate" onclick="window.generateProductsFromButton && window.generateProductsFromButton(); return false;"__MODEL_READY_DISABLED__>Generuj products.json z mapowania</button>
+          <button type="button" id="generateProductsBtn" name="_action" value="convert" data-i18n="products.generate" onclick="window.generateAndSaveProductsAs && window.generateAndSaveProductsAs(); return false;"__MODEL_READY_DISABLED__>Generuj products.json z mapowania</button>
         </form>
         <div id="productsStatus" class="status" data-i18n="products.ready">__PRODUCTS_STATUS__</div>
         <div id="productsLinks" class="links"></div>
@@ -1033,6 +1033,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let productMappingProfile = null;
     let generatedProductsJobId = null;
     let generatedProductsUrl = "";
+    let generatedMappingReportJsonUrl = "";
+    let generatedMappingReportXlsxUrl = "";
     let mainProductTable = null;
     let supplementFileForMapping = null;
     let supplementAnalysisTable = null;
@@ -1105,7 +1107,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "products.generate": "Generuj products.json z mapowania",
         "products.outputTitle": "Wynik products.json",
         "products.outputHelp": "To zapisuje właściwy plik danych produktu. Projekt mapowania zapisuje tylko ustawienia pracy.",
-        "products.saveAs": "Zapisz products.json jako...",
+        "products.saveAs": "Zapisz pliki wynikowe jako...",
         "products.saveMissing": "Najpierw wygeneruj products.json z aktualnego mapowania.",
         "products.saveFailed": "Nie udało się zapisać products.json.",
         "products.saved": "Zapisano products.json:",
@@ -1390,7 +1392,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "products.generate": "Generate products.json from mapping",
         "products.outputTitle": "products.json output",
         "products.outputHelp": "This saves the actual product data file. The mapping project only saves work settings.",
-        "products.saveAs": "Save products.json as...",
+        "products.saveAs": "Save output files as...",
         "products.saveMissing": "Generate products.json from the current mapping first.",
         "products.saveFailed": "Could not save products.json.",
         "products.saved": "Saved products.json:",
@@ -1907,18 +1909,11 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       return `${safe || "products"}.json`;
     }
 
-    async function saveJsonFileToDisk(filename, payload) {
-      const json = JSON.stringify(payload, null, 2);
-      const blob = new Blob([json], { type: "application/json" });
+    async function saveBlobToDisk(filename, blob, pickerTypes = []) {
       if (window.showSaveFilePicker) {
         const handle = await window.showSaveFilePicker({
           suggestedName: filename,
-          types: [
-            {
-              description: "Mapping project JSON",
-              accept: { "application/json": [".json"] }
-            }
-          ]
+          types: pickerTypes,
         });
         const writable = await handle.createWritable();
         await writable.write(blob);
@@ -1934,6 +1929,17 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       link.remove();
       URL.revokeObjectURL(url);
       return { mode: "download", filename };
+    }
+
+    async function saveJsonFileToDisk(filename, payload) {
+      const json = JSON.stringify(payload, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      return saveBlobToDisk(filename, blob, [
+        {
+          description: "JSON",
+          accept: { "application/json": [".json"] }
+        }
+      ]);
     }
 
     function showReport(html, summary) {
@@ -2068,6 +2074,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       productMappingProfile = null;
       generatedProductsJobId = null;
       generatedProductsUrl = "";
+      generatedMappingReportJsonUrl = "";
+      generatedMappingReportXlsxUrl = "";
       mainProductTable = null;
       supplementFileForMapping = null;
       supplementAnalysisTable = null;
@@ -5618,13 +5626,13 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       const clearEnrichmentButton = $("clearEnrichmentSessionBtn");
       if (clearEnrichmentButton) clearEnrichmentButton.onclick = () => clearEnrichmentSession();
       const generateEnrichedButton = $("generateEnrichedProductsBtn");
-      if (generateEnrichedButton) generateEnrichedButton.onclick = () => generateProductsFromButton();
+      if (generateEnrichedButton) generateEnrichedButton.onclick = () => generateAndSaveProductsAs();
       const generateEnrichedMenuButton = $("generateEnrichedProductsMenuBtn");
       if (generateEnrichedMenuButton) generateEnrichedMenuButton.onclick = () => generateAndSaveProductsAs();
       const generateProductsInlineButton = $("generateProductsInlineBtn");
-      if (generateProductsInlineButton) generateProductsInlineButton.onclick = () => generateProductsFromButton();
+      if (generateProductsInlineButton) generateProductsInlineButton.onclick = () => generateAndSaveProductsAs();
       const saveProductsAsButton = $("saveProductsAsBtn");
-      if (saveProductsAsButton) saveProductsAsButton.onclick = () => saveGeneratedProductsAs();
+      if (saveProductsAsButton) saveProductsAsButton.onclick = () => saveGeneratedOutputsAs();
       const mapSupplementButton = $("mapSupplementFileBtn");
       if (mapSupplementButton) mapSupplementButton.onclick = () => analyzeSupplementFileForMapping();
       const prepareSupplementButton = $("prepareSupplementDataBtn");
@@ -5983,6 +5991,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       productMappingProfile = null;
       generatedProductsJobId = null;
       generatedProductsUrl = "";
+      generatedMappingReportJsonUrl = "";
+      generatedMappingReportXlsxUrl = "";
       supplementAnalysisTable = null;
       supplementMapping = null;
       supplementMappingProfile = null;
@@ -6044,8 +6054,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "Błąd konwersji produktów." : "Product conversion error."));
         generatedProductsJobId = data.job_id;
         generatedProductsUrl = data.files?.products_json || "";
+        generatedMappingReportJsonUrl = data.files?.mapping_report_json || "";
+        generatedMappingReportXlsxUrl = data.files?.mapping_report_xlsx || "";
         $("productsStatus").innerHTML = currentLang === "pl"
-          ? `<span class="ok">Produkty zapisane.</span> products.json jest gotowy do użycia.`
+          ? `<span class="ok">Produkty wygenerowane.</span> Wybierz miejsce zapisu dla plików wynikowych.`
           : `<span class="ok">Products saved.</span> products.json is ready to use.`;
         const conversionLinks = renderConversion(data, "products", false);
         $("productsLinks").innerHTML = conversionLinks;
@@ -6059,9 +6071,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
     window.generateProductsFromButton = generateProductsFromButton;
     async function generateAndSaveProductsAs() {
-      await generateProductsFromButton();
+      await generateAndSaveProductsAs();
       if (generatedProductsUrl) {
-        await saveGeneratedProductsAs();
+        await saveGeneratedOutputsAs();
       }
       return false;
     }
@@ -6081,19 +6093,26 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     });
 
     async function saveGeneratedProductsAs() {
+      return saveGeneratedFileAs(generatedProductsUrl, safeProductsFilename(($("projectName")?.value || "products").replace(/project/i, "products")), "products.json");
+    }
+
+    async function saveGeneratedOutputsAs() {
       const status = $("productsSaveStatus") || $("productsStatus");
       if (!generatedProductsUrl) {
         if (status) status.textContent = t("products.saveMissing");
         return;
       }
       try {
-        const response = await fetch(generatedProductsUrl);
-        if (!response.ok) throw new Error(t("products.saveFailed"));
-        const payload = await response.json();
         const projectName = $("projectName")?.value || "products";
-        const filename = safeProductsFilename(projectName.replace(/project/i, "products"));
-        const result = await saveJsonFileToDisk(filename, payload);
-        if (status) status.textContent = `${t("products.saved")} ${result.filename}`;
+        const saved = [];
+        saved.push(await saveGeneratedFileAs(generatedProductsUrl, safeProductsFilename(projectName.replace(/project/i, "products")), "products.json"));
+        if (generatedMappingReportXlsxUrl) {
+          saved.push(await saveGeneratedFileAs(generatedMappingReportXlsxUrl, "mapping_report.xlsx", "mapping_report.xlsx"));
+        }
+        if (generatedMappingReportJsonUrl) {
+          saved.push(await saveGeneratedFileAs(generatedMappingReportJsonUrl, "mapping_report.json", "mapping_report.json"));
+        }
+        if (status) status.textContent = `${t("products.saved")} ${saved.map(item => item.filename).join(", ")}`;
       } catch (error) {
         if (error?.name === "AbortError") {
           if (status) status.textContent = t("products.saveMissing");
@@ -6101,6 +6120,27 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         }
         if (status) status.textContent = error.message || t("products.saveFailed");
       }
+    }
+
+    async function saveGeneratedFileAs(url, filename, label) {
+      if (!url) throw new Error(`${label || filename}: ${t("products.saveMissing")}`);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`${label || filename}: ${t("products.saveFailed")}`);
+      const blob = await response.blob();
+      return saveBlobToDisk(filename, blob, pickerTypesForFilename(filename));
+    }
+
+    function pickerTypesForFilename(filename) {
+      if (String(filename).toLowerCase().endsWith(".xlsx")) {
+        return [{
+          description: "Excel workbook",
+          accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
+        }];
+      }
+      return [{
+        description: "JSON",
+        accept: { "application/json": [".json"] },
+      }];
     }
 
     const generateEnrichedProductsMenuButton = $("generateEnrichedProductsMenuBtn");
