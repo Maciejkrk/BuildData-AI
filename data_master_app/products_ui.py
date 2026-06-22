@@ -1081,6 +1081,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let acceptedProductModelSignature = "";
     const PRODUCT_WORKSPACE_KEY = "buildDataAiProductsWorkspace";
     const PRODUCT_WORKSPACE_FILES_KEY = "products-files";
+    const WORKSPACE_NAVIGATION_KEY = "buildDataAiPreserveWorkspaceNavigation";
     const PRODUCT_WORKSPACE_STATE_VERSION = 3;
     const REQUIRED_PRODUCT_MODEL_FILES = [
       { key: "productsmodels", label: "productsModels.json" },
@@ -1770,6 +1771,16 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       const navigation = performance.getEntriesByType?.("navigation")?.[0];
       return navigation?.type === "reload";
     }
+    function markWorkspaceNavigation() {
+      sessionStorage.setItem(WORKSPACE_NAVIGATION_KEY, String(Date.now()));
+    }
+    function consumeWorkspaceNavigationMarker() {
+      const raw = sessionStorage.getItem(WORKSPACE_NAVIGATION_KEY);
+      sessionStorage.removeItem(WORKSPACE_NAVIGATION_KEY);
+      if (!raw) return false;
+      const ageMs = Date.now() - Number(raw);
+      return Number.isFinite(ageMs) && ageMs < 30000;
+    }
     async function saveProductWorkspaceFilesState() {
       try {
         const previous = await getProductWorkspaceItem(PRODUCT_WORKSPACE_FILES_KEY) || {};
@@ -1841,6 +1852,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           };
         }
         if (payload.analysis) renderAnalysis(payload.analysis, "products");
+        else if (pimModelAccepted && activeProductModelFields.length) renderProductModelPreview();
         renderRestoredGeneratedLinks();
         updateWorkflowGate();
       } catch (error) {
@@ -6108,6 +6120,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (activeMode === "products") collectMapping("products");
       saveProductWorkspaceState();
       await saveProductWorkspaceFilesState();
+      markWorkspaceNavigation();
       window.location.href = link.href;
     }
     for (const link of document.querySelectorAll(".top-nav a")) {
@@ -6327,13 +6340,14 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     async function initializeProductPage() {
+      const preserveWorkspace = consumeWorkspaceNavigationMarker();
       if (activeProductModelId && $("productModelId")) $("productModelId").value = activeProductModelId;
       if (activeProductModelId && $("productsProductModelId")) $("productsProductModelId").value = activeProductModelId;
       if (INITIAL_ANALYSIS && INITIAL_ANALYSIS.source_id && $("productsSourceId")) $("productsSourceId").value = INITIAL_ANALYSIS.source_id;
       if (INITIAL_ANALYSIS && INITIAL_ANALYSIS.analysis) {
         $("productsStatus").textContent = t("analysis.ready");
         renderAnalysis(INITIAL_ANALYSIS.analysis, INITIAL_ANALYSIS.mode || "products");
-      } else if (isPageReload()) {
+      } else if (isPageReload() && !preserveWorkspace) {
         await clearProductWorkspaceStorage();
       } else {
         await restoreProductWorkspaceState();

@@ -360,6 +360,7 @@ def render_building_elements_home() -> str:
     let loadedElementProjectFiles = { modelFiles: [], sourceFile: null, productsReferenceFile: null };
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
     const ELEMENT_WORKSPACE_FILES_KEY = "building-elements-files";
+    const WORKSPACE_NAVIGATION_KEY = "buildDataAiPreserveWorkspaceNavigation";
     const $ = (id) => document.getElementById(id);
     function t(key) { return I18N[currentLang]?.[key] || I18N.pl[key] || key; }
     function applyLanguage() {
@@ -437,6 +438,16 @@ def render_building_elements_home() -> str:
       const navigation = performance.getEntriesByType?.("navigation")?.[0];
       return navigation?.type === "reload";
     }
+    function markWorkspaceNavigation() {
+      sessionStorage.setItem(WORKSPACE_NAVIGATION_KEY, String(Date.now()));
+    }
+    function consumeWorkspaceNavigationMarker() {
+      const raw = sessionStorage.getItem(WORKSPACE_NAVIGATION_KEY);
+      sessionStorage.removeItem(WORKSPACE_NAVIGATION_KEY);
+      if (!raw) return false;
+      const ageMs = Date.now() - Number(raw);
+      return Number.isFinite(ageMs) && ageMs < 30000;
+    }
     async function saveElementWorkspaceFilesState() {
       try {
         const previous = await getElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY) || {};
@@ -482,6 +493,7 @@ def render_building_elements_home() -> str:
         if (payload.projectName && $("elementProjectName")) $("elementProjectName").value = payload.projectName;
         if (payload.status && $("elementStatus")) $("elementStatus").textContent = payload.status;
         if (payload.analysis) renderElementAnalysis(payload.analysis);
+        else if (loadedElementProjectFiles.modelFiles.length >= 2) await loadElementModelHierarchy();
       } catch (error) {
         console.warn("Could not restore building-elements workspace state", error);
       }
@@ -497,7 +509,9 @@ def render_building_elements_home() -> str:
       if (!link?.href) return;
       event.preventDefault();
       syncElementMappingState();
+      saveElementWorkspaceState();
       await saveElementWorkspaceFilesState();
+      markWorkspaceNavigation();
       window.location.href = link.href;
     }
     for (const link of document.querySelectorAll(".top-nav a")) {
@@ -1072,7 +1086,8 @@ def render_building_elements_home() -> str:
       });
     }
     async function initializeElementPage() {
-      if (isPageReload()) {
+      const preserveWorkspace = consumeWorkspaceNavigationMarker();
+      if (isPageReload() && !preserveWorkspace) {
         await clearElementWorkspaceStorage();
       } else {
         await restoreElementWorkspaceState();
