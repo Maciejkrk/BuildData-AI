@@ -1684,6 +1684,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           mappingProfile: productMappingProfile,
           enrichmentSession,
           mappingWorkspaceTab,
+          generatedProductsUrl,
+          generatedMappingReportJsonUrl,
+          generatedMappingReportXlsxUrl,
           status: $("productsStatus")?.textContent || "",
           savedAt: new Date().toISOString(),
         };
@@ -1766,6 +1769,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         }
         enrichmentSession = payload.enrichmentSession || enrichmentSession;
         mappingWorkspaceTab = payload.mappingWorkspaceTab || mappingWorkspaceTab;
+        generatedProductsUrl = payload.generatedProductsUrl || "";
+        generatedMappingReportJsonUrl = payload.generatedMappingReportJsonUrl || "";
+        generatedMappingReportXlsxUrl = payload.generatedMappingReportXlsxUrl || "";
         productMapping = payload.mapping || productMapping;
         productMappingProfile = payload.mappingProfile || productMappingProfile;
         if (payload.mappingProfile) {
@@ -1777,6 +1783,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           };
         }
         if (payload.analysis) renderAnalysis(payload.analysis, "products");
+        renderRestoredGeneratedLinks();
       } catch (error) {
         console.warn("Could not restore product workspace state", error);
       }
@@ -5897,6 +5904,19 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       return links.join("");
     }
 
+    function renderRestoredGeneratedLinks() {
+      if (!generatedProductsUrl && !generatedMappingReportJsonUrl && !generatedMappingReportXlsxUrl) return;
+      const conversionLinks = renderConversion({
+        files: {
+          products_json: generatedProductsUrl,
+          mapping_report_json: generatedMappingReportJsonUrl,
+          mapping_report_xlsx: generatedMappingReportXlsxUrl,
+        },
+      }, "products", false);
+      if ($("productsLinks")) $("productsLinks").innerHTML = conversionLinks;
+      if ($("productsLinksInline")) $("productsLinksInline").innerHTML = conversionLinks;
+    }
+
     async function analyzeFile(inputId, statusId, mode) {
       if (!isProductModelAccepted()) {
         $(statusId).textContent = t("gate.locked");
@@ -6062,6 +6082,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         const conversionLinks = renderConversion(data, "products", false);
         $("productsLinks").innerHTML = conversionLinks;
         if ($("productsLinksInline")) $("productsLinksInline").innerHTML = conversionLinks;
+        saveProductWorkspaceState();
         updateWorkflowGate();
       } catch (error) {
         $("productsStatus").textContent = error.message;
@@ -6071,7 +6092,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
     window.generateProductsFromButton = generateProductsFromButton;
     async function generateAndSaveProductsAs() {
-      await generateAndSaveProductsAs();
+      await generateProductsFromButton();
       if (generatedProductsUrl) {
         await saveGeneratedOutputsAs();
       }
@@ -6089,7 +6110,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         event.target.submit();
         return;
       }
-      await generateProductsFromButton();
+      await generateAndSaveProductsAs();
     });
 
     async function saveGeneratedProductsAs() {
