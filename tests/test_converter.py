@@ -208,6 +208,34 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("INITIAL_ANALYSIS", body)
         self.assertIn('id="productsSourceId" type="hidden" name="products_source_id" value="', body)
 
+    def test_product_model_analysis_can_select_root_model(self):
+        files = {
+            "productsModels.json": json.dumps(
+                {
+                    "models": [
+                        {"Id": 41, "Name": "Model firmowy", "modelType": "Product"},
+                        {"Id": 42, "Name": "Model typowy", "modelType": "Product"},
+                    ]
+                }
+            ).encode("utf-8"),
+            "productsAttributes.json": json.dumps(
+                {
+                    "attributes": [
+                        {"Id": 116, "ProductModelId": 41, "AttributeName": "Nazwa", "DispName": "Nazwa", "AttributeType": "TextBox"},
+                        {"Id": 117, "ProductModelId": 42, "AttributeName": "Kod", "DispName": "Kod", "AttributeType": "TextBox"},
+                    ]
+                }
+            ).encode("utf-8"),
+        }
+
+        result = analyze_product_model_files(files, product_root_model_id=42)
+
+        self.assertEqual(result["selected_root_model_id"], 42)
+        self.assertEqual([item["id"] for item in result["product_models"]], [41, 42])
+        labels = [field["label"] for field in result["target_fields"]]
+        self.assertIn("Kod", labels)
+        self.assertNotIn("Nazwa", labels)
+
     def test_server_rendered_mapping_keeps_type_series_table(self):
         html = render_home(
             {"model_id": "model-1", "target_fields": [{"key": "product.name.value", "label": "Nazwa", "group": "Product identity"}]},

@@ -51,12 +51,20 @@ class NestedRelation:
 
 
 @dataclass(frozen=True)
+class PimModelChoice:
+    id: int
+    name: str
+    model_type: str
+
+
+@dataclass(frozen=True)
 class PimModelBundle:
     domain: str
     root_model_id: int
     root_model_name: str
     fields: tuple[PimField, ...]
     relations: tuple[NestedRelation, ...] = ()
+    root_models: tuple[PimModelChoice, ...] = ()
 
 
 @dataclass

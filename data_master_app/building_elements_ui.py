@@ -247,6 +247,9 @@ def render_building_elements_home() -> str:
           <input id="elementAttributesFile" type="file" accept=".json">
         </label>
         <button type="button" class="secondary" onclick="loadElementModelHierarchy()" data-i18n="elements.loadModel">Wczytaj hierarchię modelu</button>
+        <label><span data-i18n="elements.activeModel">Edytowany model elementu</span>
+          <select id="elementRootModelSelect" disabled></select>
+        </label>
         <label><span data-i18n="elements.productsReference">Referencyjne products.json</span>
           <input id="productReferenceFile" type="file" accept=".json">
         </label>
@@ -292,6 +295,7 @@ def render_building_elements_home() -> str:
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
         "elements.loadModel": "Wczytaj hierarchię modelu",
+        "elements.activeModel": "Edytowany model elementu",
         "elements.productsReference": "Referencyjne products.json (opcjonalne do analizy, wymagane do eksportu relacji)",
         "elements.importFile": "Plik importowany",
         "elements.analyze": "Analizuj elementy budowlane",
@@ -324,6 +328,7 @@ def render_building_elements_home() -> str:
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
         "elements.loadModel": "Load model hierarchy",
+        "elements.activeModel": "Edited element model",
         "elements.productsReference": "Reference products.json (optional for analysis, required for relation export)",
         "elements.importFile": "Imported file",
         "elements.analyze": "Analyze building elements",
@@ -348,6 +353,9 @@ def render_building_elements_home() -> str:
     let currentLang = localStorage.getItem("aiDataMasterLang") || "pl";
     let lastElementAnalysis = null;
     let currentElementMapping = {};
+    let elementRootModels = [];
+    let activeElementRootModelId = "";
+    let elementMappingsByModel = {};
     let loadedElementProject = null;
     let loadedElementProjectFiles = { modelFiles: [], sourceFile: null, productsReferenceFile: null };
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
@@ -367,6 +375,9 @@ def render_building_elements_home() -> str:
           projectName: $("elementProjectName")?.value || "",
           analysis: lastElementAnalysis,
           mapping: currentElementMapping,
+          elementRootModels,
+          activeElementRootModelId,
+          elementMappingsByModel,
           status: $("elementStatus")?.textContent || "",
           savedAt: new Date().toISOString(),
         };
@@ -443,6 +454,9 @@ def render_building_elements_home() -> str:
         if (!raw) return;
         const payload = JSON.parse(raw);
         currentElementMapping = payload.mapping || {};
+        elementRootModels = payload.elementRootModels || elementRootModels;
+        activeElementRootModelId = String(payload.activeElementRootModelId || activeElementRootModelId || "");
+        elementMappingsByModel = payload.elementMappingsByModel || elementMappingsByModel;
         if (payload.projectName && $("elementProjectName")) $("elementProjectName").value = payload.projectName;
         if (payload.status && $("elementStatus")) $("elementStatus").textContent = payload.status;
         if (payload.analysis) renderElementAnalysis(payload.analysis);
@@ -472,6 +486,34 @@ def render_building_elements_home() -> str:
     }
     function addFilesFromList(form, name, files) {
       [...(files || [])].forEach((file) => form.append(name, file));
+    }
+    function elementRootModelKey() {
+      return String(activeElementRootModelId || elementRootModels[0]?.id || "default");
+    }
+    function renderElementRootModelSelect() {
+      const select = $("elementRootModelSelect");
+      if (!select) return;
+      select.innerHTML = elementRootModels.length
+        ? elementRootModels.map(model => `<option value="${escapeHtml(model.id)}"${String(model.id) === String(activeElementRootModelId) ? " selected" : ""}>${escapeHtml(model.name || model.id)} (${escapeHtml(model.modelType || "Building_Element")})</option>`).join("")
+        : `<option value="">${escapeHtml(currentLang === "pl" ? "Brak modeli elementów" : "No element models")}</option>`;
+      select.disabled = !elementRootModels.length;
+    }
+    function storeElementMappingForActiveModel() {
+      const key = elementRootModelKey();
+      if (!key || key === "default") return;
+      elementMappingsByModel[key] = JSON.parse(JSON.stringify(currentElementMapping || {}));
+    }
+    function restoreElementMappingForActiveModel() {
+      currentElementMapping = elementMappingsByModel[elementRootModelKey()] || {};
+    }
+    async function changeElementRootModel(rootModelId) {
+      if (!rootModelId || String(rootModelId) === String(activeElementRootModelId)) return;
+      syncElementMappingState();
+      storeElementMappingForActiveModel();
+      activeElementRootModelId = String(rootModelId);
+      restoreElementMappingForActiveModel();
+      await loadElementModelHierarchy();
+      saveElementWorkspaceState();
     }
     function selectedElementModelFiles() {
       return [
@@ -571,6 +613,7 @@ def render_building_elements_home() -> str:
     }
     async function elementProjectPayload() {
       syncElementMappingState();
+      storeElementMappingForActiveModel();
       const effectiveModelFiles = effectiveElementModelFiles();
       const sourceFile = $("elementSourceFile").files[0] || loadedElementProjectFiles.sourceFile;
       const productsReferenceFile = $("productReferenceFile").files[0] || loadedElementProjectFiles.productsReferenceFile;
@@ -578,6 +621,9 @@ def render_building_elements_home() -> str:
       return {
         name: $("elementProjectName").value || "mapowanie-elementow-budowlanych",
         model_version: "building-elements-mapping-project.v1",
+        active_element_root_model_id: activeElementRootModelId || "",
+        element_root_models: elementRootModels || [],
+        element_mappings_by_model: elementMappingsByModel || {},
         building_element_mapping: currentElementMapping || {},
         analysis: lastElementAnalysis,
         embedded_files: {
@@ -606,7 +652,11 @@ def render_building_elements_home() -> str:
           sourceFile: fileFromProjectFile(embedded.source_file),
           productsReferenceFile: fileFromProjectFile(embedded.products_reference_file),
         };
+        elementRootModels = loadedElementProject.element_root_models || elementRootModels;
+        activeElementRootModelId = String(loadedElementProject.active_element_root_model_id || activeElementRootModelId || "");
+        elementMappingsByModel = loadedElementProject.element_mappings_by_model || elementMappingsByModel;
         currentElementMapping = loadedElementProject.building_element_mapping || {};
+        if (activeElementRootModelId) elementMappingsByModel[activeElementRootModelId] = currentElementMapping;
         $("elementProjectName").value = loadedElementProject.name || "mapowanie-elementow-budowlanych";
         $("elementProjectStatus").textContent = `${t("project.loaded")} ${loadedElementProject.name || file.name}`;
         saveElementWorkspaceState();
@@ -632,7 +682,12 @@ def render_building_elements_home() -> str:
         const modelFiles = effectiveElementModelFiles();
         if (modelFiles.length < 2) throw new Error(currentLang === "pl" ? "Wczytaj oba pliki modelu: Models i Attributes." : "Load both model files: Models and Attributes.");
         addFilesFromList(form, "files", modelFiles);
+        if (activeElementRootModelId) form.append("root_model_id", activeElementRootModelId);
         const payload = await postForm("/api/building-elements/model", form);
+        elementRootModels = payload.model?.root_models || [];
+        activeElementRootModelId = String(payload.model?.root_model_id || activeElementRootModelId || elementRootModels[0]?.id || "");
+        restoreElementMappingForActiveModel();
+        renderElementRootModelSelect();
         renderElementAnalysis({
           model: payload.model,
           tables: [],
@@ -657,9 +712,14 @@ def render_building_elements_home() -> str:
         const modelFiles = effectiveElementModelFiles();
         if (modelFiles.length < 2) throw new Error(currentLang === "pl" ? "Wczytaj oba pliki modelu: Models i Attributes." : "Load both model files: Models and Attributes.");
         addFilesFromList(form, "model_files", modelFiles);
+        if (activeElementRootModelId) form.append("root_model_id", activeElementRootModelId);
         addOptionalProjectFile(form, "products_reference", $("productReferenceFile"), loadedElementProjectFiles.productsReferenceFile);
         addRequiredProjectFile(form, "file", $("elementSourceFile"), loadedElementProjectFiles.sourceFile, t("elements.importFile"));
         const payload = await postForm("/api/building-elements/analyze", form);
+        elementRootModels = payload.model?.root_models || elementRootModels;
+        activeElementRootModelId = String(payload.model?.root_model_id || activeElementRootModelId || elementRootModels[0]?.id || "");
+        restoreElementMappingForActiveModel();
+        renderElementRootModelSelect();
         renderElementAnalysis(payload);
         $("elementStatus").textContent = t("status.ready");
         saveElementWorkspaceState();
@@ -946,6 +1006,7 @@ def render_building_elements_home() -> str:
     }
     function syncElementMappingState() {
       currentElementMapping = collectElementMapping();
+      storeElementMappingForActiveModel();
       saveElementWorkspaceState();
     }
     function renderElementAnalysis(payload) {
@@ -972,10 +1033,12 @@ def render_building_elements_home() -> str:
         <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
         ${mappingEditor}
       `;
+      renderElementRootModelSelect();
       syncElementMappingState();
       saveElementWorkspaceState();
     }
     $("elementProjectName").addEventListener("input", saveElementWorkspaceState);
+    $("elementRootModelSelect").addEventListener("change", (event) => changeElementRootModel(event.target.value));
     $("elementProjectFile").addEventListener("change", () => {
       const file = $("elementProjectFile").files[0];
       if (file) loadElementProjectFromFile(file);

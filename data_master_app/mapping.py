@@ -91,14 +91,15 @@ def product_fields_from_json(content: bytes | str) -> list[FieldDefinition]:
     return product_fields_from_payload(payload)
 
 
-def product_fields_from_pim_bundle(files: dict[str, bytes | str]) -> list[FieldDefinition]:
+def product_fields_from_pim_bundle(files: dict[str, bytes | str], root_model_id: int | None = None) -> list[FieldDefinition]:
+    root_model_id = int_value(root_model_id)
     keyed_files = {pim_bundle_file_key(filename): content for filename, content in files.items()}
     models_content = keyed_files.get("productsmodels")
     attributes_content = keyed_files.get("productsattributes")
     if models_content is not None and attributes_content is not None:
         models_payload = load_json_content(models_content)
         attributes_payload = load_json_content(attributes_content)
-        fields = product_fields_from_pim_models(models_payload, attributes_payload)
+        fields = product_fields_from_pim_models(models_payload, attributes_payload, root_model_id=root_model_id)
         if fields:
             return fields
         return []
@@ -131,7 +132,10 @@ def load_json_content(content: bytes | str) -> Any:
 def product_fields_from_pim_models(
     models_payload: Any,
     attributes_payload: Any,
+    *,
+    root_model_id: int | None = None,
 ) -> list[FieldDefinition]:
+    root_model_id = int_value(root_model_id)
     models = pim_items(models_payload, "models")
     attributes = [attribute for attribute in pim_items(attributes_payload, "attributes") if not is_deleted(attribute)]
     if not models or not attributes:
@@ -143,6 +147,8 @@ def product_fields_from_pim_models(
         for model in models
         if normalize(first_present(model, "modelType", "ModelType", "type")) == "product" and model.get("Id") is not None
     }
+    if root_model_id is not None:
+        model_ids = {root_model_id}
     if not model_ids:
         model_ids = {66}
 
@@ -190,6 +196,30 @@ def product_fields_from_pim_models(
                 seen.add(field.key)
 
     return fields
+
+
+def product_model_choices_from_pim_bundle(files: dict[str, bytes | str]) -> list[dict[str, Any]]:
+    keyed_files = {pim_bundle_file_key(filename): content for filename, content in files.items()}
+    models_content = keyed_files.get("productsmodels")
+    if models_content is None:
+        return []
+    models_payload = load_json_content(models_content)
+    choices = []
+    for model in pim_items(models_payload, "models"):
+        model_id = int_value(model.get("Id"))
+        if model_id is None:
+            continue
+        model_type = text_value(first_present(model, "modelType", "ModelType", "type") or "")
+        if normalize(model_type) != "product":
+            continue
+        choices.append(
+            {
+                "id": model_id,
+                "name": text_value(first_present(model, "Name", "DispName", "AttributeName") or model_id),
+                "modelType": model_type,
+            }
+        )
+    return sorted(choices, key=lambda item: (item["name"], item["id"]))
 
 
 def pim_items(payload: Any, key: str) -> list[dict[str, Any]]:

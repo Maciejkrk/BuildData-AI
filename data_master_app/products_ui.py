@@ -952,6 +952,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           </label>
         </div>
         <div class="gate-warning" data-i18n="model.warning">Zmiana tych plików kasuje aktualną strukturę mapowania, podgląd i wygenerowany products.json. Dalsze funkcje są dostępne dopiero po zaakceptowaniu modelu.</div>
+        <label><span data-i18n="model.activeModel">Edytowany model produktu</span>
+          <select id="productRootModelSelect" disabled></select>
+        </label>
         <button type="submit" id="acceptProductModelBtn" data-i18n="model.accept" disabled>Zaakceptuj model produktu</button>
         <div id="productModelStatus" class="status">__INITIAL_PRODUCT_MODEL_STATUS__</div>
       </form>
@@ -961,6 +964,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         <div class="muted" data-i18n="products.help">Analizuj plik, przypisz kolumny do modelu produktu i typoszeregu, ustaw czyszczenie wartości, potem generuj products.json.</div>
         <form id="productsForm" action="/analyze-products-page" method="post" enctype="multipart/form-data">
           <input id="productsProductModelId" type="hidden" name="product_model_id" value="__PRODUCT_MODEL_ID_VALUE__">
+          <input id="productsRootModelId" type="hidden" name="product_root_model_id" value="">
           <input id="productsSourceId" type="hidden" name="products_source_id" value="__PRODUCTS_SOURCE_ID__">
           <label><span data-i18n="products.file">Plik produktów</span>
             <input id="productsFile" name="file" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv"__MODEL_READY_DISABLED__>
@@ -1066,6 +1070,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     const INITIAL_PRODUCT_MODEL_ACCEPTED = Boolean(INITIAL_PRODUCT_MODEL.model_id && (INITIAL_PRODUCT_MODEL.target_fields || []).length);
     let activeProductModelFields = INITIAL_PRODUCT_MODEL_ACCEPTED ? (INITIAL_PRODUCT_MODEL.target_fields || []) : [];
     let activeProductModelId = INITIAL_PRODUCT_MODEL_ACCEPTED ? INITIAL_PRODUCT_MODEL.model_id : "";
+    let productRootModels = INITIAL_PRODUCT_MODEL.product_models || [];
+    let activeProductRootModelId = String(INITIAL_PRODUCT_MODEL.selected_root_model_id || productRootModels[0]?.id || "");
+    let productMappingsByModel = {};
+    let productMappingProfilesByModel = {};
     let acceptingProductModel = false;
     let currentLang = localStorage.getItem("aiDataMasterLang") || "pl";
     let lastElementAnalysis = null;
@@ -1096,6 +1104,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "model.required": "Wczytaj i zaakceptuj wymagane pliki modelu PIM.",
         "model.selected": "Wybrano pliki modelu produktu",
         "model.warning": "Zmiana tych plików kasuje aktualną strukturę mapowania, podgląd i wygenerowany products.json. Dalsze funkcje są dostępne dopiero po zaakceptowaniu modelu.",
+        "model.activeModel": "Edytowany model produktu",
         "model.accept": "Zaakceptuj model produktu",
         "model.accepted": "Model produktu został zaakceptowany. Możesz rozpocząć import danych klienta.",
         "model.previewTitle": "Model produktu PIM",
@@ -1382,6 +1391,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "model.required": "Load and accept the required PIM model files.",
         "model.selected": "Selected product model files",
         "model.warning": "Changing these files clears the current mapping structure, preview and generated products.json. Other functions are available only after accepting the model.",
+        "model.activeModel": "Edited product model",
         "model.accept": "Accept product model",
         "model.accepted": "The product model has been accepted. You can start importing customer data.",
         "model.previewTitle": "Product PIM Model",
@@ -1692,6 +1702,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           mappingProfile: productMappingProfile,
           enrichmentSession,
           mappingWorkspaceTab,
+          productRootModels,
+          activeProductRootModelId,
+          productMappingsByModel,
+          productMappingProfilesByModel,
           generatedProductsUrl,
           generatedProductsAcceptanceXlsxUrl,
           generatedMappingReportJsonUrl,
@@ -1795,8 +1809,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         }
         if (payload.projectName && $("projectName")) $("projectName").value = payload.projectName;
         if (payload.status && $("productsStatus")) $("productsStatus").textContent = payload.status;
+        productRootModels = payload.productRootModels || productRootModels;
+        activeProductRootModelId = String(payload.activeProductRootModelId || activeProductRootModelId || "");
+        productMappingsByModel = payload.productMappingsByModel || productMappingsByModel;
+        productMappingProfilesByModel = payload.productMappingProfilesByModel || productMappingProfilesByModel;
         if (!pimModelAccepted && loadedProjectFiles.productModelFiles.length) {
-          await loadProductModelFields(loadedProjectFiles.productModelFiles);
+          await loadProductModelFields(loadedProjectFiles.productModelFiles, activeProductRootModelId);
           acceptedProductModelSignature = productModelSignature(loadedProjectFiles.productModelFiles);
           pimModelAccepted = true;
         }
@@ -1808,6 +1826,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         generatedMappingReportXlsxUrl = payload.generatedMappingReportXlsxUrl || "";
         productMapping = payload.mapping || productMapping;
         productMappingProfile = payload.mappingProfile || productMappingProfile;
+        restoreProductMappingForActiveModel();
+        renderProductRootModelSelect();
         if (payload.mappingProfile) {
           loadedProject = {
             ...(loadedProject || {}),
@@ -2091,6 +2111,57 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       return pimModelAccepted && (Boolean(activeProductModelId) || productModelSignature() === acceptedProductModelSignature);
     }
 
+    function productRootModelKey() {
+      return String(activeProductRootModelId || productRootModels[0]?.id || "default");
+    }
+
+    function renderProductRootModelSelect() {
+      const select = $("productRootModelSelect");
+      if (!select) return;
+      const models = productRootModels || [];
+      select.innerHTML = models.length
+        ? models.map(model => `<option value="${esc(model.id)}"${String(model.id) === String(activeProductRootModelId) ? " selected" : ""}>${esc(model.name || model.id)} (${esc(model.modelType || "Product")})</option>`).join("")
+        : `<option value="">${esc(currentLang === "pl" ? "Brak modeli produktu" : "No product models")}</option>`;
+      select.disabled = !models.length || !isProductModelAccepted();
+      if ($("productsRootModelId")) $("productsRootModelId").value = activeProductRootModelId || "";
+    }
+
+    function storeProductMappingForActiveModel() {
+      const key = productRootModelKey();
+      if (!key || key === "default") return;
+      if (productMapping) productMappingsByModel[key] = JSON.parse(JSON.stringify(productMapping));
+      if (productMappingProfile) productMappingProfilesByModel[key] = JSON.parse(JSON.stringify(productMappingProfile));
+    }
+
+    function restoreProductMappingForActiveModel() {
+      const key = productRootModelKey();
+      productMapping = productMappingsByModel[key] || null;
+      productMappingProfile = productMappingProfilesByModel[key] || null;
+      if (loadedProject) {
+        loadedProject = {
+          ...loadedProject,
+          product_mapping: productMapping || {},
+          product_mapping_profile: productMappingProfile || {},
+        };
+      }
+    }
+
+    async function changeProductRootModel(rootModelId) {
+      if (!rootModelId || String(rootModelId) === String(activeProductRootModelId)) return;
+      if (activeMode === "products" && activeTable) collectMapping("products");
+      storeProductMappingForActiveModel();
+      activeProductRootModelId = String(rootModelId);
+      await loadProductModelFields(productModelDefinitionFiles(), activeProductRootModelId);
+      restoreProductMappingForActiveModel();
+      renderProductRootModelSelect();
+      if (lastProductAnalysis) {
+        await analyzeFile("productsFile", "productsStatus", "products");
+      } else {
+        renderProductModelPreview();
+      }
+      saveProductWorkspaceState();
+    }
+
     function updateWorkflowGate() {
       const modelReady = isProductModelAccepted();
       const productsReady = modelReady && Boolean(generatedProductsJobId);
@@ -2106,6 +2177,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         $("productsStatus").textContent = t("gate.locked");
       }
       updateProductModelAcceptState();
+      renderProductRootModelSelect();
       updateWorkspaceChrome();
     }
 
@@ -2130,6 +2202,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       activeMode = null;
       activeProductModelFields = [];
       activeProductModelId = "";
+      productRootModels = [];
+      activeProductRootModelId = "";
+      productMappingsByModel = {};
+      productMappingProfilesByModel = {};
       loadedProject = null;
       loadedProjectFiles = { productModelFiles: [], productsFile: null, typicalDataFile: null };
       enrichmentSession = { manual_entries: [], typical_sources: [], typical_matches: [] };
@@ -2205,16 +2281,21 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       renderProductPreview();
     }
 
-    async function loadProductModelFields(files) {
+    async function loadProductModelFields(files, rootModelId = activeProductRootModelId) {
       const body = new FormData();
       files.forEach((modelFile) => body.append("product_model_files", modelFile));
+      if (rootModelId) body.append("product_root_model_id", rootModelId);
       const response = await fetch("/product-model", { method: "POST", body });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "Nie udało się odczytać modelu produktu." : "Could not read the product model."));
       activeProductModelFields = data.target_fields || [];
       activeProductModelId = data.model_id || "";
+      productRootModels = data.product_models || [];
+      activeProductRootModelId = String(data.selected_root_model_id || rootModelId || productRootModels[0]?.id || "");
       if ($("productModelId")) $("productModelId").value = activeProductModelId;
       if ($("productsProductModelId")) $("productsProductModelId").value = activeProductModelId;
+      if ($("productsRootModelId")) $("productsRootModelId").value = activeProductRootModelId;
+      renderProductRootModelSelect();
       if (!activeProductModelFields.length) {
         throw new Error(currentLang === "pl" ? "Model produktu nie zawiera pól do mapowania." : "The product model does not contain mappable fields.");
       }
@@ -3756,8 +3837,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       body.append("file", file);
       if (activeProductModelId) {
         body.append("product_model_id", activeProductModelId);
+        if (activeProductRootModelId) body.append("product_root_model_id", activeProductRootModelId);
       } else {
         productModelDefinitionFiles().forEach((modelFile) => body.append("product_model_files", modelFile));
+        if (activeProductRootModelId) body.append("product_root_model_id", activeProductRootModelId);
       }
       if ($("typicalStatus")) $("typicalStatus").textContent = t("analysis.running");
       const response = await fetch("/analyze", { method: "POST", body });
@@ -4403,6 +4486,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         profile._row_rules = rowRules;
         productMapping = result;
         productMappingProfile = profile;
+        storeProductMappingForActiveModel();
         refreshRuleOwnedRows(rowRules.rules || []);
         refreshRuleOwnedTargetOptions(ruleOwnedTargets);
         validateMappingConflicts(profile);
@@ -5746,10 +5830,16 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       const productsFile = fileForInput("productsFile");
       const typicalFile = loadedProjectFiles.typicalDataFile || fileForInput("typicalFile");
       const modelFiles = await productModelFilesForProject();
+      if (activeMode === "products" && activeTable) collectMapping("products");
+      storeProductMappingForActiveModel();
       return {
         name: $("projectName").value || "import-produktow",
         model_version: "mapping-project.v1",
         source_table: activeTable?.name || null,
+        active_product_root_model_id: activeProductRootModelId || "",
+        product_root_models: productRootModels || [],
+        product_mappings_by_model: productMappingsByModel || {},
+        product_mapping_profiles_by_model: productMappingProfilesByModel || {},
         product_mapping: productMapping || {},
         product_mapping_profile: productMappingProfile || {},
         supplement_mapping: supplementMapping || {},
@@ -5802,6 +5892,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           typicalDataFile: fileFromProjectFile(embedded.typical_data_file)
         };
         enrichmentSession = normalizeEnrichmentSession(loadedProject.enrichment_session);
+        productRootModels = loadedProject.product_root_models || productRootModels;
+        activeProductRootModelId = String(loadedProject.active_product_root_model_id || activeProductRootModelId || "");
+        productMappingsByModel = loadedProject.product_mappings_by_model || productMappingsByModel;
+        productMappingProfilesByModel = loadedProject.product_mapping_profiles_by_model || productMappingProfilesByModel;
         supplementMapping = loadedProject.supplement_mapping || null;
         supplementMappingProfile = loadedProject.supplement_mapping_profile || null;
         supplementProductsUrl = loadedProject.supplement_products_url || "";
@@ -5822,9 +5916,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           acceptedProductModelSignature = "";
           activeProductModelFields = [];
           if (!missing.length) {
-            await loadProductModelFields(loadedProjectFiles.productModelFiles);
+            await loadProductModelFields(loadedProjectFiles.productModelFiles, activeProductRootModelId);
             pimModelAccepted = true;
             acceptedProductModelSignature = productModelSignature(loadedProjectFiles.productModelFiles);
+            restoreProductMappingForActiveModel();
           }
           $("productModelStatus").innerHTML = pimModelAccepted
             ? `<span class="ok">${esc(t("model.accepted"))}</span> ${esc(productModelFileNames(loadedProjectFiles.productModelFiles))}`
@@ -5976,8 +6071,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       body.append("file", file);
       if (activeProductModelId) {
         body.append("product_model_id", activeProductModelId);
+        if (activeProductRootModelId) body.append("product_root_model_id", activeProductRootModelId);
       } else {
         productModelDefinitionFiles().forEach((modelFile) => body.append("product_model_files", modelFile));
+        if (activeProductRootModelId) body.append("product_root_model_id", activeProductRootModelId);
       }
       $(statusId).textContent = t("analysis.running");
       try {
@@ -6013,6 +6110,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       link.addEventListener("click", persistProductWorkspaceBeforeNavigation);
     }
     if ($("projectName")) $("projectName").addEventListener("input", saveProductWorkspaceState);
+    if ($("productRootModelSelect")) $("productRootModelSelect").addEventListener("change", (event) => changeProductRootModel(event.target.value));
     $("saveProjectBtn").addEventListener("click", () => saveProject());
     if ($("clearProductSessionBtn")) $("clearProductSessionBtn").addEventListener("click", () => startNewProductSession());
     $("loadProjectFile").addEventListener("change", () => {
@@ -6114,6 +6212,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       }
       if (activeProductModelId) {
         body.append("product_model_id", activeProductModelId);
+        if (activeProductRootModelId) body.append("product_root_model_id", activeProductRootModelId);
       }
       $("productsStatus").textContent = currentLang === "pl" ? "Konwersja produktów trwa." : "Product conversion is running.";
       $("productsLinks").innerHTML = "";

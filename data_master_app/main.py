@@ -80,6 +80,7 @@ async def convert_products(
     typical_data_file: UploadFile | None = File(None),
     products_source_id: str | None = Form(None),
     product_model_id: str | None = Form(None),
+    product_root_model_id: int | None = Form(None),
     product_mapping: str | None = Form(None),
     product_mapping_profile: str | None = Form(None),
     enrichment_session: str | None = Form(None),
@@ -109,6 +110,7 @@ async def convert_products(
             enrichment_session=enrichment,
             typical_products_payload=typical_payload,
             product_model_files=model_files,
+            product_root_model_id=product_root_model_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -120,6 +122,7 @@ async def analyze(
     product_model: UploadFile | None = File(None),
     product_model_files: list[UploadFile] | None = File(None),
     product_model_id: str | None = Form(None),
+    product_root_model_id: int | None = Form(None),
 ) -> dict[str, Any]:
     try:
         content = await file.read()
@@ -138,18 +141,19 @@ async def analyze(
             content,
             product_model_content=product_model_content,
             product_model_files=model_files or None,
+            product_root_model_id=product_root_model_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/product-model")
-async def product_model(product_model_files: list[UploadFile] = File(...)) -> dict[str, Any]:
+async def product_model(product_model_files: list[UploadFile] = File(...), product_root_model_id: int | None = Form(None)) -> dict[str, Any]:
     try:
         model_files = await model_files_from_uploads(product_model_files=product_model_files)
         if not model_files:
             raise ValueError("Product model files are required.")
-        result = analyze_product_model_files(model_files)
+        result = analyze_product_model_files(model_files, product_root_model_id=product_root_model_id)
         result["model_id"] = save_product_model_session(model_files)
         return result
     except ValueError as exc:
@@ -157,19 +161,19 @@ async def product_model(product_model_files: list[UploadFile] = File(...)) -> di
 
 
 @app.post("/api/products/model")
-async def products_model_api(files: list[UploadFile] = File(...)) -> dict[str, Any]:
+async def products_model_api(files: list[UploadFile] = File(...), root_model_id: int | None = Form(None)) -> dict[str, Any]:
     try:
         model_files = await api_files_payload(files)
-        return {"model": bundle_payload(load_product_model(model_files))}
+        return {"model": bundle_payload(load_product_model(model_files, root_model_id=root_model_id))}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/building-elements/model")
-async def building_elements_model_api(files: list[UploadFile] = File(...)) -> dict[str, Any]:
+async def building_elements_model_api(files: list[UploadFile] = File(...), root_model_id: int | None = Form(None)) -> dict[str, Any]:
     try:
         model_files = await api_files_payload(files)
-        return {"model": bundle_payload(load_building_element_model(model_files))}
+        return {"model": bundle_payload(load_building_element_model(model_files, root_model_id=root_model_id))}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -179,9 +183,10 @@ async def analyze_building_elements_api(
     file: UploadFile = File(...),
     model_files: list[UploadFile] = File(...),
     products_reference: UploadFile | None = File(None),
+    root_model_id: int | None = Form(None),
 ) -> dict[str, Any]:
     try:
-        model = load_building_element_model(await api_files_payload(model_files))
+        model = load_building_element_model(await api_files_payload(model_files), root_model_id=root_model_id)
         product_index = None
         if products_reference is not None:
             reference_content = await products_reference.read()
@@ -280,13 +285,14 @@ async def product_model_accept(
 async def analyze_products_page(
     file: UploadFile = File(...),
     product_model_id: str | None = Form(None),
+    product_root_model_id: int | None = Form(None),
 ) -> HTMLResponse:
     try:
         content = await file.read()
         if not content:
             raise ValueError("Uploaded file is empty.")
         model_files = load_product_model_session(product_model_id or "")
-        model_result = analyze_product_model_files(model_files)
+        model_result = analyze_product_model_files(model_files, product_root_model_id=product_root_model_id)
         model_result["model_id"] = product_model_id
         model_result["files"] = list(model_files)
         source_id = save_source_file_session(file.filename or "products", content)
@@ -294,6 +300,7 @@ async def analyze_products_page(
             file.filename or "products",
             content,
             product_model_files=model_files,
+            product_root_model_id=product_root_model_id,
         )
         return html_response(
             render_home(

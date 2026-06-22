@@ -45,6 +45,10 @@ def bundle_payload(model: PimModelBundle) -> dict[str, Any]:
             for field in model.fields
         ],
         "relations": [relation.__dict__ for relation in model.relations],
+        "root_models": [
+            {"id": item.id, "name": item.name, "modelType": item.model_type}
+            for item in model.root_models
+        ],
         "hierarchy": hierarchy_payload(model),
     }
 

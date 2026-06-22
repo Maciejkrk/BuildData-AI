@@ -80,3 +80,26 @@ def test_building_element_model_accepts_singular_export_filenames() -> None:
     assert bundle.root_model_id == 74
     assert bundle.fields[0].attribute_id == 280
 
+
+def test_building_element_model_can_select_root_model() -> None:
+    files = {
+        "buildingsElementsModels.json": b"""{
+          "models": [
+            {"Id": 74, "Name": "Warstwa", "modelType": "Building_Element"},
+            {"Id": 80, "Name": "Dach", "modelType": "Building_Element"}
+          ]
+        }""",
+        "buildingsElementsAttributes.json": b"""{
+          "attributes": [
+            {"Id": 280, "ProductModelId": 74, "AttributeName": "wall_name", "DispName": "Sciana", "AttributeType": "VarChar", "deleted": false},
+            {"Id": 300, "ProductModelId": 80, "AttributeName": "roof_name", "DispName": "Dach", "AttributeType": "VarChar", "deleted": false}
+          ]
+        }""",
+    }
+
+    bundle = load_building_element_model(files, root_model_id=80)
+
+    assert bundle.root_model_id == 80
+    assert [item.id for item in bundle.root_models] == [80, 74]
+    assert [field.attribute_id for field in bundle.fields] == [300]
+

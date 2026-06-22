@@ -27,6 +27,7 @@ from .mapping import (
     pim_items,
     product_fields_from_json,
     product_fields_from_pim_bundle,
+    product_model_choices_from_pim_bundle,
     semantic_pim_field_key,
     skip_pim_attribute,
     value_kind_from_attribute,
@@ -397,23 +398,30 @@ def analyze_uploaded_file(
     *,
     product_model_content: bytes | None = None,
     product_model_files: dict[str, bytes] | None = None,
+    product_root_model_id: int | None = None,
 ) -> dict[str, Any]:
     tables = read_source_tables(filename, content)
     product_fields = None
+    product_root_model_id = int_value(product_root_model_id)
     if product_model_files:
-        product_fields = product_fields_from_pim_bundle(product_model_files)
+        product_fields = product_fields_from_pim_bundle(product_model_files, root_model_id=product_root_model_id)
     elif product_model_content:
         product_fields = product_fields_from_json(product_model_content)
     return analyze_tables(tables, product_fields=product_fields)
 
 
-def analyze_product_model_files(product_model_files: dict[str, bytes]) -> dict[str, Any]:
-    fields = product_fields_from_pim_bundle(product_model_files)
+def analyze_product_model_files(product_model_files: dict[str, bytes], product_root_model_id: int | None = None) -> dict[str, Any]:
+    product_root_model_id = int_value(product_root_model_id)
+    model_choices = product_model_choices_from_pim_bundle(product_model_files)
+    selected_root_model_id = product_root_model_id or (model_choices[0]["id"] if model_choices else None)
+    fields = product_fields_from_pim_bundle(product_model_files, root_model_id=selected_root_model_id)
     if not fields:
         raise ValueError("Product model files do not contain a readable PIM product model.")
     return {
         "status": "model_loaded",
         "files": sorted(product_model_files.keys()),
+        "selected_root_model_id": selected_root_model_id,
+        "product_models": model_choices,
         "target_fields": field_definitions_payload(fields),
     }
 
@@ -806,8 +814,10 @@ def convert_products_file(
     enrichment_session: dict[str, Any] | None = None,
     typical_products_payload: Any = None,
     product_model_files: dict[str, bytes | str] | None = None,
+    product_root_model_id: int | None = None,
 ) -> dict[str, Any]:
     tables = read_source_tables(filename, content)
+    product_root_model_id = int_value(product_root_model_id)
     product_rows = choose_product_rows(tables)
     if product_mapping_profile:
         product_rows = apply_mapping_profile_to_rows(product_rows, product_mapping_profile)
@@ -815,7 +825,7 @@ def convert_products_file(
         product_rows = [apply_column_mapping(row, product_mapping) for row in product_rows]
     enrichment_report = apply_enrichment_session_to_rows(product_rows, enrichment_session)
     mapped_rows = unique_mapped_products([map_source_row(row) for row in product_rows])
-    export_schema = export_schema_from_pim_bundle(product_model_files)
+    export_schema = export_schema_from_pim_bundle(product_model_files, root_model_id=product_root_model_id)
     products = [build_pim_product(mapped, index, export_schema=export_schema) for index, mapped in enumerate(mapped_rows, start=1)]
     typical_enrichment_report = apply_typical_products_to_products(products, typical_products_payload, enrichment_session)
     report = build_mapping_report(
@@ -1931,7 +1941,8 @@ def category_ids(value: Any) -> list[int]:
     return sorted(set(result))
 
 
-def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None) -> PimExportSchema:
+def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_model_id: int | None = None) -> PimExportSchema:
+    root_model_id = int_value(root_model_id)
     if not files:
         return DEFAULT_EXPORT_SCHEMA
     keyed_files = {pim_bundle_file_key(filename): content for filename, content in files.items()}
@@ -1957,6 +1968,8 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None) -> PimEx
         if str(model.get("Id") or "").strip()
         and normalize_lookup(model.get("modelType") or model.get("ModelType") or model.get("type")) == "product"
     } or {PRODUCT_MODEL_TYPE}
+    if root_model_id is not None:
+        product_model_ids = {root_model_id}
     product_model_id = sorted(product_model_ids)[0] if product_model_ids else PRODUCT_MODEL_TYPE
 
     attributes_by_model: dict[int, list[dict[str, Any]]] = {}

@@ -3,20 +3,20 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from mapping_studio.models import FieldKind, NestedRelation, PimField, PimModelBundle, PimOption
+from mapping_studio.models import FieldKind, NestedRelation, PimField, PimModelBundle, PimModelChoice, PimOption
 from mapping_studio.services.normalization import first_present, int_value, normalize, text_value
 
 
-def load_product_model(files: dict[str, bytes]) -> PimModelBundle:
+def load_product_model(files: dict[str, bytes], root_model_id: int | None = None) -> PimModelBundle:
     models_payload, attributes_payload = _load_model_pair(
         files,
         ("productsmodels", "productmodels"),
         ("productsattributes", "productattributes"),
     )
-    return _load_bundle(models_payload, attributes_payload, domain="products", root_type="product")
+    return _load_bundle(models_payload, attributes_payload, domain="products", root_type="product", root_model_id=root_model_id)
 
 
-def load_building_element_model(files: dict[str, bytes]) -> PimModelBundle:
+def load_building_element_model(files: dict[str, bytes], root_model_id: int | None = None) -> PimModelBundle:
     models_payload, attributes_payload = _load_model_pair(
         files,
         (
@@ -34,7 +34,7 @@ def load_building_element_model(files: dict[str, bytes]) -> PimModelBundle:
             "systemattributes",
         ),
     )
-    return _load_bundle(models_payload, attributes_payload, domain="building_elements", root_type="building_element")
+    return _load_bundle(models_payload, attributes_payload, domain="building_elements", root_type="building_element", root_model_id=root_model_id)
 
 
 def _load_model_pair(
@@ -62,13 +62,16 @@ def _file_key(filename: str) -> str:
     return "".join(char for char in filename.lower().removesuffix(".json") if char.isalnum())
 
 
-def _load_bundle(models_payload: Any, attributes_payload: Any, *, domain: str, root_type: str) -> PimModelBundle:
+def _load_bundle(models_payload: Any, attributes_payload: Any, *, domain: str, root_type: str, root_model_id: int | None = None) -> PimModelBundle:
+    root_model_id = int_value(root_model_id)
     models = _items(models_payload, "models")
     attributes = [item for item in _items(attributes_payload, "attributes") if not _is_deleted(item)]
     if not models or not attributes:
         raise ValueError("The uploaded files do not contain a readable PIM model export.")
 
-    root_model = _root_model(models, root_type)
+    root_models = _root_model_choices(models, root_type)
+    root_model = next((model for model in models if int_value(model.get("Id")) == root_model_id), None) if root_model_id is not None else None
+    root_model = root_model or _root_model(models, root_type)
     root_model_id = int_value(root_model.get("Id"))
     if root_model_id is None:
         raise ValueError("Root PIM model has no Id.")
@@ -136,6 +139,7 @@ def _load_bundle(models_payload: Any, attributes_payload: Any, *, domain: str, r
         root_model_name=model_name_by_id.get(root_model_id, root_type),
         fields=tuple(fields),
         relations=tuple(relations),
+        root_models=tuple(root_models),
     )
 
 
@@ -148,12 +152,33 @@ def _items(payload: Any, key: str) -> list[dict[str, Any]]:
 
 
 def _root_model(models: list[dict[str, Any]], root_type: str) -> dict[str, Any]:
+    normalized_root_type = normalize(root_type)
     for model in models:
-        if normalize(first_present(model, "modelType", "ModelType", "type")) == root_type:
+        if normalize(first_present(model, "modelType", "ModelType", "type")) == normalized_root_type:
             return model
     if models:
         return models[0]
     raise ValueError("No PIM models found.")
+
+
+def _root_model_choices(models: list[dict[str, Any]], root_type: str) -> list[PimModelChoice]:
+    result = []
+    normalized_root_type = normalize(root_type)
+    for model in models:
+        model_id = int_value(model.get("Id"))
+        if model_id is None:
+            continue
+        model_type = text_value(first_present(model, "modelType", "ModelType", "type") or "")
+        if normalize(model_type) != normalized_root_type:
+            continue
+        result.append(
+            PimModelChoice(
+                id=model_id,
+                name=text_value(first_present(model, "Name", "DispName", "AttributeName") or model_id),
+                model_type=model_type,
+            )
+        )
+    return sorted(result, key=lambda item: (item.name, item.id))
 
 
 def _is_deleted(attribute: dict[str, Any]) -> bool:
