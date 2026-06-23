@@ -37,6 +37,8 @@ def render_colors_home() -> str:
     th { font-size:12px; color:#344054; background:#f8fafc; }
     .field-type { display:inline-block; padding:3px 7px; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:12px; font-weight:700; }
     .file-field { background:#f0fdfa; color:#0f766e; }
+    .choice-map { margin-top:16px; border:1px solid var(--line); border-radius:6px; padding:12px; background:#f8fafc; }
+    .choice-map table { background:#fff; }
     .links { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
     .links a { color:var(--accent); font-weight:700; }
   </style>
@@ -80,6 +82,7 @@ def render_colors_home() -> str:
     const $ = (id) => document.getElementById(id);
     let colorsAnalysis = null;
     let colorsMapping = {};
+    let colorsChoiceMapping = {};
     let selectedTableName = "";
 
     function esc(value) {
@@ -109,16 +112,68 @@ def render_colors_home() -> str:
       const table = (colorsAnalysis?.tables || []).find(item => item.name === selectedTableName) || colorsAnalysis?.tables?.[0];
       return table?.columns || [];
     }
+    function activeColorTable() {
+      return (colorsAnalysis?.tables || []).find(item => item.name === selectedTableName) || colorsAnalysis?.tables?.[0] || { columns:[], rows:0, column_values:{} };
+    }
     function suggestColumn(field, columns) {
       const keys = [field.key, field.label, ...(field.options || []).flatMap(option => [option.name, option.value])].map(normalize).filter(Boolean);
       return columns.find(column => keys.includes(normalize(column)))
         || columns.find(column => keys.some(key => normalize(column).includes(key) || key.includes(normalize(column))))
         || "";
     }
+    function isSelectField(field) {
+      return normalize(field.type) === "select" || normalize(field.type) === "checkboxes";
+    }
+    function optionValue(option) {
+      return String(option?.value ?? option?.name ?? "").trim();
+    }
+    function optionLabel(option) {
+      const value = optionValue(option);
+      const name = String(option?.name ?? value).trim();
+      return value && name && value !== name ? `${name} (${value})` : (name || value);
+    }
+    function suggestChoice(field, sourceValue) {
+      const sourceKey = normalize(sourceValue);
+      const options = field.options || [];
+      const exact = options.find(option => [option.name, option.value].some(item => normalize(item) === sourceKey));
+      if (exact) return optionValue(exact);
+      return "";
+    }
+    function renderChoiceMapping(field, activeTable) {
+      if (!isSelectField(field) || !(field.options || []).length) return "";
+      const column = colorsMapping[field.key] || "";
+      const values = column ? (activeTable.column_values?.[column] || []) : [];
+      const map = colorsChoiceMapping[field.key] || {};
+      const optionItems = field.options || [];
+      const rows = values.length
+        ? values.map(value => {
+            const selected = map[value] || map[normalize(value)] || suggestChoice(field, value);
+            if (selected && !map[value]) map[value] = selected;
+            return `<tr>
+              <td>${esc(value)}</td>
+              <td>
+                <select data-color-choice-field="${esc(field.key)}" data-color-choice-value="${esc(value)}">
+                  <option value="">-- pomiń / brak dopasowania --</option>
+                  ${optionItems.map(option => `<option value="${esc(optionValue(option))}"${optionValue(option) === selected ? " selected" : ""}>${esc(optionLabel(option))}</option>`).join("")}
+                </select>
+              </td>
+            </tr>`;
+          }).join("")
+        : `<tr><td colspan="2" class="muted">${column ? "Brak wartości do mapowania w tej kolumnie." : "Najpierw wybierz kolumnę źródłową dla tego pola."}</td></tr>`;
+      colorsChoiceMapping[field.key] = map;
+      return `<div class="choice-map" data-color-choice-map="${esc(field.key)}">
+        <h3>${esc(field.label || field.key)}: wartości klienta → opcje modelu</h3>
+        <div class="muted">Pole wyboru z modelu. Przypisz nazwy z pliku klienta do wartości dozwolonych w PIM.</div>
+        <table>
+          <thead><tr><th>Wartość z pliku klienta</th><th>Opcja z modelu</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    }
     function renderAnalysis() {
       const tables = colorsAnalysis.tables || [];
       selectedTableName = selectedTableName || tables[0]?.name || "";
-      const activeTable = tables.find(table => table.name === selectedTableName) || tables[0] || { columns:[], rows:0 };
+      const activeTable = activeColorTable();
       const columns = activeTable.columns || [];
       const fields = colorsAnalysis.fields || [];
       for (const field of fields) {
@@ -150,15 +205,28 @@ def render_colors_home() -> str:
                 </td>
               </tr>`).join("")}
           </tbody>
-        </table>`;
+        </table>
+        ${fields.map(field => renderChoiceMapping(field, activeTable)).join("")}`;
       $("colorsTableSelect").addEventListener("change", (event) => {
         selectedTableName = event.target.value;
         colorsMapping = {};
+        colorsChoiceMapping = {};
         renderAnalysis();
       });
       for (const select of document.querySelectorAll("[data-color-field]")) {
         select.addEventListener("change", () => {
           colorsMapping[select.dataset.colorField] = select.value;
+          if (colorsChoiceMapping[select.dataset.colorField]) colorsChoiceMapping[select.dataset.colorField] = {};
+          renderAnalysis();
+        });
+      }
+      for (const select of document.querySelectorAll("[data-color-choice-field]")) {
+        select.addEventListener("change", () => {
+          const field = select.dataset.colorChoiceField;
+          const value = select.dataset.colorChoiceValue;
+          colorsChoiceMapping[field] = colorsChoiceMapping[field] || {};
+          if (select.value) colorsChoiceMapping[field][value] = select.value;
+          else delete colorsChoiceMapping[field][value];
         });
       }
       $("generateColorsBtn").disabled = false;
@@ -171,6 +239,7 @@ def render_colors_home() -> str:
         addOptionalFile(form, "color_parameters", "colorParametersFile");
         colorsAnalysis = await postForm("/api/colors/analyze", form);
         colorsMapping = {};
+        colorsChoiceMapping = {};
         selectedTableName = "";
         renderAnalysis();
         $("colorsStatus").textContent = "Analiza gotowa. Sprawdź mapowanie pól koloru.";
@@ -209,6 +278,7 @@ def render_colors_home() -> str:
         addOptionalFile(form, "color_parameters", "colorParametersFile");
         form.append("table_name", selectedTableName || "");
         form.append("color_mapping", JSON.stringify(colorsMapping));
+        form.append("color_choice_mapping", JSON.stringify(colorsChoiceMapping));
         const result = await postForm("/api/colors/convert", form);
         $("colorsLinks").innerHTML = `<a href="${esc(result.files.colors_json)}" download="colors.json">Pobierz colors.json</a> <a href="${esc(result.files.mapping_report_json)}" download="colors_mapping_report.json">Pobierz raport mapowania</a>`;
         const saved = await saveGeneratedFile(result.files.colors_json, "colors.json");

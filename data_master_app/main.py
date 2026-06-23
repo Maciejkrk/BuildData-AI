@@ -252,6 +252,7 @@ async def convert_colors_api(
     file: UploadFile = File(...),
     color_parameters: UploadFile | None = File(None),
     color_mapping: str = Form("{}"),
+    color_choice_mapping: str = Form("{}"),
     table_name: str | None = Form(None),
 ) -> dict[str, Any]:
     try:
@@ -264,6 +265,7 @@ async def convert_colors_api(
             content,
             OUTPUT_DIR,
             color_mapping=json.loads(color_mapping or "{}"),
+            color_choice_mapping=json.loads(color_choice_mapping or "{}"),
             color_parameters_content=parameters_content,
             table_name=table_name,
         )

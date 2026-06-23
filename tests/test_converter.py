@@ -36,6 +36,7 @@ from data_master_app.mapping import (
     suggest_mapping,
 )
 from data_master_app.main import analyze_products_page, app, home, product_model_accept, product_model_files
+from data_master_app.colors_ui import render_colors_home
 from data_master_app.web_ui import render_home, render_main_menu
 from starlette.datastructures import UploadFile
 
@@ -107,6 +108,12 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("rowRuleTargetPaths", html)
         self.assertIn("legacyProductMapping", html)
         self.assertIn("productMappingsByModel[activeProductRootModelId]", html)
+
+    def test_colors_ui_has_choice_mapping_editor(self):
+        html = render_colors_home()
+
+        self.assertIn("data-color-choice-field", html)
+        self.assertIn("color_choice_mapping", html)
 
     def test_systems_endpoint_is_removed_from_app(self):
         paths = {route.path for route in app.routes}
@@ -327,8 +334,8 @@ class ConverterTests(unittest.TestCase):
     def test_converts_color_rows_to_colors_json_with_file_references(self):
         payload = json.dumps(
             [
-                {"Name": "E1-10", "Type": "Color", "RGB": "#9b5d74"},
-                {"Name": "FG 01", "Type": "Texture", "Main": "textures/fg01/basecolor.png", "Normal": "https://example.test/fg01-normal.png"},
+                {"Name": "E1-10", "Type": "Kolor prosty", "RGB": "#9b5d74", "Roughness": "mat"},
+                {"Name": "FG 01", "Type": "Tekstura", "Main": "textures/fg01/basecolor.png", "Normal": "https://example.test/fg01-normal.png"},
             ]
         ).encode("utf-8")
 
@@ -345,8 +352,13 @@ class ConverterTests(unittest.TestCase):
                     "name": "Name",
                     "type": "Type",
                     "colorRGB": "RGB",
+                    "roughness": "Roughness",
                     "MainTexture": "Main",
                     "normal_map": "Normal",
+                },
+                color_choice_mapping={
+                    "type": {"Kolor prosty": "simple", "Tekstura": "advanced"},
+                    "roughness": {"mat": "matte"},
                 },
             )
             colors_path = Path(tmp) / result["job_id"] / "colors.json"
@@ -355,6 +367,8 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(data["Count"], 2)
         first_params = data["colors"][0]["dataVersions"][0]["parameters"]
         self.assertTrue(any(item["parameterName"] == "r" and item["IntValue"] == 155 for item in first_params))
+        self.assertTrue(any(item["parameterName"] == "type" and item["TextValue"] == "simple" for item in first_params))
+        self.assertTrue(any(item["parameterName"] == "roughness" and item["TextValue"] == "matte" for item in first_params))
         second_version = data["colors"][1]["dataVersions"][0]
         self.assertTrue(any(item["parameterName"] == "type" and item["TextValue"] == "advanced" for item in second_version["parameters"]))
         self.assertTrue(any(item["parameterName"] == "MainTexture" and item["fileName"] == "basecolor.png" for item in second_version["filesParameters"]))

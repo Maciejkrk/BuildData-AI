@@ -494,6 +494,7 @@ def analyze_colors_file(filename: str, content: bytes, color_parameters_content:
                 "name": table.name,
                 "rows": len(table.rows),
                 "columns": columns_for_rows(table.rows),
+                "column_values": distinct_column_values(table.rows),
                 "sample_rows": table.rows[:5],
             }
             for table in tables
@@ -507,6 +508,7 @@ def convert_colors_file(
     output_root: Path,
     *,
     color_mapping: dict[str, str] | None = None,
+    color_choice_mapping: dict[str, dict[str, str]] | None = None,
     color_parameters_content: bytes | str | None = None,
     table_name: str | None = None,
 ) -> dict[str, Any]:
@@ -518,7 +520,7 @@ def convert_colors_file(
     parameter_by_name = {str(item.get("Name") or ""): item for item in parameters if item.get("Name")}
     mapping = color_mapping or {}
     colors = [
-        build_color_entry(row, index, mapping, parameter_by_name)
+        build_color_entry(row, index, mapping, parameter_by_name, color_choice_mapping or {})
         for index, row in enumerate(table.rows, start=1)
         if any(value not in (None, "") for value in row.values())
     ]
@@ -534,6 +536,7 @@ def convert_colors_file(
         "colors_generated": len(colors),
         "file_parameters_are_references": True,
         "mapped_fields": {key: value for key, value in mapping.items() if value},
+        "choice_mapping": color_choice_mapping or {},
     }
     (output_dir / "colors_mapping_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return {
@@ -559,11 +562,30 @@ def columns_for_rows(rows: list[dict[str, Any]]) -> list[str]:
     return columns
 
 
+def distinct_column_values(rows: list[dict[str, Any]], limit: int = 60) -> dict[str, list[str]]:
+    values: dict[str, list[str]] = {}
+    seen: dict[str, set[str]] = {}
+    for row in rows:
+        for column, value in row.items():
+            if value in (None, ""):
+                continue
+            text = str(value).strip()
+            if not text:
+                continue
+            column_seen = seen.setdefault(column, set())
+            if text in column_seen or len(column_seen) >= limit:
+                continue
+            column_seen.add(text)
+            values.setdefault(column, []).append(text)
+    return values
+
+
 def build_color_entry(
     row: dict[str, Any],
     index: int,
     mapping: dict[str, str],
     parameter_by_name: dict[str, dict[str, Any]],
+    choice_mapping: dict[str, dict[str, str]],
 ) -> dict[str, Any]:
     color_id = COLOR_ID_START + index
     parameters: list[dict[str, Any]] = []
@@ -583,10 +605,10 @@ def build_color_entry(
         if normalize_lookup(parameter_def.get("type")) == "files":
             files_parameters.extend(color_file_parameters(color_id, parameter_name, value))
             continue
-        add_color_parameter(parameters, color_id, parameter_name, value, parameter_def)
+        add_color_parameter(parameters, color_id, parameter_name, value, parameter_def, choice_mapping.get(parameter_name, {}))
     if not any(item["parameterName"] == "type" for item in parameters):
         file_mode = bool(files_parameters)
-        add_color_parameter(parameters, color_id, "type", "advanced" if file_mode else "simple", parameter_by_name.get("type", {"type": "Select"}))
+        add_color_parameter(parameters, color_id, "type", "advanced" if file_mode else "simple", parameter_by_name.get("type", {"type": "Select"}), choice_mapping.get("type", {}))
     return {
         "Id": color_id,
         "TypeId": COLOR_TYPE_ID,
@@ -606,7 +628,14 @@ def mapped_row_value(row: dict[str, Any], source_column: str | None) -> Any:
     return row.get(source_column)
 
 
-def add_color_parameter(parameters: list[dict[str, Any]], color_id: int, name: str, value: Any, definition: dict[str, Any]) -> None:
+def add_color_parameter(
+    parameters: list[dict[str, Any]],
+    color_id: int,
+    name: str,
+    value: Any,
+    definition: dict[str, Any],
+    choice_map: dict[str, str] | None = None,
+) -> None:
     param_type = normalize_lookup(definition.get("type") or definition.get("Type") or "VarChar")
     item = {
         "ColorId": color_id,
@@ -623,7 +652,7 @@ def add_color_parameter(parameters: list[dict[str, Any]], color_id: int, name: s
     elif param_type in {"number", "float", "decimal"}:
         item["NumberValue"] = parse_number(value)
     elif param_type in {"select", "checkboxes"}:
-        item["TextValue"] = normalize_color_option(value, definition)
+        item["TextValue"] = normalize_color_option(value, definition, choice_map or {})
     elif param_type in {"longtext", "text", "textarea"}:
         item["TextValue"] = str(value).strip()
     else:
@@ -632,8 +661,12 @@ def add_color_parameter(parameters: list[dict[str, Any]], color_id: int, name: s
         parameters.append(item)
 
 
-def normalize_color_option(value: Any, definition: dict[str, Any]) -> str:
+def normalize_color_option(value: Any, definition: dict[str, Any], choice_map: dict[str, str] | None = None) -> str:
     raw = str(value or "").strip()
+    if choice_map:
+        mapped = choice_map.get(raw) or choice_map.get(normalize_lookup(raw))
+        if mapped:
+            return str(mapped).strip()
     raw_key = normalize_lookup(raw)
     for option in definition.get("options") or []:
         if not isinstance(option, dict):
