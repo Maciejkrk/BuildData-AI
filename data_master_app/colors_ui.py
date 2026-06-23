@@ -69,6 +69,12 @@ def render_colors_home() -> str:
         <label><span id="colorParametersLabel">colorParameters.json (opcjonalnie)</span>
           <input id="colorParametersFile" type="file" accept=".json">
         </label>
+        <label><span id="colorGroupsFileLabel">Plik klienta z grupami kolorów (.xlsx, .json, .csv, .tsv)</span>
+          <input id="colorGroupsFile" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">
+        </label>
+        <label><span id="colorGroupParametersLabel">colorGroupParameters.json (opcjonalnie)</span>
+          <input id="colorGroupParametersFile" type="file" accept=".json">
+        </label>
       </div>
       <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
         <button type="button" id="analyzeColorsBtn">Analizuj plik</button>
@@ -81,6 +87,7 @@ def render_colors_home() -> str:
       <h2>Mapowanie pól koloru</h2>
       <div id="colorsSummary" class="muted">Po analizie pojawią się pola z modelu kolorów i kolumny z pliku klienta.</div>
       <div id="colorsMapping"></div>
+      <div id="colorGroupsMapping"></div>
     </section>
   </main>
   <script>
@@ -88,9 +95,11 @@ def render_colors_home() -> str:
     let colorsAnalysis = null;
     let colorsMapping = {};
     let colorsChoiceMapping = {};
+    let colorGroupMapping = {};
     let selectedTableName = "";
+    let selectedColorGroupTableName = "";
     let currentLang = localStorage.getItem("aiDataMasterLang") || "pl";
-    let loadedColorFiles = { colorsFile: null, parametersFile: null };
+    let loadedColorFiles = { colorsFile: null, parametersFile: null, groupsFile: null, groupParametersFile: null };
     const COLORS_WORKSPACE_KEY = "buildDataAiColorsWorkspace";
     const COLORS_WORKSPACE_FILES_KEY = "colors-files";
     const WORKSPACE_NAVIGATION_KEY = "buildDataAiPreserveWorkspaceNavigation";
@@ -124,14 +133,22 @@ def render_colors_home() -> str:
         notice: "Bitmapy nie są wczytywane do aplikacji. Pola tekstur i map są eksportowane jako zewnętrzne referencje: URL, ścieżka albo nazwa pliku.",
         colorsFileLabel: "Plik klienta z kolorami (.xlsx, .json, .csv, .tsv)",
         colorParametersLabel: "colorParameters.json (opcjonalnie)",
+        colorGroupsFileLabel: "Plik klienta z grupami kolorów (.xlsx, .json, .csv, .tsv)",
+        colorGroupParametersLabel: "colorGroupParameters.json (opcjonalnie)",
         tableLabel: "Arkusz / tabela",
+        groupTableLabel: "Arkusz / tabela grup kolorów",
         rowsSuffix: "wierszy",
         parameterHeader: "Parametr colors.json",
+        groupParameterHeader: "Parametr colorGroups.json",
         typeHeader: "Typ",
         sourceColumnHeader: "Kolumna z pliku klienta",
         choiceTitleSuffix: "wartości klienta → opcje modelu",
         downloadColors: "Pobierz colors.json",
+        downloadColorGroups: "Pobierz colorGroups.json",
         downloadReport: "Pobierz raport mapowania",
+        groupMappingTitle: "Mapowanie grup kolorów",
+        groupMappingHelp: "Po wczytaniu pliku grup zmapuj pola grup oraz kolumnę zawierającą listę kolorów należących do grupy.",
+        noGroups: "Nie wczytano pliku grup kolorów.",
         analyze: "Analizuj plik",
         generate: "Generuj colors.json",
         emptySummary: "Po analizie pojawią się pola z modelu kolorów i kolumny z pliku klienta.",
@@ -165,14 +182,22 @@ def render_colors_home() -> str:
         notice: "Bitmap files are not loaded into the app. Texture and map fields are exported as external references: URL, path, or file name.",
         colorsFileLabel: "Client color file (.xlsx, .json, .csv, .tsv)",
         colorParametersLabel: "colorParameters.json (optional)",
+        colorGroupsFileLabel: "Client color-groups file (.xlsx, .json, .csv, .tsv)",
+        colorGroupParametersLabel: "colorGroupParameters.json (optional)",
         tableLabel: "Sheet / table",
+        groupTableLabel: "Color-groups sheet / table",
         rowsSuffix: "rows",
         parameterHeader: "colors.json parameter",
+        groupParameterHeader: "colorGroups.json parameter",
         typeHeader: "Type",
         sourceColumnHeader: "Client-file column",
         choiceTitleSuffix: "client values → model options",
         downloadColors: "Download colors.json",
+        downloadColorGroups: "Download colorGroups.json",
         downloadReport: "Download mapping report",
+        groupMappingTitle: "Color-group mapping",
+        groupMappingHelp: "After loading a groups file, map group fields and the column that contains colors assigned to each group.",
+        noGroups: "No color-groups file loaded.",
         analyze: "Analyze file",
         generate: "Generate colors.json",
         emptySummary: "After analysis, color model fields and client-file columns will appear here.",
@@ -196,6 +221,8 @@ def render_colors_home() -> str:
       $("colorsNotice").textContent = t("notice");
       $("colorsFileLabel").textContent = t("colorsFileLabel");
       $("colorParametersLabel").textContent = t("colorParametersLabel");
+      $("colorGroupsFileLabel").textContent = t("colorGroupsFileLabel");
+      $("colorGroupParametersLabel").textContent = t("colorGroupParametersLabel");
       $("analyzeColorsBtn").textContent = t("analyze");
       $("generateColorsBtn").textContent = t("generate");
       if (!colorsAnalysis) $("colorsStatus").textContent = t("initialStatus");
@@ -289,7 +316,11 @@ def render_colors_home() -> str:
       return file;
     }
     function addOptionalFile(form, name, id) {
-      const fallback = id === "colorParametersFile" ? loadedColorFiles.parametersFile : null;
+      const fallback = {
+        colorParametersFile: loadedColorFiles.parametersFile,
+        colorGroupsFile: loadedColorFiles.groupsFile,
+        colorGroupParametersFile: loadedColorFiles.groupParametersFile,
+      }[id] || null;
       const file = $(id).files[0] || fallback;
       if (file) form.append(name, file);
     }
@@ -299,7 +330,9 @@ def render_colors_home() -> str:
           analysis: colorsAnalysis,
           mapping: colorsMapping,
           choiceMapping: colorsChoiceMapping,
+          groupMapping: colorGroupMapping,
           selectedTableName,
+          selectedColorGroupTableName,
           status: $("colorsStatus")?.textContent || "",
           links: $("colorsLinks")?.innerHTML || "",
           savedAt: new Date().toISOString(),
@@ -312,9 +345,13 @@ def render_colors_home() -> str:
       try {
         const colorsFile = $("colorsFile")?.files?.[0] || loadedColorFiles.colorsFile || null;
         const parametersFile = $("colorParametersFile")?.files?.[0] || loadedColorFiles.parametersFile || null;
+        const groupsFile = $("colorGroupsFile")?.files?.[0] || loadedColorFiles.groupsFile || null;
+        const groupParametersFile = $("colorGroupParametersFile")?.files?.[0] || loadedColorFiles.groupParametersFile || null;
         await setColorsWorkspaceItem(COLORS_WORKSPACE_FILES_KEY, {
           colorsFile: colorsFile ? await projectFileFromFile(colorsFile) : null,
           parametersFile: parametersFile ? await projectFileFromFile(parametersFile) : null,
+          groupsFile: groupsFile ? await projectFileFromFile(groupsFile) : null,
+          groupParametersFile: groupParametersFile ? await projectFileFromFile(groupParametersFile) : null,
           savedAt: new Date().toISOString(),
         });
       } catch (error) {
@@ -328,6 +365,8 @@ def render_colors_home() -> str:
         loadedColorFiles = {
           colorsFile: fileFromProjectFile(payload.colorsFile),
           parametersFile: fileFromProjectFile(payload.parametersFile),
+          groupsFile: fileFromProjectFile(payload.groupsFile),
+          groupParametersFile: fileFromProjectFile(payload.groupParametersFile),
         };
       } catch (error) {
         console.warn("Could not restore colors files state", error);
@@ -350,7 +389,9 @@ def render_colors_home() -> str:
         colorsAnalysis = payload.analysis || null;
         colorsMapping = payload.mapping || {};
         colorsChoiceMapping = payload.choiceMapping || {};
+        colorGroupMapping = payload.groupMapping || {};
         selectedTableName = payload.selectedTableName || "";
+        selectedColorGroupTableName = payload.selectedColorGroupTableName || "";
         if (payload.status) $("colorsStatus").textContent = payload.status;
         if (payload.links) $("colorsLinks").innerHTML = payload.links;
         if (colorsAnalysis) renderAnalysis();
@@ -370,6 +411,10 @@ def render_colors_home() -> str:
     }
     function activeColorTable() {
       return (colorsAnalysis?.tables || []).find(item => item.name === selectedTableName) || colorsAnalysis?.tables?.[0] || { columns:[], rows:0, column_values:{} };
+    }
+    function activeColorGroupTable() {
+      const groups = colorsAnalysis?.groups || {};
+      return (groups.tables || []).find(item => item.name === selectedColorGroupTableName) || groups.tables?.[0] || { columns:[], rows:0, column_values:{} };
     }
     function suggestColumn(field, columns) {
       const keys = [field.key, field.label, ...(field.options || []).flatMap(option => [option.name, option.value])].map(normalize).filter(Boolean);
@@ -463,6 +508,7 @@ def render_colors_home() -> str:
           </tbody>
         </table>
         ${fields.map(field => renderChoiceMapping(field, activeTable)).join("")}`;
+      renderColorGroupsMapping();
       $("colorsTableSelect").addEventListener("change", (event) => {
         selectedTableName = event.target.value;
         colorsMapping = {};
@@ -491,17 +537,72 @@ def render_colors_home() -> str:
       $("generateColorsBtn").disabled = false;
       saveColorsWorkspaceState();
     }
+    function renderColorGroupsMapping() {
+      const groups = colorsAnalysis?.groups || null;
+      if (!groups) {
+        $("colorGroupsMapping").innerHTML = `<div class="choice-map"><h3>${esc(t("groupMappingTitle"))}</h3><div class="muted">${esc(t("noGroups"))}</div></div>`;
+        return;
+      }
+      const tables = groups.tables || [];
+      selectedColorGroupTableName = selectedColorGroupTableName || tables[0]?.name || "";
+      const activeTable = activeColorGroupTable();
+      const columns = activeTable.columns || [];
+      const fields = groups.fields || [];
+      for (const field of fields) {
+        if (!(field.key in colorGroupMapping)) colorGroupMapping[field.key] = suggestColumn(field, columns);
+      }
+      $("colorGroupsMapping").innerHTML = `
+        <div class="choice-map">
+          <h3>${esc(t("groupMappingTitle"))}</h3>
+          <div class="muted">${esc(t("groupMappingHelp"))}</div>
+          <label>${esc(t("groupTableLabel"))}
+            <select id="colorGroupsTableSelect">${tables.map(table => `<option value="${esc(table.name)}"${table.name === selectedColorGroupTableName ? " selected" : ""}>${esc(table.name)} (${esc(table.rows || 0)} ${esc(t("rowsSuffix"))})</option>`).join("")}</select>
+          </label>
+          <table>
+            <thead><tr><th>${esc(t("groupParameterHeader"))}</th><th>${esc(t("typeHeader"))}</th><th>${esc(t("sourceColumnHeader"))}</th></tr></thead>
+            <tbody>
+              ${fields.map(field => `
+                <tr>
+                  <td><strong>${esc(field.label || field.key)}</strong><div class="muted">${esc(field.key)}${field.unit ? ` [${esc(field.unit)}]` : ""}</div></td>
+                  <td><span class="field-type ${field.is_file ? "file-field" : ""}">${esc(field.type || "")}</span></td>
+                  <td>
+                    <select data-color-group-field="${esc(field.key)}">
+                      <option value="">${esc(t("noMap"))}</option>
+                      ${columns.map(column => `<option value="${esc(column)}"${colorGroupMapping[field.key] === column ? " selected" : ""}>${esc(column)}</option>`).join("")}
+                    </select>
+                  </td>
+                </tr>`).join("")}
+            </tbody>
+          </table>
+        </div>`;
+      $("colorGroupsTableSelect").addEventListener("change", (event) => {
+        selectedColorGroupTableName = event.target.value;
+        colorGroupMapping = {};
+        renderColorGroupsMapping();
+        saveColorsWorkspaceState();
+      });
+      for (const select of document.querySelectorAll("[data-color-group-field]")) {
+        select.addEventListener("change", () => {
+          colorGroupMapping[select.dataset.colorGroupField] = select.value;
+          saveColorsWorkspaceState();
+        });
+      }
+    }
     async function analyzeColors() {
       try {
         $("colorsStatus").textContent = t("analyzeWait");
         const form = new FormData();
         form.append("file", fileOrError("colorsFile", t("chooseFile")));
         addOptionalFile(form, "color_parameters", "colorParametersFile");
+        addOptionalFile(form, "color_groups_file", "colorGroupsFile");
+        addOptionalFile(form, "color_group_parameters", "colorGroupParametersFile");
         await saveColorsWorkspaceFilesState();
         colorsAnalysis = await postForm("/api/colors/analyze", form);
         colorsMapping = {};
         colorsChoiceMapping = {};
+        colorGroupMapping = {};
         selectedTableName = "";
+        selectedColorGroupTableName = "";
         renderAnalysis();
         $("colorsStatus").textContent = t("analyzeReady");
         saveColorsWorkspaceState();
@@ -538,13 +639,24 @@ def render_colors_home() -> str:
         const form = new FormData();
         form.append("file", fileOrError("colorsFile", t("chooseFile")));
         addOptionalFile(form, "color_parameters", "colorParametersFile");
+        addOptionalFile(form, "color_groups_file", "colorGroupsFile");
+        addOptionalFile(form, "color_group_parameters", "colorGroupParametersFile");
         form.append("table_name", selectedTableName || "");
         form.append("color_mapping", JSON.stringify(colorsMapping));
         form.append("color_choice_mapping", JSON.stringify(colorsChoiceMapping));
+        form.append("color_group_table_name", selectedColorGroupTableName || "");
+        form.append("color_group_mapping", JSON.stringify(colorGroupMapping));
         const result = await postForm("/api/colors/convert", form);
-        $("colorsLinks").innerHTML = `<a href="${esc(result.files.colors_json)}" download="colors.json">${esc(t("downloadColors"))}</a> <a href="${esc(result.files.mapping_report_json)}" download="colors_mapping_report.json">${esc(t("downloadReport"))}</a>`;
-        const saved = await saveGeneratedFile(result.files.colors_json, "colors.json");
-        $("colorsStatus").innerHTML = `<span>${esc(t("saved").replace("{count}", result.colors_count).replace("{file}", saved))}</span>`;
+        $("colorsLinks").innerHTML = [
+          `<a href="${esc(result.files.colors_json)}" download="colors.json">${esc(t("downloadColors"))}</a>`,
+          result.files.color_groups_json ? `<a href="${esc(result.files.color_groups_json)}" download="colorGroups.json">${esc(t("downloadColorGroups"))}</a>` : "",
+          `<a href="${esc(result.files.mapping_report_json)}" download="colors_mapping_report.json">${esc(t("downloadReport"))}</a>`,
+        ].filter(Boolean).join(" ");
+        const savedFiles = [await saveGeneratedFile(result.files.colors_json, "colors.json")];
+        if (result.files.color_groups_json) {
+          savedFiles.push(await saveGeneratedFile(result.files.color_groups_json, "colorGroups.json"));
+        }
+        $("colorsStatus").innerHTML = `<span>${esc(t("saved").replace("{count}", result.colors_count).replace("{file}", savedFiles.join(", ")))}</span>`;
         saveColorsWorkspaceState();
       } catch (error) {
         $("colorsStatus").textContent = error.message;
@@ -568,7 +680,7 @@ def render_colors_home() -> str:
         window.location.href = target.href;
       });
     }
-    for (const inputId of ["colorsFile", "colorParametersFile"]) {
+    for (const inputId of ["colorsFile", "colorParametersFile", "colorGroupsFile", "colorGroupParametersFile"]) {
       $(inputId).addEventListener("change", async () => {
         await saveColorsWorkspaceFilesState();
         await saveColorsWorkspaceState();
