@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from .converter import analyze_colors_file, analyze_product_model_files, analyze_uploaded_file, convert_colors_file, convert_products_file
 from .web_ui import render_building_elements_home, render_colors_home, render_home, render_main_menu
-from mapping_studio.services.building_preview import preview_building_elements_from_tables
+from mapping_studio.services.building_preview import convert_building_elements_from_tables, preview_building_elements_from_tables
 from mapping_studio.services.mapping_analyzer import analyze_source_tables, bundle_payload
 from mapping_studio.services.pim_model_loader import load_building_element_model, load_product_model
 from mapping_studio.services.product_reference import build_product_reference_index
@@ -228,6 +228,37 @@ async def building_elements_preview_api(
                 product_index = build_product_reference_index(reference_content)
         mapping = json.loads(mapping_json or "{}")
         return preview_building_elements_from_tables(tables, mapping, product_index)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/building-elements/convert")
+async def convert_building_elements_api(
+    file: UploadFile = File(...),
+    model_files: list[UploadFile] = File(...),
+    products_reference: UploadFile | None = File(None),
+    root_model_id: int | None = Form(None),
+    mapping_json: str = Form("{}"),
+) -> dict[str, Any]:
+    try:
+        model = load_building_element_model(await api_files_payload(model_files), root_model_id=root_model_id)
+        content = await file.read()
+        tables = read_source_tables(file.filename or "building-elements", content)
+        product_index = None
+        if products_reference is not None:
+            reference_content = await products_reference.read()
+            if reference_content:
+                product_index = build_product_reference_index(reference_content)
+        mapping = json.loads(mapping_json or "{}")
+        return convert_building_elements_from_tables(
+            file.filename or "building-elements",
+            content,
+            tables,
+            mapping,
+            model,
+            product_index,
+            OUTPUT_DIR,
+        )
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

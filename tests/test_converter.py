@@ -40,7 +40,9 @@ from data_master_app.building_elements_ui import render_building_elements_home
 from data_master_app.colors_ui import render_colors_home
 from data_master_app.web_ui import render_home, render_main_menu
 from mapping_studio.models import ProductReferenceIndex
-from mapping_studio.services.building_preview import preview_building_elements
+from mapping_studio.services.building_preview import convert_building_elements_from_tables, preview_building_elements
+from mapping_studio.services.pim_model_loader import load_building_element_model
+from mapping_studio.services.source_reader import SourceTable
 from starlette.datastructures import UploadFile
 
 
@@ -130,6 +132,8 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("kilka produktów w jednej komórce", html)
         self.assertIn("localStorage.setItem(ELEMENT_WORKSPACE_KEY", html)
         self.assertIn("return currentElementMapping", html)
+        self.assertIn("generateBuildingElements", html)
+        self.assertIn("building_elements.json", html)
 
     def test_building_preview_splits_comma_separated_layer_products(self):
         product_a = {"Id": 101}
@@ -156,6 +160,45 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual([item["raw"] for item in products], ["SKU1", "SKU2"])
         self.assertEqual([item["product_id"] for item in products], [101, 102])
         self.assertEqual([item["identity_source"] for item in products], ["code", "code"])
+
+    def test_building_elements_convert_writes_json_from_profile(self):
+        model = load_building_element_model(
+            {
+                "buildingElementsModels.json": b"""{
+                  "models": [
+                    {"Id": 74, "Name": "Building Element", "modelType": "Building_Element"},
+                    {"Id": 75, "Name": "Variant", "modelType": "Attribute"},
+                    {"Id": 76, "Name": "Layer", "modelType": "Attribute"}
+                  ]
+                }""",
+                "buildingElementsAttributes.json": b"""{
+                  "attributes": [
+                    {"Id": 280, "ProductModelId": 74, "AttributeName": "name", "DispName": "Name", "AttributeType": "VarChar", "deleted": false},
+                    {"Id": 283, "ProductModelId": 74, "AttributeName": "variants", "DispName": "Variants", "AttributeType": "Model_Array", "TargetModelId": 75, "deleted": false},
+                    {"Id": 284, "ProductModelId": 75, "AttributeName": "variant_name", "DispName": "Variant Name", "AttributeType": "VarChar", "deleted": false},
+                    {"Id": 285, "ProductModelId": 75, "AttributeName": "layers", "DispName": "Layers", "AttributeType": "Model_Array", "TargetModelId": 76, "deleted": false},
+                    {"Id": 287, "ProductModelId": 76, "AttributeName": "layer_name", "DispName": "Layer name", "AttributeType": "VarChar", "deleted": false}
+                  ]
+                }""",
+            }
+        )
+        tables = [SourceTable("Systemy", [{"System": "S1", "Wariant": "W1", "Warstwa": "L1"}])]
+        profile = {
+            "_levels": {"model.74": {"level_name_field": "building_element.name.value"}},
+            "building_element.name.value": {"table": "Systemy", "column": "System", "cleanup": {"trim": True}},
+            "building_element.variant_name.value": {"table": "Systemy", "column": "Wariant", "cleanup": {"trim": True}},
+            "building_element.layer_name.value": {"table": "Systemy", "column": "Warstwa", "cleanup": {"trim": True}},
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = convert_building_elements_from_tables("systems.json", b"{}", tables, profile, model, None, Path(tmp))
+            payload = json.loads((Path(tmp) / result["job_id"] / "building_elements.json").read_text(encoding="utf-8"))
+
+        self.assertEqual(result["building_elements_count"], 1)
+        attrs = payload["buildingElements"][0]["dataVersions"][0]["productAttributes"]
+        self.assertTrue(any(attr["AttributeId"] == 280 and attr["varcharValue"] == "S1" for attr in attrs))
+        self.assertTrue(any(attr["AttributeId"] == 284 and attr["ParentAttributeId"] == 283 for attr in attrs))
+        self.assertTrue(any(attr["AttributeId"] == 287 and attr["ParentAttributeId"] == 285 for attr in attrs))
 
     def test_systems_endpoint_is_removed_from_app(self):
         paths = {route.path for route in app.routes}

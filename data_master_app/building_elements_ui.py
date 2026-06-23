@@ -789,6 +789,29 @@ def render_building_elements_home() -> str:
       URL.revokeObjectURL(link.href);
       return { filename, mode: "download" };
     }
+    async function saveGeneratedElementFile(url, suggestedName) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(currentLang === "pl" ? "Nie udało się pobrać pliku wynikowego." : "Could not download generated file.");
+      const blob = await response.blob();
+      if (window.showSaveFilePicker) {
+        const handle = await window.showSaveFilePicker({
+          suggestedName,
+          types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return handle.name || suggestedName;
+      }
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = suggestedName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+      return suggestedName;
+    }
     async function elementProjectPayload() {
       syncElementMappingState();
       storeElementMappingForActiveModel();
@@ -921,6 +944,34 @@ def render_building_elements_home() -> str:
         renderElementRootModelSelect();
         renderElementAnalysis(payload);
         $("elementStatus").textContent = t("status.ready");
+        saveElementWorkspaceState();
+      } catch (error) {
+        $("elementStatus").textContent = error.message;
+        saveElementWorkspaceState();
+      }
+    }
+    async function generateBuildingElements() {
+      const form = new FormData();
+      try {
+        syncElementMappingState();
+        $("elementStatus").textContent = currentLang === "pl"
+          ? "Generuję building_elements.json."
+          : "Generating building_elements.json.";
+        if ((!selectedElementModelFiles().length && !loadedElementProjectFiles.modelFiles.length) || (!$("elementSourceFile").files[0] && !loadedElementProjectFiles.sourceFile)) {
+          await restoreElementWorkspaceFilesState();
+        }
+        const modelFiles = effectiveElementModelFiles();
+        if (modelFiles.length < 2) throw new Error(currentLang === "pl" ? "Wczytaj oba pliki modelu: Models i Attributes." : "Load both model files: Models and Attributes.");
+        addFilesFromList(form, "model_files", modelFiles);
+        addOptionalProjectFile(form, "products_reference", $("productReferenceFile"), loadedElementProjectFiles.productsReferenceFile);
+        addRequiredProjectFile(form, "file", $("elementSourceFile"), loadedElementProjectFiles.sourceFile, t("elements.importFile"));
+        if (activeElementRootModelId) form.append("root_model_id", activeElementRootModelId);
+        form.append("mapping_json", JSON.stringify(currentElementMapping || {}));
+        const payload = await postForm("/api/building-elements/convert", form);
+        const saved = await saveGeneratedElementFile(payload.files.building_elements_json, "building_elements.json");
+        $("elementStatus").textContent = currentLang === "pl"
+          ? `Gotowe. Zapisano ${saved}.`
+          : `Done. Saved ${saved}.`;
         saveElementWorkspaceState();
       } catch (error) {
         $("elementStatus").textContent = error.message;
@@ -1249,6 +1300,9 @@ def render_building_elements_home() -> str:
         <p>${escapeHtml(reference.message || "")}</p>
         <h3>Wczytane tabele</h3>
         <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
+        <div style="margin:14px 0; display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="button" onclick="generateBuildingElements()">Generuj building_elements.json</button>
+        </div>
         ${mappingEditor}
       `;
       renderElementRootModelSelect();

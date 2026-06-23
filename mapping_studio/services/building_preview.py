@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
+from pathlib import Path
 from typing import Any
 
 from data_master_app.mapping import apply_cleanup
-from mapping_studio.models import ProductReferenceIndex
+from mapping_studio.models import PimModelBundle, ProductReferenceIndex
 from mapping_studio.services.source_reader import SourceTable
 from mapping_studio.services.normalization import lookup_key
+
+
+BUILDING_ELEMENT_ID_START = 910000
+BUILDING_ELEMENT_TYPE_ID = 1
 
 
 def preview_building_elements(rows: list[dict[str, Any]], mapping: dict[str, str], product_index: ProductReferenceIndex | None) -> dict[str, Any]:
@@ -154,3 +161,212 @@ def normalize_tree(systems: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
             variants.append({"name": variant["name"], "layers": layers})
         result.append({"name": system["name"], "variants": variants})
     return result
+
+
+def convert_building_elements_from_tables(
+    filename: str,
+    content: bytes,
+    tables: list[SourceTable],
+    mapping_profile: dict[str, Any],
+    model: PimModelBundle,
+    product_index: ProductReferenceIndex | None,
+    output_root: Path,
+) -> dict[str, Any]:
+    rows = mapped_rows_from_profile(tables, mapping_profile)
+    field_by_key: dict[str, Any] = {}
+    for field in model.fields:
+        field_by_key[field.key] = field
+        field_by_key[field.key.replace(" ", "_")] = field
+    relation_by_key = {relation.key: relation for relation in model.relations}
+    root_key = f"model.{model.root_model_id}"
+    levels = mapping_profile.get("_levels") if isinstance(mapping_profile.get("_levels"), dict) else {}
+    root_level = levels.get(root_key, {}) if isinstance(levels.get(root_key), dict) else {}
+    root_name_field = root_level.get("level_name_field") or next((field.key for field in model.fields if field.parent_relation_key is None), "")
+
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        name = row.get(root_name_field) or row.get("building_element.name.value") or row.get("system.name") or "Building element"
+        grouped.setdefault(str(name), []).append(row)
+
+    elements = [
+        build_element_entry(name, element_rows, index, field_by_key, relation_by_key, product_index, model.root_model_id)
+        for index, (name, element_rows) in enumerate(grouped.items(), start=1)
+    ]
+    payload = {"buildingElementsCount": len(elements), "buildingElements": elements}
+    job_id = stable_job_id("building-elements", filename, content, json.dumps(mapping_profile, sort_keys=True, ensure_ascii=False))
+    output_dir = output_root / job_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "building_elements.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    report = {
+        "source_filename": filename,
+        "building_elements_count": len(elements),
+        "product_identity": mapping_profile.get("_product_identity") or {},
+    }
+    (output_dir / "building_elements_mapping_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "status": "building_elements_converted",
+        "job_id": job_id,
+        "building_elements_count": len(elements),
+        "files": {
+            "building_elements_json": f"/outputs/{job_id}/building_elements.json",
+            "mapping_report_json": f"/outputs/{job_id}/building_elements_mapping_report.json",
+        },
+        "report": report,
+    }
+
+
+def build_element_entry(
+    name: str,
+    rows: list[dict[str, Any]],
+    index: int,
+    field_by_key: dict[str, Any],
+    relation_by_key: dict[str, Any],
+    product_index: ProductReferenceIndex | None,
+    model_id: int,
+) -> dict[str, Any]:
+    attrs: list[dict[str, Any]] = []
+    relation_hashes: dict[tuple[str, str], str] = {}
+    for row_index, row in enumerate(rows):
+        for key, value in row.items():
+            if key.startswith("_") or value in (None, ""):
+                continue
+            field = field_by_key.get(key)
+            if not field:
+                continue
+            parent_attribute_id = 0
+            parent_hash = ""
+            row_hash = None
+            relation_key = field.parent_relation_key
+            if relation_key:
+                relation = relation_by_key.get(relation_key)
+                parent_attribute_id = relation.attribute_id if relation else 0
+                relation_value = relation_identity_value(row, relation_key, field_by_key) or str(row_index + 1)
+                row_hash = relation_hashes.setdefault((relation_key, relation_value), stable_hash(relation_key, relation_value))
+                parent_relation_key = relation.parent_relation_key if relation else None
+                if parent_relation_key:
+                    parent_value = relation_identity_value(row, parent_relation_key, field_by_key) or "root"
+                    parent_hash = relation_hashes.setdefault((parent_relation_key, parent_value), stable_hash(parent_relation_key, parent_value))
+            add_field_attrs(attrs, field, value, product_index, parent_attribute_id=parent_attribute_id, row_hash=row_hash, parent_hash=parent_hash, row_i=row_index)
+    return {
+        "Id": BUILDING_ELEMENT_ID_START + index,
+        "elementTypeId": BUILDING_ELEMENT_TYPE_ID,
+        "ModelType": model_id,
+        "dataVersions": [
+            {
+                "VersionId": 1,
+                "productAttributes": attrs,
+                "filesAttributes": [],
+                "colorsAttributes": [],
+            }
+        ],
+    }
+
+
+def relation_identity_value(row: dict[str, Any], relation_key: str, field_by_key: dict[str, Any]) -> str:
+    for key, value in row.items():
+        field = field_by_key.get(key)
+        if field and field.parent_relation_key == relation_key and value not in (None, ""):
+            return str(value)
+    return ""
+
+
+def add_field_attrs(
+    attrs: list[dict[str, Any]],
+    field: Any,
+    value: Any,
+    product_index: ProductReferenceIndex | None,
+    *,
+    parent_attribute_id: int = 0,
+    row_hash: str | None = None,
+    parent_hash: str = "",
+    row_i: int = 0,
+) -> None:
+    values = product_values(value) if str(field.kind) in {"product_ref", "multi_choice"} else [value]
+    for item in values:
+        add_attr(
+            attrs,
+            field.attribute_id,
+            parent_attribute_id=parent_attribute_id,
+            row_hash=row_hash,
+            parent_hash=parent_hash,
+            row_i=row_i,
+            **attr_payload_for_value(field, item, product_index),
+        )
+
+
+def attr_payload_for_value(field: Any, value: Any, product_index: ProductReferenceIndex | None) -> dict[str, Any]:
+    if str(field.kind) == "product_ref":
+        match = resolve_product(value, product_index)
+        if match and str(match.get("Id") or "").isdigit():
+            return {"int_value": int(match["Id"])}
+        return {"varchar": str(value)}
+    if str(field.kind) == "number":
+        number = parse_number(value)
+        return {"number": number} if number is not None else {"varchar": str(value)}
+    if str(field.kind) == "boolean":
+        return {"boolean": parse_bool(value)}
+    option_id = option_id_for_value(field, value)
+    if option_id is not None:
+        return {"int_value": option_id, "boolean": True}
+    return {"varchar": str(value)}
+
+
+def add_attr(
+    attrs: list[dict[str, Any]],
+    attribute_id: int,
+    *,
+    varchar: str | None = None,
+    text: str | None = None,
+    int_value: int | None = None,
+    number: float | None = None,
+    boolean: bool = False,
+    parent_attribute_id: int = 0,
+    row_hash: str | None = None,
+    parent_hash: str = "",
+    row_i: int = 0,
+) -> None:
+    attrs.append(
+        {
+            "AttributeId": attribute_id,
+            "hash": row_hash,
+            "parentHash": parent_hash,
+            "ParentAttributeId": parent_attribute_id,
+            "varcharValue": varchar,
+            "TextValue": text,
+            "IntValue": int_value,
+            "IntValue2": None,
+            "NumberValue": number,
+            "BooleanValue": boolean,
+            "MainAttributeId": None,
+            "RowI": row_i,
+        }
+    )
+
+
+def option_id_for_value(field: Any, value: Any) -> int | None:
+    key = lookup_key(value)
+    for option in getattr(field, "options", []) or []:
+        if lookup_key(option.label) == key or lookup_key(option.value) == key or str(option.id or "") == str(value):
+            return option.id
+    return None
+
+
+def parse_number(value: Any) -> float | None:
+    match = re.search(r"-?\d+(?:[,.]\d+)?", str(value or ""))
+    return float(match.group(0).replace(",", ".")) if match else None
+
+
+def parse_bool(value: Any) -> bool:
+    return lookup_key(value) in {"1", "true", "yes", "tak", "y", "t"}
+
+
+def stable_hash(*parts: Any) -> str:
+    return hashlib.md5("|".join(str(part) for part in parts).encode("utf-8")).hexdigest()
+
+
+def stable_job_id(*parts: Any) -> str:
+    digest = hashlib.sha1()
+    for part in parts:
+        digest.update(part if isinstance(part, bytes) else str(part).encode("utf-8"))
+        digest.update(b"|")
+    return digest.hexdigest()[:12]
