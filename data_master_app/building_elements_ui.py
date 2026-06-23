@@ -222,6 +222,7 @@ def render_building_elements_home() -> str:
       <a href="/" data-i18n="nav.menu">Wróć do menu głównego</a>
       <a href="/products" data-i18n="nav.products">Produkty</a>
       <a class="active" href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
+      <a href="/colors" data-i18n="nav.colors">Kolory</a>
     </nav>
     <div class="header-actions">
       <span class="status" data-i18n="app.subtitle">Mapowanie elementów budowlanych na podstawie modelu PIM</span>
@@ -287,6 +288,7 @@ def render_building_elements_home() -> str:
         "nav.products": "Produkty",
         "nav.menu": "Wróć do menu głównego",
         "nav.buildingElements": "Elementy budowlane",
+        "nav.colors": "Kolory",
         "app.subtitle": "Mapowanie elementów budowlanych na podstawie modelu PIM",
         "elements.title": "Elementy budowlane",
         "elements.help": "Ten moduł służy do mapowania elementów budowlanych. Relacje do produktów wymagają referencyjnego pliku products.json z mapowania produktów.",
@@ -320,6 +322,7 @@ def render_building_elements_home() -> str:
         "nav.products": "Products",
         "nav.menu": "Back to main menu",
         "nav.buildingElements": "Building elements",
+        "nav.colors": "Colors",
         "app.subtitle": "Building-element mapping based on the PIM model",
         "elements.title": "Building elements",
         "elements.help": "This module starts building-element mapping. Product relations require a reference products.json exported from product mapping.",
@@ -517,6 +520,10 @@ def render_building_elements_home() -> str:
     for (const link of document.querySelectorAll(".top-nav a")) {
       link.addEventListener("click", persistElementWorkspaceBeforeNavigation);
     }
+    window.addEventListener("pagehide", () => {
+      syncElementMappingState();
+      saveElementWorkspaceState();
+    });
     function addFiles(form, name, input) {
       [...input.files].forEach((file) => form.append(name, file));
     }

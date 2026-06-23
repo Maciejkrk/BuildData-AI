@@ -236,13 +236,24 @@ async def building_elements_preview_api(
 async def analyze_colors_api(
     file: UploadFile = File(...),
     color_parameters: UploadFile | None = File(None),
+    color_groups_file: UploadFile | None = File(None),
+    color_group_parameters: UploadFile | None = File(None),
 ) -> dict[str, Any]:
     try:
         content = await file.read()
         if not content:
             raise ValueError("Uploaded file is empty.")
         parameters_content = await color_parameters.read() if color_parameters is not None else None
-        return analyze_colors_file(file.filename or "colors", content, parameters_content)
+        group_content = await color_groups_file.read() if color_groups_file is not None else None
+        group_parameters_content = await color_group_parameters.read() if color_group_parameters is not None else None
+        return analyze_colors_file(
+            file.filename or "colors",
+            content,
+            parameters_content,
+            color_groups_filename=color_groups_file.filename if color_groups_file is not None else None,
+            color_groups_content=group_content,
+            color_group_parameters_content=group_parameters_content,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -251,15 +262,21 @@ async def analyze_colors_api(
 async def convert_colors_api(
     file: UploadFile = File(...),
     color_parameters: UploadFile | None = File(None),
+    color_groups_file: UploadFile | None = File(None),
+    color_group_parameters: UploadFile | None = File(None),
     color_mapping: str = Form("{}"),
     color_choice_mapping: str = Form("{}"),
+    color_group_mapping: str = Form("{}"),
     table_name: str | None = Form(None),
+    color_group_table_name: str | None = Form(None),
 ) -> dict[str, Any]:
     try:
         content = await file.read()
         if not content:
             raise ValueError("Uploaded file is empty.")
         parameters_content = await color_parameters.read() if color_parameters is not None else None
+        group_content = await color_groups_file.read() if color_groups_file is not None else None
+        group_parameters_content = await color_group_parameters.read() if color_group_parameters is not None else None
         return convert_colors_file(
             file.filename or "colors",
             content,
@@ -268,6 +285,11 @@ async def convert_colors_api(
             color_choice_mapping=json.loads(color_choice_mapping or "{}"),
             color_parameters_content=parameters_content,
             table_name=table_name,
+            color_groups_filename=color_groups_file.filename if color_groups_file is not None else None,
+            color_groups_content=group_content,
+            color_group_parameters_content=group_parameters_content,
+            color_group_mapping=json.loads(color_group_mapping or "{}"),
+            color_group_table_name=color_group_table_name,
         )
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

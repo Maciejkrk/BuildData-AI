@@ -928,6 +928,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       <a href="/" data-i18n="nav.menu">Wróć do menu głównego</a>
       <a class="active" href="/products" data-i18n="nav.products">Produkty</a>
       <a href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
+      <a href="/colors" data-i18n="nav.colors">Kolory</a>
     </nav>
     <div class="header-actions">
       <span class="muted" data-i18n="app.subtitle">Import, mapowanie, czyszczenie i eksport PIM JSON</span>
@@ -1094,6 +1095,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "nav.products": "Produkty",
         "nav.menu": "Wróć do menu głównego",
         "nav.buildingElements": "Elementy budowlane",
+        "nav.colors": "Kolory",
         "app.subtitle": "Mapowanie danych produktowych i eksport products.json",
         "model.title": "Model produktu PIM",
         "model.help": "Najpierw wczytaj dwa pliki z PIM: productsModels.json i productsAttributes.json. One tworzą obowiązujący model produktu dla całego procesu.",
@@ -1381,6 +1383,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "nav.products": "Products",
         "nav.menu": "Back to main menu",
         "nav.buildingElements": "Building elements",
+        "nav.colors": "Colors",
         "app.subtitle": "Product data mapping and products.json export",
         "model.title": "Product PIM Model",
         "model.help": "First load two files from PIM: productsModels.json and productsAttributes.json. They define the product model for the whole process.",

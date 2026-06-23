@@ -43,6 +43,8 @@ BUILDING_ELEMENT_TYPE_ID = 1
 BUILDING_ELEMENT_ID_START = 910000
 COLOR_TYPE_ID = 1
 COLOR_ID_START = 920000
+COLOR_GROUP_TYPE_ID = 1
+COLOR_GROUP_ID_START = 930000
 
 
 PIM_ATTR = {
@@ -160,6 +162,12 @@ DEFAULT_COLOR_PARAMETERS = [
     {"Name": "opacity_map", "DispName": "Opacity Map", "type": "Files", "options": None, "unit": None},
     {"Name": "roughness", "DispName": "Roughness", "type": "Select", "options": [{"name": "Glossy", "value": "glossy"}, {"name": "Matte", "value": "matte"}, {"name": "Roughness Map", "value": "roughnessMap"}], "unit": None},
     {"Name": "roughness_map", "DispName": "Roughness Map", "type": "Files", "options": None, "unit": None},
+]
+
+DEFAULT_COLOR_GROUP_PARAMETERS = [
+    {"Name": "name", "DispName": "Color Group Name", "type": "VarChar", "options": None, "unit": None},
+    {"Name": "description", "DispName": "Description", "type": "Longtext", "options": None, "unit": None},
+    {"Name": "Cover", "DispName": "Cover", "type": "Files", "options": None, "unit": None},
 ]
 
 FIELD_TYPE_STRING_OPTION_ID = 265
@@ -462,6 +470,20 @@ def color_parameters_from_content(content: bytes | str | None = None) -> list[di
     return [dict(item) for item in DEFAULT_COLOR_PARAMETERS]
 
 
+def color_group_parameters_from_content(content: bytes | str | None = None) -> list[dict[str, Any]]:
+    if not content:
+        return [dict(item) for item in DEFAULT_COLOR_GROUP_PARAMETERS]
+    payload = load_json_content(content)
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict) and item.get("Name")]
+    if isinstance(payload, dict):
+        for key in ("parameters", "colorGroupParameters", "items"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict) and item.get("Name")]
+    return [dict(item) for item in DEFAULT_COLOR_GROUP_PARAMETERS]
+
+
 def color_fields_payload(parameters: list[dict[str, Any]]) -> list[dict[str, Any]]:
     result = []
     for parameter in parameters:
@@ -482,24 +504,59 @@ def color_fields_payload(parameters: list[dict[str, Any]]) -> list[dict[str, Any
     return result
 
 
-def analyze_colors_file(filename: str, content: bytes, color_parameters_content: bytes | str | None = None) -> dict[str, Any]:
+def color_group_fields_payload(parameters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    fields = color_fields_payload(parameters)
+    fields.append(
+        {
+            "key": "__color_list__",
+            "label": "Kolory w grupie",
+            "type": "ColorList",
+            "unit": None,
+            "options": [],
+            "is_file": False,
+        }
+    )
+    return fields
+
+
+def source_tables_payload(tables: list[SourceTable]) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": table.name,
+            "rows": len(table.rows),
+            "columns": columns_for_rows(table.rows),
+            "column_values": distinct_column_values(table.rows),
+            "sample_rows": table.rows[:5],
+        }
+        for table in tables
+    ]
+
+
+def analyze_colors_file(
+    filename: str,
+    content: bytes,
+    color_parameters_content: bytes | str | None = None,
+    *,
+    color_groups_filename: str | None = None,
+    color_groups_content: bytes | None = None,
+    color_group_parameters_content: bytes | str | None = None,
+) -> dict[str, Any]:
     tables = read_source_tables(filename, content)
     parameters = color_parameters_from_content(color_parameters_content)
-    return {
+    result = {
         "status": "colors_analyzed",
         "filename": filename,
         "fields": color_fields_payload(parameters),
-        "tables": [
-            {
-                "name": table.name,
-                "rows": len(table.rows),
-                "columns": columns_for_rows(table.rows),
-                "column_values": distinct_column_values(table.rows),
-                "sample_rows": table.rows[:5],
-            }
-            for table in tables
-        ],
+        "tables": source_tables_payload(tables),
     }
+    if color_groups_content:
+        group_tables = read_source_tables(color_groups_filename or "color-groups", color_groups_content)
+        result["groups"] = {
+            "filename": color_groups_filename or "color-groups",
+            "fields": color_group_fields_payload(color_group_parameters_from_content(color_group_parameters_content)),
+            "tables": source_tables_payload(group_tables),
+        }
+    return result
 
 
 def convert_colors_file(
@@ -511,6 +568,11 @@ def convert_colors_file(
     color_choice_mapping: dict[str, dict[str, str]] | None = None,
     color_parameters_content: bytes | str | None = None,
     table_name: str | None = None,
+    color_groups_filename: str | None = None,
+    color_groups_content: bytes | None = None,
+    color_group_parameters_content: bytes | str | None = None,
+    color_group_mapping: dict[str, str] | None = None,
+    color_group_table_name: str | None = None,
 ) -> dict[str, Any]:
     tables = read_source_tables(filename, content)
     if not tables:
@@ -529,13 +591,26 @@ def convert_colors_file(
     output_dir = output_root / job_id
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "colors.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    color_group_payload = None
+    if color_groups_content:
+        color_group_payload = build_color_groups_payload(
+            color_groups_filename or "color-groups",
+            color_groups_content,
+            color_group_parameters_content,
+            color_group_mapping or {},
+            color_lookup_from_rows(table.rows, colors, mapping),
+            color_group_table_name,
+        )
+        (output_dir / "colorGroups.json").write_text(json.dumps(color_group_payload, ensure_ascii=False, indent=2), encoding="utf-8")
     report = {
         "source_filename": filename,
         "table": table.name,
         "source_rows": len(table.rows),
         "colors_generated": len(colors),
+        "color_groups_generated": color_group_payload["Count"] if color_group_payload else 0,
         "file_parameters_are_references": True,
         "mapped_fields": {key: value for key, value in mapping.items() if value},
+        "mapped_group_fields": {key: value for key, value in (color_group_mapping or {}).items() if value},
         "choice_mapping": color_choice_mapping or {},
     }
     (output_dir / "colors_mapping_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -546,6 +621,7 @@ def convert_colors_file(
         "files": {
             "colors_json": f"/outputs/{job_id}/colors.json",
             "mapping_report_json": f"/outputs/{job_id}/colors_mapping_report.json",
+            **({"color_groups_json": f"/outputs/{job_id}/colorGroups.json"} if color_group_payload else {}),
         },
         "report": report,
     }
@@ -620,6 +696,95 @@ def build_color_entry(
             }
         ],
     }
+
+
+def build_color_groups_payload(
+    filename: str,
+    content: bytes,
+    parameter_content: bytes | str | None,
+    mapping: dict[str, str],
+    color_lookup: dict[str, int],
+    table_name: str | None = None,
+) -> dict[str, Any]:
+    tables = read_source_tables(filename, content)
+    if not tables:
+        return {"Count": 0, "colorGroups": []}
+    table = next((item for item in tables if item.name == table_name), tables[0])
+    parameters = color_group_parameters_from_content(parameter_content)
+    parameter_by_name = {str(item.get("Name") or ""): item for item in parameters if item.get("Name")}
+    groups = [
+        build_color_group_entry(row, index, mapping, parameter_by_name, color_lookup)
+        for index, row in enumerate(table.rows, start=1)
+        if any(value not in (None, "") for value in row.values())
+    ]
+    return {"Count": len(groups), "colorGroups": groups}
+
+
+def build_color_group_entry(
+    row: dict[str, Any],
+    index: int,
+    mapping: dict[str, str],
+    parameter_by_name: dict[str, dict[str, Any]],
+    color_lookup: dict[str, int],
+) -> dict[str, Any]:
+    group_id = COLOR_GROUP_ID_START + index
+    parameters: list[dict[str, Any]] = []
+    files_parameters: list[dict[str, Any]] = []
+    color_list: list[int] = []
+    for parameter_name, source_column in mapping.items():
+        if not source_column:
+            continue
+        value = mapped_row_value(row, source_column)
+        if value in (None, ""):
+            continue
+        if parameter_name == "__color_list__":
+            color_list = resolve_color_group_members(value, color_lookup)
+            continue
+        parameter_def = parameter_by_name.get(parameter_name, {"Name": parameter_name, "type": "VarChar"})
+        if normalize_lookup(parameter_def.get("type")) == "files":
+            files_parameters.extend(color_file_parameters(group_id, parameter_name, value))
+            continue
+        add_color_parameter(parameters, group_id, parameter_name, value, parameter_def)
+    return {
+        "Id": group_id,
+        "TypeId": COLOR_GROUP_TYPE_ID,
+        "dataVersions": [
+            {
+                "VersionId": 1,
+                "parameters": parameters,
+                "filesParameters": files_parameters,
+                "colorList": color_list,
+            }
+        ],
+    }
+
+
+def color_lookup_from_rows(rows: list[dict[str, Any]], colors: list[dict[str, Any]], mapping: dict[str, str]) -> dict[str, int]:
+    lookup: dict[str, int] = {}
+    name_column = mapping.get("name")
+    for index, color in enumerate(colors, start=1):
+        color_id = int_value(color.get("Id"))
+        if color_id is None:
+            continue
+        lookup[str(color_id)] = color_id
+        lookup[str(index)] = color_id
+        if index - 1 < len(rows) and name_column:
+            name = mapped_row_value(rows[index - 1], name_column)
+            if name not in (None, ""):
+                lookup[normalize_lookup(name)] = color_id
+                lookup[str(name).strip()] = color_id
+    return lookup
+
+
+def resolve_color_group_members(value: Any, color_lookup: dict[str, int]) -> list[int]:
+    result: list[int] = []
+    for item in split_multi_value(value):
+        color_id = int_value(item)
+        if color_id is None:
+            color_id = color_lookup.get(item) or color_lookup.get(normalize_lookup(item))
+        if color_id is not None and color_id not in result:
+            result.append(color_id)
+    return result
 
 
 def mapped_row_value(row: dict[str, Any], source_column: str | None) -> Any:
