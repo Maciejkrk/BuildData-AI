@@ -322,6 +322,7 @@ def render_building_elements_home() -> str:
           <div data-i18n="modelBuilder.help">Najpierw wczytaj model elementów budowlanych. Edytor ręczny musi powstać z hierarchii modelu, więc nie używa pliku importowanego ani stałych pól.</div>
           <button type="button" class="secondary" onclick="loadElementModelHierarchy()" data-i18n="modelBuilder.load">Wczytaj / odśwież model</button>
           <div id="modelBuilderStatus" class="status"></div>
+          <div id="modelBuilderEditorInline"></div>
         </div>
         <div id="elementStatus" class="status"></div>
       </div>
@@ -672,6 +673,7 @@ def render_building_elements_home() -> str:
           ? ""
           : (lastElementAnalysis?.model ? (currentLang === "pl" ? "Model jest wczytany. Możesz dodawać obiekty z pól modelu." : "Model loaded. You can add objects from model fields.") : (currentLang === "pl" ? "Wczytaj model elementów, aby rozpocząć budowanie systemów." : "Load the element model to start building systems."));
       }
+      renderModelBuilderEditorInline();
       if (lastElementAnalysis?.model) renderElementAnalysis(lastElementAnalysis);
       saveElementWorkspaceState();
     }
@@ -1100,6 +1102,7 @@ def render_building_elements_home() -> str:
     function modelBuilderFieldsFromHierarchy(model) {
       const fields = [];
       const seen = new Set();
+      const levelLabels = Object.fromEntries(modelBuilderLevelsFromHierarchy(model).map((level) => [level.key, level.label]));
       function visit(node, trail = []) {
         if (!node) return;
         const labelTrail = [...trail, node.label || node.key || ""].filter(Boolean);
@@ -1115,10 +1118,52 @@ def render_building_elements_home() -> str:
         for (const field of model?.fields || []) {
           if (!field?.key || seen.has(field.key)) continue;
           seen.add(field.key);
-          fields.push(field);
+          fields.push({
+            ...field,
+            _level_label: field.parent_relation_key ? (levelLabels[field.parent_relation_key] || field.parent_relation_key) : (model?.root_model_name || "Model"),
+            _level_key: field.parent_relation_key || (model?.hierarchy?.key || `model.${model?.root_model_id || "root"}`),
+          });
         }
       }
       return fields;
+    }
+    function modelBuilderLevelsFromHierarchy(model) {
+      const levels = [];
+      function visit(node, trail = []) {
+        if (!node) return;
+        const labelTrail = [...trail, node.label || node.key || ""].filter(Boolean);
+        levels.push({
+          key: node.key || "",
+          label: labelTrail.join(" / ") || node.key || "",
+          type: node.type || "model",
+        });
+        for (const child of node.children || []) visit(child, labelTrail);
+      }
+      visit(model?.hierarchy);
+      if (!levels.length && model?.root_model_id) {
+        levels.push({ key: `model.${model.root_model_id}`, label: model.root_model_name || "Model", type: "model" });
+      }
+      return levels.filter((level) => level.key);
+    }
+    function modelBuilderLevelControlsHtml(model) {
+      const levels = modelBuilderLevelsFromHierarchy(model);
+      if (!levels.length) return "";
+      const controls = levels.map((level) => {
+        const key = escapeHtml(level.key);
+        const label = escapeHtml(level.label);
+        const parentInput = level.type === "relation" ? `
+          <label><strong>ID parenta</strong><span>${label}</span><input type="text" data-model-builder-parent-id="${key}" placeholder="parent id"></label>
+        ` : "";
+        return `
+          <label><strong>ID levela</strong><span>${label}</span><input type="text" data-model-builder-level-id="${key}" placeholder="level id"></label>
+          ${parentInput}
+        `;
+      }).join("");
+      return `
+        <h4>Identyfikatory leveli</h4>
+        <p class="helper">Dla pierwszego poziomu podaj ID levela. Dla poziomów niższych podaj ID parenta oraz ID levela.</p>
+        <div class="model-builder-grid">${controls}</div>
+      `;
     }
     function modelBuilderInputHtml(field) {
       const key = escapeHtml(field.key);
@@ -1146,13 +1191,30 @@ def render_building_elements_home() -> str:
       return `
         <h3>Tworzenie elementów budowlanych z modelu</h3>
         <p>Uzupełnij pola odczytane z modelu PIM. Każdy dodany obiekt zostanie potraktowany jako wiersz danych wejściowych do wygenerowania building_elements.json.</p>
+        ${modelBuilderLevelControlsHtml(model)}
+        <h4>Pola modelu</h4>
         <div class="model-builder-grid">${fields.map(modelBuilderInputHtml).join("")}</div>
         <button type="button" class="secondary" onclick="addModelBuilderRow()">${escapeHtml(t("modelBuilder.add"))}</button>
         <div id="modelBuilderRows">${renderModelBuilderRows(model)}</div>
       `;
     }
+    function renderModelBuilderEditorInline() {
+      const holder = $("modelBuilderEditorInline");
+      if (!holder) return;
+      holder.innerHTML = elementWorkflowMode === "modelBuilder" && lastElementAnalysis?.model
+        ? renderModelBuilderEditor(lastElementAnalysis.model)
+        : "";
+    }
     function addModelBuilderRow() {
       const row = {};
+      for (const input of document.querySelectorAll("[data-model-builder-level-id]")) {
+        const key = input.dataset.modelBuilderLevelId;
+        if (key && input.value.trim()) row[`__level_id__${key}`] = input.value.trim();
+      }
+      for (const input of document.querySelectorAll("[data-model-builder-parent-id]")) {
+        const key = input.dataset.modelBuilderParentId;
+        if (key && input.value.trim()) row[`__parent_id__${key}`] = input.value.trim();
+      }
       for (const input of document.querySelectorAll("[data-model-builder-input]")) {
         const key = input.dataset.modelBuilderInput;
         if (key && input.value.trim()) row[key] = input.value.trim();
@@ -1162,7 +1224,7 @@ def render_building_elements_home() -> str:
         return;
       }
       modelBuilderRows.push(row);
-      for (const input of document.querySelectorAll("[data-model-builder-input]")) input.value = "";
+      for (const input of document.querySelectorAll("[data-model-builder-input], [data-model-builder-level-id], [data-model-builder-parent-id]")) input.value = "";
       syncElementMappingState();
       renderModelBuilderRowsIntoDom();
     }
@@ -1179,6 +1241,12 @@ def render_building_elements_home() -> str:
       }
       const rows = modelBuilderRows.map((row, index) => {
         const items = Object.entries(row).map(([key, value]) => {
+          if (key.startsWith("__level_id__")) {
+            return `<div><strong>ID levela</strong><br>${escapeHtml(key.replace("__level_id__", ""))}: ${escapeHtml(value)}</div>`;
+          }
+          if (key.startsWith("__parent_id__")) {
+            return `<div><strong>ID parenta</strong><br>${escapeHtml(key.replace("__parent_id__", ""))}: ${escapeHtml(value)}</div>`;
+          }
           const field = fieldByKey[key] || { label: key, key };
           return `<div><strong>${escapeHtml(field.label || key)}</strong><br>${escapeHtml(value)}</div>`;
         }).join("");
@@ -1215,11 +1283,16 @@ def render_building_elements_home() -> str:
       }
       const rootKey = lastElementAnalysis?.model?.hierarchy?.key || `model.${lastElementAnalysis?.model?.root_model_id || "root"}`;
       if (!mapping._levels) mapping._levels = {};
-      if (!mapping._levels[rootKey]) mapping._levels[rootKey] = {};
-      if (!mapping._levels[rootKey].id_column) {
-        const firstRootField = fields.find((field) => !field.parent_relation_key) || fields[0];
-        if (firstRootField) mapping._levels[rootKey].id_column = firstRootField.key;
+      for (const level of modelBuilderLevelsFromHierarchy(lastElementAnalysis?.model)) {
+        mapping._levels[level.key] = {
+          table: "json",
+          id_column: `__level_id__${level.key}`,
+        };
+        if (level.type === "relation") {
+          mapping._levels[level.key].parent_id_column = `__parent_id__${level.key}`;
+        }
       }
+      if (!mapping._levels[rootKey]) mapping._levels[rootKey] = { table: "json", id_column: `__level_id__${rootKey}` };
       for (const field of fields) {
         mapping[field.key] = {
           level: field._level_key || rootKey,
@@ -1512,7 +1585,6 @@ def render_building_elements_home() -> str:
       const reference = payload.product_reference || {};
       const tableItems = tables.map((table) => `<li>${escapeHtml(table.name)}: ${table.rows || 0} wierszy, ${(table.columns || []).length} kolumn</li>`).join("");
       const mappingEditor = renderElementMappingEditor(payload);
-      const builderEditor = renderModelBuilderEditor(payload.model);
       $("elementSummary").className = "panel";
       $("elementSummary").innerHTML = `
         <h3>Analiza elementów budowlanych</h3>
@@ -1526,9 +1598,9 @@ def render_building_elements_home() -> str:
         <p>${escapeHtml(reference.message || "")}</p>
         <h3>Wczytane tabele</h3>
         <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
-        ${builderEditor}
         ${mappingEditor}
       `;
+      renderModelBuilderEditorInline();
       renderElementRootModelSelect();
       syncElementMappingState();
       saveElementWorkspaceState();
