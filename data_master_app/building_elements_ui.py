@@ -238,6 +238,12 @@ def render_building_elements_home() -> str:
         <h2 data-i18n="elements.title">Elementy budowlane</h2>
         <p data-i18n="elements.help">Ten moduł służy do mapowania elementów budowlanych. Referencyjne products.json jest opcjonalne i służy do kontroli dopasowania produktów po ID, kodzie albo nazwie.</p>
         <div class="notice" data-i18n="elements.notice">To jest ekran roboczy dla hierarchii elementów budowlanych: leveli, parentów, wariantów i pól modelu PIM.</div>
+        <label><span data-i18n="workflow.mode">Tryb pracy</span>
+          <select id="elementWorkflowMode">
+            <option value="import" data-i18n="workflow.import">Importuj dane i edytuj później</option>
+            <option value="modelBuilder" data-i18n="workflow.modelBuilder">Stwórz własne systemy z modelu</option>
+          </select>
+        </label>
       </div>
       <div class="panel">
         <h3 data-i18n="elements.files">Model, produkty i dane</h3>
@@ -273,6 +279,12 @@ def render_building_elements_home() -> str:
           <input id="elementSourceFile" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">
         </label>
         <button type="button" onclick="analyzeElements()" data-i18n="elements.analyze">Analizuj elementy budowlane</button>
+        <div id="modelBuilderPanel" class="notice" hidden>
+          <strong data-i18n="modelBuilder.title">Budowanie systemów z modelu</strong>
+          <div data-i18n="modelBuilder.help">Najpierw wczytaj model elementów budowlanych. Edytor ręczny musi powstać z hierarchii modelu, więc nie używa pliku importowanego ani stałych pól.</div>
+          <button type="button" class="secondary" onclick="loadElementModelHierarchy()" data-i18n="modelBuilder.load">Wczytaj / odśwież model</button>
+          <div id="modelBuilderStatus" class="status"></div>
+        </div>
         <div id="elementStatus" class="status"></div>
       </div>
       <div class="panel">
@@ -308,6 +320,12 @@ def render_building_elements_home() -> str:
         "elements.title": "Elementy budowlane",
         "elements.help": "Ten moduł służy do mapowania elementów budowlanych. Referencyjne products.json jest opcjonalne i służy do kontroli dopasowania produktów po ID, kodzie albo nazwie.",
         "elements.notice": "To jest ekran roboczy dla hierarchii elementów budowlanych: leveli, parentów, wariantów i pól modelu PIM.",
+        "workflow.mode": "Tryb pracy",
+        "workflow.import": "Importuj dane i edytuj później",
+        "workflow.modelBuilder": "Stwórz własne systemy z modelu",
+        "modelBuilder.title": "Budowanie systemów z modelu",
+        "modelBuilder.help": "Najpierw wczytaj model elementów budowlanych. Edytor ręczny musi powstać z hierarchii modelu, więc nie używa pliku importowanego ani stałych pól.",
+        "modelBuilder.load": "Wczytaj / odśwież model",
         "elements.files": "Model, produkty i dane",
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
@@ -351,6 +369,12 @@ def render_building_elements_home() -> str:
         "elements.title": "Building elements",
         "elements.help": "This module maps building elements. Reference products.json is optional and is used to verify product matching by ID, code, or name.",
         "elements.notice": "This is the first working screen for building elements. It will be expanded to the same operational depth as product mapping.",
+        "workflow.mode": "Workflow mode",
+        "workflow.import": "Import data and edit later",
+        "workflow.modelBuilder": "Create systems from the model",
+        "modelBuilder.title": "Building systems from the model",
+        "modelBuilder.help": "Load the building-element model first. The manual editor must be generated from the model hierarchy, so it does not use an imported file or fixed fields.",
+        "modelBuilder.load": "Load / refresh model",
         "elements.files": "Model, products and data",
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
@@ -396,6 +420,7 @@ def render_building_elements_home() -> str:
     let activeElementProductRootModelId = "";
     let elementProductIdentityFields = [];
     let selectedElementProductIdentityField = "";
+    let elementWorkflowMode = "import";
     let loadedElementProject = null;
     let loadedElementProjectFiles = { modelFiles: [], productModelFiles: [], sourceFile: null, productsReferenceFile: null };
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
@@ -423,6 +448,7 @@ def render_building_elements_home() -> str:
           activeElementProductRootModelId,
           elementProductIdentityFields,
           selectedElementProductIdentityField,
+          elementWorkflowMode,
           status: $("elementStatus")?.textContent || "",
           productIdentityStatus: $("elementProductIdentityStatus")?.textContent || "",
           savedAt: new Date().toISOString(),
@@ -547,6 +573,9 @@ def render_building_elements_home() -> str:
         activeElementProductRootModelId = String(payload.activeElementProductRootModelId || activeElementProductRootModelId || "");
         elementProductIdentityFields = payload.elementProductIdentityFields || elementProductIdentityFields;
         selectedElementProductIdentityField = payload.selectedElementProductIdentityField || selectedElementProductIdentityField;
+        elementWorkflowMode = payload.elementWorkflowMode || elementWorkflowMode;
+        if ($("elementWorkflowMode")) $("elementWorkflowMode").value = elementWorkflowMode;
+        updateElementWorkflowMode();
         if (payload.projectName && $("elementProjectName")) $("elementProjectName").value = payload.projectName;
         if (payload.status && $("elementStatus")) $("elementStatus").textContent = payload.status;
         if (payload.productIdentityStatus && $("elementProductIdentityStatus")) $("elementProductIdentityStatus").textContent = payload.productIdentityStatus;
@@ -580,6 +609,18 @@ def render_building_elements_home() -> str:
       syncElementMappingState();
       saveElementWorkspaceState();
     });
+    function updateElementWorkflowMode() {
+      elementWorkflowMode = $("elementWorkflowMode")?.value || elementWorkflowMode || "import";
+      const importMode = elementWorkflowMode === "import";
+      if ($("elementSourceFile")) $("elementSourceFile").disabled = !importMode;
+      if ($("modelBuilderPanel")) $("modelBuilderPanel").hidden = importMode;
+      if ($("modelBuilderStatus")) {
+        $("modelBuilderStatus").textContent = importMode
+          ? ""
+          : (lastElementAnalysis?.model ? (currentLang === "pl" ? "Model jest wczytany. Kolejny krok to modelowy edytor obiektów." : "Model loaded. Next step is the model-driven object editor.") : (currentLang === "pl" ? "Wczytaj model elementów, aby rozpocząć budowanie systemów." : "Load the element model to start building systems."));
+      }
+      saveElementWorkspaceState();
+    }
     function addFiles(form, name, input) {
       [...input.files].forEach((file) => form.append(name, file));
     }
@@ -824,6 +865,7 @@ def render_building_elements_home() -> str:
         name: $("elementProjectName").value || "mapowanie-elementow-budowlanych",
         model_version: "building-elements-mapping-project.v1",
         active_element_root_model_id: activeElementRootModelId || "",
+        workflow_mode: elementWorkflowMode || "import",
         element_root_models: elementRootModels || [],
         element_mappings_by_model: elementMappingsByModel || {},
         product_identity: {
@@ -869,6 +911,8 @@ def render_building_elements_home() -> str:
         selectedElementProductIdentityField = productIdentity.identity_field_key || selectedElementProductIdentityField;
         elementRootModels = loadedElementProject.element_root_models || elementRootModels;
         activeElementRootModelId = String(loadedElementProject.active_element_root_model_id || activeElementRootModelId || "");
+        elementWorkflowMode = loadedElementProject.workflow_mode || elementWorkflowMode || "import";
+        if ($("elementWorkflowMode")) $("elementWorkflowMode").value = elementWorkflowMode;
         elementMappingsByModel = loadedElementProject.element_mappings_by_model || elementMappingsByModel;
         currentElementMapping = loadedElementProject.building_element_mapping || {};
         if (activeElementRootModelId) elementMappingsByModel[activeElementRootModelId] = currentElementMapping;
@@ -877,6 +921,7 @@ def render_building_elements_home() -> str:
         saveElementWorkspaceState();
         await saveElementWorkspaceFilesState();
         renderElementProductIdentityControls();
+        updateElementWorkflowMode();
         if (loadedElementProjectFiles.sourceFile) {
           await analyzeElements();
         } else {
@@ -1310,6 +1355,7 @@ def render_building_elements_home() -> str:
       saveElementWorkspaceState();
     }
     $("elementProjectName").addEventListener("input", saveElementWorkspaceState);
+    $("elementWorkflowMode").addEventListener("change", updateElementWorkflowMode);
     $("elementRootModelSelect").addEventListener("change", (event) => changeElementRootModel(event.target.value));
     $("elementProductRootModelSelect").addEventListener("change", (event) => changeElementProductRootModel(event.target.value));
     $("elementProductIdentityFieldSelect").addEventListener("change", (event) => {

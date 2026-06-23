@@ -134,6 +134,9 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("return currentElementMapping", html)
         self.assertIn("generateBuildingElements", html)
         self.assertIn("building_elements.json", html)
+        self.assertIn("elementWorkflowMode", html)
+        self.assertIn("modelBuilderPanel", html)
+        self.assertIn("Stwórz własne systemy z modelu", html)
 
     def test_building_preview_splits_comma_separated_layer_products(self):
         product_a = {"Id": 101}
