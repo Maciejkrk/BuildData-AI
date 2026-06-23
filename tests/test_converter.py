@@ -123,6 +123,11 @@ class ConverterTests(unittest.TestCase):
 
         self.assertIn("identyfikuje produkt w warstwie", html)
         self.assertIn("Referencyjne products.json jest opcjonalne", html)
+        self.assertIn('id="elementProductModelsFile"', html)
+        self.assertIn('id="elementProductAttributesFile"', html)
+        self.assertIn('id="elementProductIdentityFieldSelect"', html)
+        self.assertIn("_product_identity", html)
+        self.assertIn("kilka produktów w jednej komórce", html)
 
     def test_building_preview_splits_comma_separated_layer_products(self):
         product_a = {"Id": 101}

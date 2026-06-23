@@ -254,6 +254,21 @@ def render_building_elements_home() -> str:
         <label><span data-i18n="elements.productsReference">Referencyjne products.json</span>
           <input id="productReferenceFile" type="file" accept=".json">
         </label>
+        <div class="notice" data-i18n="productIdentity.notice">Model produktu jest opcjonalny, ale zalecany. Pozwala wskazać, który atrybut produktu jest stabilnym identyfikatorem używanym przy warstwach.</div>
+        <label><span data-i18n="productIdentity.modelsFile">productsModels.json</span>
+          <input id="elementProductModelsFile" type="file" accept=".json">
+        </label>
+        <label><span data-i18n="productIdentity.attributesFile">productsAttributes.json</span>
+          <input id="elementProductAttributesFile" type="file" accept=".json">
+        </label>
+        <button type="button" class="secondary" onclick="loadElementProductModel()" data-i18n="productIdentity.loadModel">Wczytaj model produktu</button>
+        <label><span data-i18n="productIdentity.activeModel">Model produktu dla dopasowania</span>
+          <select id="elementProductRootModelSelect" disabled></select>
+        </label>
+        <label><span data-i18n="productIdentity.field">Atrybut identyfikujący produkt</span>
+          <select id="elementProductIdentityFieldSelect" disabled></select>
+        </label>
+        <div id="elementProductIdentityStatus" class="status"></div>
         <label><span data-i18n="elements.importFile">Plik importowany</span>
           <input id="elementSourceFile" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">
         </label>
@@ -299,6 +314,15 @@ def render_building_elements_home() -> str:
         "elements.loadModel": "Wczytaj hierarchię modelu",
         "elements.activeModel": "Edytowany model elementu",
         "elements.productsReference": "Referencyjne products.json (opcjonalne, do kontroli dopasowania produktów)",
+        "productIdentity.notice": "Model produktu jest opcjonalny, ale zalecany. Pozwala wskazać, który atrybut produktu jest stabilnym identyfikatorem używanym przy warstwach.",
+        "productIdentity.modelsFile": "productsModels.json",
+        "productIdentity.attributesFile": "productsAttributes.json",
+        "productIdentity.loadModel": "Wczytaj model produktu",
+        "productIdentity.activeModel": "Model produktu dla dopasowania",
+        "productIdentity.field": "Atrybut identyfikujący produkt",
+        "productIdentity.ready": "Model produktu wczytany. Wybierz atrybut identyfikujący produkt.",
+        "productIdentity.missing": "Wczytaj oba pliki modelu produktu: Models i Attributes.",
+        "productIdentity.none": "Brak wczytanego modelu produktu",
         "elements.importFile": "Plik importowany",
         "elements.analyze": "Analizuj elementy budowlane",
         "elements.result": "Wynik analizy",
@@ -333,6 +357,15 @@ def render_building_elements_home() -> str:
         "elements.loadModel": "Load model hierarchy",
         "elements.activeModel": "Edited element model",
         "elements.productsReference": "Reference products.json (optional, for product-match verification)",
+        "productIdentity.notice": "The product model is optional but recommended. It lets you choose which product attribute is the stable identifier used in layers.",
+        "productIdentity.modelsFile": "productsModels.json",
+        "productIdentity.attributesFile": "productsAttributes.json",
+        "productIdentity.loadModel": "Load product model",
+        "productIdentity.activeModel": "Product model for matching",
+        "productIdentity.field": "Product identity attribute",
+        "productIdentity.ready": "Product model loaded. Choose the product identity attribute.",
+        "productIdentity.missing": "Load both product model files: Models and Attributes.",
+        "productIdentity.none": "No product model loaded",
         "elements.importFile": "Imported file",
         "elements.analyze": "Analyze building elements",
         "elements.result": "Analysis result",
@@ -359,8 +392,12 @@ def render_building_elements_home() -> str:
     let elementRootModels = [];
     let activeElementRootModelId = "";
     let elementMappingsByModel = {};
+    let elementProductRootModels = [];
+    let activeElementProductRootModelId = "";
+    let elementProductIdentityFields = [];
+    let selectedElementProductIdentityField = "";
     let loadedElementProject = null;
-    let loadedElementProjectFiles = { modelFiles: [], sourceFile: null, productsReferenceFile: null };
+    let loadedElementProjectFiles = { modelFiles: [], productModelFiles: [], sourceFile: null, productsReferenceFile: null };
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
     const ELEMENT_WORKSPACE_FILES_KEY = "building-elements-files";
     const WORKSPACE_NAVIGATION_KEY = "buildDataAiPreserveWorkspaceNavigation";
@@ -382,7 +419,12 @@ def render_building_elements_home() -> str:
           elementRootModels,
           activeElementRootModelId,
           elementMappingsByModel,
+          elementProductRootModels,
+          activeElementProductRootModelId,
+          elementProductIdentityFields,
+          selectedElementProductIdentityField,
           status: $("elementStatus")?.textContent || "",
+          productIdentityStatus: $("elementProductIdentityStatus")?.textContent || "",
           savedAt: new Date().toISOString(),
         };
         sessionStorage.setItem(ELEMENT_WORKSPACE_KEY, JSON.stringify(payload));
@@ -455,12 +497,16 @@ def render_building_elements_home() -> str:
       try {
         const previous = await getElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY) || {};
         const modelFiles = selectedElementModelFiles();
+        const productModelFiles = selectedElementProductModelFiles();
         const sourceFile = $("elementSourceFile").files[0] || null;
         const productsReferenceFile = $("productReferenceFile").files[0] || null;
         const payload = {
           modelFiles: modelFiles.length
             ? await Promise.all(modelFiles.map(projectFileFromFile))
             : (loadedElementProjectFiles.modelFiles.length ? await Promise.all(loadedElementProjectFiles.modelFiles.map(projectFileFromFile)) : (previous.modelFiles || [])),
+          productModelFiles: productModelFiles.length
+            ? await Promise.all(productModelFiles.map(projectFileFromFile))
+            : (loadedElementProjectFiles.productModelFiles.length ? await Promise.all(loadedElementProjectFiles.productModelFiles.map(projectFileFromFile)) : (previous.productModelFiles || [])),
           sourceFile: sourceFile ? await projectFileFromFile(sourceFile) : (loadedElementProjectFiles.sourceFile ? await projectFileFromFile(loadedElementProjectFiles.sourceFile) : (previous.sourceFile || null)),
           productsReferenceFile: productsReferenceFile ? await projectFileFromFile(productsReferenceFile) : (loadedElementProjectFiles.productsReferenceFile ? await projectFileFromFile(loadedElementProjectFiles.productsReferenceFile) : (previous.productsReferenceFile || null)),
           savedAt: new Date().toISOString(),
@@ -476,6 +522,7 @@ def render_building_elements_home() -> str:
         if (!payload) return;
         loadedElementProjectFiles = {
           modelFiles: (payload.modelFiles || []).map(fileFromProjectFile).filter(Boolean),
+          productModelFiles: (payload.productModelFiles || []).map(fileFromProjectFile).filter(Boolean),
           sourceFile: fileFromProjectFile(payload.sourceFile),
           productsReferenceFile: fileFromProjectFile(payload.productsReferenceFile),
         };
@@ -493,8 +540,14 @@ def render_building_elements_home() -> str:
         elementRootModels = payload.elementRootModels || elementRootModels;
         activeElementRootModelId = String(payload.activeElementRootModelId || activeElementRootModelId || "");
         elementMappingsByModel = payload.elementMappingsByModel || elementMappingsByModel;
+        elementProductRootModels = payload.elementProductRootModels || elementProductRootModels;
+        activeElementProductRootModelId = String(payload.activeElementProductRootModelId || activeElementProductRootModelId || "");
+        elementProductIdentityFields = payload.elementProductIdentityFields || elementProductIdentityFields;
+        selectedElementProductIdentityField = payload.selectedElementProductIdentityField || selectedElementProductIdentityField;
         if (payload.projectName && $("elementProjectName")) $("elementProjectName").value = payload.projectName;
         if (payload.status && $("elementStatus")) $("elementStatus").textContent = payload.status;
+        if (payload.productIdentityStatus && $("elementProductIdentityStatus")) $("elementProductIdentityStatus").textContent = payload.productIdentityStatus;
+        renderElementProductIdentityControls();
         if (payload.analysis) renderElementAnalysis(payload.analysis);
         else if (loadedElementProjectFiles.modelFiles.length >= 2) await loadElementModelHierarchy();
       } catch (error) {
@@ -564,9 +617,19 @@ def render_building_elements_home() -> str:
         $("elementAttributesFile")?.files?.[0] || null,
       ].filter(Boolean);
     }
+    function selectedElementProductModelFiles() {
+      return [
+        $("elementProductModelsFile")?.files?.[0] || null,
+        $("elementProductAttributesFile")?.files?.[0] || null,
+      ].filter(Boolean);
+    }
     function elementModelFileFromCache(kind) {
       const pattern = kind === "models" ? /models[.]json$/i : /attributes[.]json$/i;
       return (loadedElementProjectFiles.modelFiles || []).find((file) => pattern.test(file?.name || "")) || null;
+    }
+    function elementProductModelFileFromCache(kind) {
+      const pattern = kind === "models" ? /models[.]json$/i : /attributes[.]json$/i;
+      return (loadedElementProjectFiles.productModelFiles || []).find((file) => pattern.test(file?.name || "")) || null;
     }
     function effectiveElementModelFiles() {
       const selected = selectedElementModelFiles();
@@ -577,6 +640,75 @@ def render_building_elements_home() -> str:
         ].filter(Boolean);
       }
       return loadedElementProjectFiles.modelFiles || [];
+    }
+    function effectiveElementProductModelFiles() {
+      const selected = selectedElementProductModelFiles();
+      if (selected.length) {
+        return [
+          $("elementProductModelsFile")?.files?.[0] || elementProductModelFileFromCache("models"),
+          $("elementProductAttributesFile")?.files?.[0] || elementProductModelFileFromCache("attributes"),
+        ].filter(Boolean);
+      }
+      return loadedElementProjectFiles.productModelFiles || [];
+    }
+    function renderElementProductIdentityControls() {
+      const modelSelect = $("elementProductRootModelSelect");
+      const fieldSelect = $("elementProductIdentityFieldSelect");
+      if (!modelSelect || !fieldSelect) return;
+      modelSelect.innerHTML = elementProductRootModels.length
+        ? elementProductRootModels.map(model => `<option value="${escapeHtml(model.id)}"${String(model.id) === String(activeElementProductRootModelId) ? " selected" : ""}>${escapeHtml(model.name || model.id)} (${escapeHtml(model.modelType || "Product")})</option>`).join("")
+        : `<option value="">${escapeHtml(t("productIdentity.none"))}</option>`;
+      modelSelect.disabled = !elementProductRootModels.length;
+      fieldSelect.innerHTML = elementProductIdentityFields.length
+        ? elementProductIdentityFields.map(field => `<option value="${escapeHtml(field.key)}"${field.key === selectedElementProductIdentityField ? " selected" : ""}>${escapeHtml(field.label || field.key)} (${escapeHtml(field.key)})</option>`).join("")
+        : `<option value="">${escapeHtml(t("productIdentity.none"))}</option>`;
+      fieldSelect.disabled = !elementProductIdentityFields.length;
+    }
+    function scoreProductIdentityField(field) {
+      const text = `${field.key || ""} ${field.label || ""}`.toLowerCase();
+      if (/pim.*id|id.*pim/.test(text)) return 100;
+      if (/external.*id|id.*external/.test(text)) return 95;
+      if (/sku|sap|code|kod|indeks|index/.test(text)) return 90;
+      if (/\bid\b/.test(text)) return 80;
+      if (/name|nazwa/.test(text)) return 10;
+      return 0;
+    }
+    function suggestProductIdentityField(fields) {
+      return [...(fields || [])].sort((left, right) => scoreProductIdentityField(right) - scoreProductIdentityField(left))[0]?.key || "";
+    }
+    async function changeElementProductRootModel(rootModelId) {
+      if (!rootModelId || String(rootModelId) === String(activeElementProductRootModelId)) return;
+      activeElementProductRootModelId = String(rootModelId);
+      await loadElementProductModel();
+      saveElementWorkspaceState();
+      await saveElementWorkspaceFilesState();
+    }
+    async function loadElementProductModel() {
+      try {
+        $("elementProductIdentityStatus").textContent = currentLang === "pl" ? "Odczytuję model produktu." : "Reading product model.";
+        if (!selectedElementProductModelFiles().length && !loadedElementProjectFiles.productModelFiles.length) {
+          await restoreElementWorkspaceFilesState();
+        }
+        const modelFiles = effectiveElementProductModelFiles();
+        if (modelFiles.length < 2) throw new Error(t("productIdentity.missing"));
+        const form = new FormData();
+        addFilesFromList(form, "files", modelFiles);
+        if (activeElementProductRootModelId) form.append("root_model_id", activeElementProductRootModelId);
+        const payload = await postForm("/api/products/model", form);
+        elementProductRootModels = payload.model?.root_models || [];
+        activeElementProductRootModelId = String(payload.model?.root_model_id || activeElementProductRootModelId || elementProductRootModels[0]?.id || "");
+        elementProductIdentityFields = payload.model?.fields || [];
+        if (!selectedElementProductIdentityField || !elementProductIdentityFields.some(field => field.key === selectedElementProductIdentityField)) {
+          selectedElementProductIdentityField = suggestProductIdentityField(elementProductIdentityFields);
+        }
+        renderElementProductIdentityControls();
+        $("elementProductIdentityStatus").textContent = t("productIdentity.ready");
+        saveElementWorkspaceState();
+        await saveElementWorkspaceFilesState();
+      } catch (error) {
+        $("elementProductIdentityStatus").textContent = error.message;
+        saveElementWorkspaceState();
+      }
     }
     function addRequiredFile(form, name, input, label) {
       const file = input.files[0];
@@ -658,6 +790,7 @@ def render_building_elements_home() -> str:
       syncElementMappingState();
       storeElementMappingForActiveModel();
       const effectiveModelFiles = effectiveElementModelFiles();
+      const productModelFiles = effectiveElementProductModelFiles();
       const sourceFile = $("elementSourceFile").files[0] || loadedElementProjectFiles.sourceFile;
       const productsReferenceFile = $("productReferenceFile").files[0] || loadedElementProjectFiles.productsReferenceFile;
       if (!effectiveModelFiles.length) throw new Error(t("project.missing"));
@@ -667,10 +800,17 @@ def render_building_elements_home() -> str:
         active_element_root_model_id: activeElementRootModelId || "",
         element_root_models: elementRootModels || [],
         element_mappings_by_model: elementMappingsByModel || {},
+        product_identity: {
+          active_product_root_model_id: activeElementProductRootModelId || "",
+          identity_field_key: selectedElementProductIdentityField || "",
+          identity_fields: elementProductIdentityFields || [],
+          product_root_models: elementProductRootModels || [],
+        },
         building_element_mapping: currentElementMapping || {},
         analysis: lastElementAnalysis,
         embedded_files: {
           model_files: await Promise.all(effectiveModelFiles.map(file => projectFileFromFile(file))),
+          product_model_files: await Promise.all(productModelFiles.map(file => projectFileFromFile(file))),
           source_file: sourceFile ? await projectFileFromFile(sourceFile) : null,
           products_reference_file: productsReferenceFile ? await projectFileFromFile(productsReferenceFile) : null,
         },
@@ -692,9 +832,15 @@ def render_building_elements_home() -> str:
         const embedded = loadedElementProject.embedded_files || {};
         loadedElementProjectFiles = {
           modelFiles: (embedded.model_files || []).map(fileFromProjectFile).filter(Boolean),
+          productModelFiles: (embedded.product_model_files || []).map(fileFromProjectFile).filter(Boolean),
           sourceFile: fileFromProjectFile(embedded.source_file),
           productsReferenceFile: fileFromProjectFile(embedded.products_reference_file),
         };
+        const productIdentity = loadedElementProject.product_identity || {};
+        elementProductRootModels = productIdentity.product_root_models || elementProductRootModels;
+        activeElementProductRootModelId = String(productIdentity.active_product_root_model_id || activeElementProductRootModelId || "");
+        elementProductIdentityFields = productIdentity.identity_fields || elementProductIdentityFields;
+        selectedElementProductIdentityField = productIdentity.identity_field_key || selectedElementProductIdentityField;
         elementRootModels = loadedElementProject.element_root_models || elementRootModels;
         activeElementRootModelId = String(loadedElementProject.active_element_root_model_id || activeElementRootModelId || "");
         elementMappingsByModel = loadedElementProject.element_mappings_by_model || elementMappingsByModel;
@@ -704,6 +850,7 @@ def render_building_elements_home() -> str:
         $("elementProjectStatus").textContent = `${t("project.loaded")} ${loadedElementProject.name || file.name}`;
         saveElementWorkspaceState();
         await saveElementWorkspaceFilesState();
+        renderElementProductIdentityControls();
         if (loadedElementProjectFiles.sourceFile) {
           await analyzeElements();
         } else {
@@ -867,10 +1014,13 @@ def render_building_elements_home() -> str:
         const selectedColumn = existing.column || (selectedTable === firstTable ? suggestedByTarget[field.key] || "" : "");
         const cleanup = existing.cleanup || {};
         const disabledAttr = enabled ? "" : " disabled";
+        const selectedIdentity = elementProductIdentityFields.find(item => item.key === selectedElementProductIdentityField);
+        const selectedIdentityText = selectedIdentity ? `${selectedIdentity.label || selectedIdentity.key} (${selectedIdentity.key})` : (currentLang === "pl" ? "nie wybrano" : "not selected");
         const productReferenceNotice = field.kind === "product_ref" ? `
           <div class="notice">
             To pole identyfikuje produkt w warstwie. Najlepiej mapować stabilny kod lub ID produktu; nazwa jest dopasowaniem awaryjnym.
             Jeśli klient wpisuje kilka produktów w jednej komórce, rozdziel je przecinkiem, średnikiem, pionową kreską albo nową linią.
+            Aktualny identyfikator z modelu produktu: ${escapeHtml(selectedIdentityText)}.
           </div>
         ` : "";
         return `
@@ -1044,7 +1194,13 @@ def render_building_elements_home() -> str:
     }
     function collectElementMapping() {
       const levels = collectElementLevels();
-      const mapping = { _levels: levels };
+      const mapping = {
+        _levels: levels,
+        _product_identity: {
+          model_id: activeElementProductRootModelId || "",
+          field_key: selectedElementProductIdentityField || "",
+        },
+      };
       for (const columnSelect of document.querySelectorAll("[data-element-column]")) {
         const target = columnSelect.dataset.elementColumn;
         const row = columnSelect.closest("[data-element-field-row]");
@@ -1095,12 +1251,24 @@ def render_building_elements_home() -> str:
     }
     $("elementProjectName").addEventListener("input", saveElementWorkspaceState);
     $("elementRootModelSelect").addEventListener("change", (event) => changeElementRootModel(event.target.value));
+    $("elementProductRootModelSelect").addEventListener("change", (event) => changeElementProductRootModel(event.target.value));
+    $("elementProductIdentityFieldSelect").addEventListener("change", (event) => {
+      selectedElementProductIdentityField = event.target.value;
+      saveElementWorkspaceState();
+    });
     $("elementProjectFile").addEventListener("change", () => {
       const file = $("elementProjectFile").files[0];
       if (file) loadElementProjectFromFile(file);
     });
-    for (const inputId of ["elementModelsFile", "elementAttributesFile", "productReferenceFile", "elementSourceFile"]) {
+    for (const inputId of ["elementModelsFile", "elementAttributesFile", "elementProductModelsFile", "elementProductAttributesFile", "productReferenceFile", "elementSourceFile"]) {
       $(inputId).addEventListener("change", async () => {
+        if (inputId === "elementProductModelsFile" || inputId === "elementProductAttributesFile") {
+          elementProductRootModels = [];
+          activeElementProductRootModelId = "";
+          elementProductIdentityFields = [];
+          selectedElementProductIdentityField = "";
+          renderElementProductIdentityControls();
+        }
         await saveElementWorkspaceFilesState();
         saveElementWorkspaceState();
       });
