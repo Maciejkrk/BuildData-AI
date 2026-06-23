@@ -4645,7 +4645,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     function normalizedValues(text) {
-      return new Set(String(text || "").split(/[;\n|,]+/).map(item => item.trim().toLowerCase()).filter(Boolean));
+      return new Set(String(text || "").split(/[;\\n|,]+/).map(item => item.trim().toLowerCase()).filter(Boolean));
     }
 
     function mappedRowsForPreview() {

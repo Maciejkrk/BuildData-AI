@@ -113,6 +113,8 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("rowRuleTargetPaths", html)
         self.assertIn("legacyProductMapping", html)
         self.assertIn("productMappingsByModel[activeProductRootModelId]", html)
+        self.assertIn("split(/[;\\n|,]+/)", html)
+        self.assertNotIn("split(/[;\n|,]+/)", html)
 
     def test_colors_ui_has_choice_mapping_editor(self):
         html = render_colors_home()
