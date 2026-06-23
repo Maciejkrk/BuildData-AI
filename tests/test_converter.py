@@ -128,6 +128,8 @@ class ConverterTests(unittest.TestCase):
         self.assertIn('id="elementProductIdentityFieldSelect"', html)
         self.assertIn("_product_identity", html)
         self.assertIn("kilka produktów w jednej komórce", html)
+        self.assertIn("localStorage.setItem(ELEMENT_WORKSPACE_KEY", html)
+        self.assertIn("return currentElementMapping", html)
 
     def test_building_preview_splits_comma_separated_layer_products(self):
         product_a = {"Id": 101}

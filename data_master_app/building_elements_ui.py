@@ -427,7 +427,9 @@ def render_building_elements_home() -> str:
           productIdentityStatus: $("elementProductIdentityStatus")?.textContent || "",
           savedAt: new Date().toISOString(),
         };
-        sessionStorage.setItem(ELEMENT_WORKSPACE_KEY, JSON.stringify(payload));
+        const serialized = JSON.stringify(payload);
+        sessionStorage.setItem(ELEMENT_WORKSPACE_KEY, serialized);
+        localStorage.setItem(ELEMENT_WORKSPACE_KEY, serialized);
       } catch (error) {
         console.warn("Could not save building-elements workspace state", error);
       }
@@ -473,6 +475,7 @@ def render_building_elements_home() -> str:
     }
     async function clearElementWorkspaceStorage() {
       sessionStorage.removeItem(ELEMENT_WORKSPACE_KEY);
+      localStorage.removeItem(ELEMENT_WORKSPACE_KEY);
       try {
         await deleteElementWorkspaceItem(ELEMENT_WORKSPACE_FILES_KEY);
       } catch (error) {
@@ -533,7 +536,7 @@ def render_building_elements_home() -> str:
     async function restoreElementWorkspaceState() {
       try {
         await restoreElementWorkspaceFilesState();
-        const raw = sessionStorage.getItem(ELEMENT_WORKSPACE_KEY);
+        const raw = sessionStorage.getItem(ELEMENT_WORKSPACE_KEY) || localStorage.getItem(ELEMENT_WORKSPACE_KEY);
         if (!raw) return;
         const payload = JSON.parse(raw);
         currentElementMapping = payload.mapping || {};
@@ -1193,6 +1196,9 @@ def render_building_elements_home() -> str:
       return levels;
     }
     function collectElementMapping() {
+      if (!document.querySelector("[data-element-field-row]") && Object.keys(currentElementMapping || {}).length) {
+        return currentElementMapping;
+      }
       const levels = collectElementLevels();
       const mapping = {
         _levels: levels,
