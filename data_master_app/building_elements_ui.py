@@ -236,7 +236,7 @@ def render_building_elements_home() -> str:
     <aside>
       <div class="panel">
         <h2 data-i18n="elements.title">Elementy budowlane</h2>
-        <p data-i18n="elements.help">Ten moduł służy do mapowania elementów budowlanych. Relacje do produktów wymagają referencyjnego pliku products.json z mapowania produktów.</p>
+        <p data-i18n="elements.help">Ten moduł służy do mapowania elementów budowlanych. Referencyjne products.json jest opcjonalne i służy do kontroli dopasowania produktów po ID, kodzie albo nazwie.</p>
         <div class="notice" data-i18n="elements.notice">To jest ekran roboczy dla hierarchii elementów budowlanych: leveli, parentów, wariantów i pól modelu PIM.</div>
       </div>
       <div class="panel">
@@ -291,14 +291,14 @@ def render_building_elements_home() -> str:
         "nav.colors": "Kolory",
         "app.subtitle": "Mapowanie elementów budowlanych na podstawie modelu PIM",
         "elements.title": "Elementy budowlane",
-        "elements.help": "Ten moduł służy do mapowania elementów budowlanych. Relacje do produktów wymagają referencyjnego pliku products.json z mapowania produktów.",
+        "elements.help": "Ten moduł służy do mapowania elementów budowlanych. Referencyjne products.json jest opcjonalne i służy do kontroli dopasowania produktów po ID, kodzie albo nazwie.",
         "elements.notice": "To jest ekran roboczy dla hierarchii elementów budowlanych: leveli, parentów, wariantów i pól modelu PIM.",
         "elements.files": "Model, produkty i dane",
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
         "elements.loadModel": "Wczytaj hierarchię modelu",
         "elements.activeModel": "Edytowany model elementu",
-        "elements.productsReference": "Referencyjne products.json (opcjonalne do analizy, wymagane do eksportu relacji)",
+        "elements.productsReference": "Referencyjne products.json (opcjonalne, do kontroli dopasowania produktów)",
         "elements.importFile": "Plik importowany",
         "elements.analyze": "Analizuj elementy budowlane",
         "elements.result": "Wynik analizy",
@@ -325,14 +325,14 @@ def render_building_elements_home() -> str:
         "nav.colors": "Colors",
         "app.subtitle": "Building-element mapping based on the PIM model",
         "elements.title": "Building elements",
-        "elements.help": "This module starts building-element mapping. Product relations require a reference products.json exported from product mapping.",
+        "elements.help": "This module maps building elements. Reference products.json is optional and is used to verify product matching by ID, code, or name.",
         "elements.notice": "This is the first working screen for building elements. It will be expanded to the same operational depth as product mapping.",
         "elements.files": "Model, products and data",
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
         "elements.loadModel": "Load model hierarchy",
         "elements.activeModel": "Edited element model",
-        "elements.productsReference": "Reference products.json (optional for analysis, required for relation export)",
+        "elements.productsReference": "Reference products.json (optional, for product-match verification)",
         "elements.importFile": "Imported file",
         "elements.analyze": "Analyze building elements",
         "elements.result": "Analysis result",
@@ -867,6 +867,12 @@ def render_building_elements_home() -> str:
         const selectedColumn = existing.column || (selectedTable === firstTable ? suggestedByTarget[field.key] || "" : "");
         const cleanup = existing.cleanup || {};
         const disabledAttr = enabled ? "" : " disabled";
+        const productReferenceNotice = field.kind === "product_ref" ? `
+          <div class="notice">
+            To pole identyfikuje produkt w warstwie. Najlepiej mapować stabilny kod lub ID produktu; nazwa jest dopasowaniem awaryjnym.
+            Jeśli klient wpisuje kilka produktów w jednej komórce, rozdziel je przecinkiem, średnikiem, pionową kreską albo nową linią.
+          </div>
+        ` : "";
         return `
           <div class="model-map-row" data-element-field-row="${escapeHtml(field.key)}" data-element-field-level="${escapeHtml(nodeKey)}">
             <div class="model-map-label">
@@ -874,6 +880,7 @@ def render_building_elements_home() -> str:
               <span>${escapeHtml(field.key)}</span>
             </div>
             <div class="model-map-kind">${escapeHtml(field.kind || "")}${field.required ? " / wymagane" : ""}</div>
+            ${productReferenceNotice}
             <div class="model-map-kind">Arkusz levelu: <strong>${escapeHtml(selectedTable || "nie wybrano")}</strong></div>
             <select data-element-column="${escapeHtml(field.key)}" onchange="refreshElementFieldState('${escapeHtml(field.key)}')"${disabledAttr}>
               ${columnOptions(selectedColumn, selectedTable)}

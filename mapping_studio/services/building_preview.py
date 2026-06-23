@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from data_master_app.mapping import apply_cleanup
@@ -23,12 +24,17 @@ def preview_building_elements(rows: list[dict[str, Any]], mapping: dict[str, str
         layer = variant["layers"].setdefault(str(layer_name), {"name": layer_name, "source_rows": [], "products": []})
         layer["source_rows"].append(source_index)
 
-        if product_key not in (None, ""):
-            match = resolve_product(product_key, product_index)
-            product_entry = {"raw": product_key, "resolved": bool(match), "product_id": match.get("Id") if match else None}
+        for product_value in product_values(product_key):
+            match = resolve_product(product_value, product_index)
+            product_entry = {
+                "raw": product_value,
+                "resolved": bool(match),
+                "product_id": match.get("Id") if match else None,
+                "identity_source": product_identity_source(product_value, product_index, match),
+            }
             layer["products"].append(product_entry)
             if not match:
-                unresolved_products.append({"row": source_index, "value": product_key, "layer": layer_name})
+                unresolved_products.append({"row": source_index, "value": product_value, "layer": layer_name})
 
     return {
         "systems": normalize_tree(systems),
@@ -108,6 +114,35 @@ def resolve_product(value: Any, product_index: ProductReferenceIndex | None) -> 
         return None
     key = lookup_key(value)
     return product_index.by_id.get(str(value)) or product_index.by_code.get(key) or product_index.by_name.get(key)
+
+
+def product_values(value: Any) -> list[str]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        result: list[str] = []
+        for item in value:
+            result.extend(product_values(item))
+        return result
+    text = str(value).strip()
+    if not text:
+        return []
+    return [item.strip() for item in re.split(r"[,;|\n]+", text) if item.strip()]
+
+
+def product_identity_source(value: Any, product_index: ProductReferenceIndex | None, match: dict[str, Any] | None) -> str:
+    if product_index is None:
+        return "raw"
+    if not match:
+        return "unresolved"
+    key = lookup_key(value)
+    if product_index.by_id.get(str(value)) is match:
+        return "id"
+    if product_index.by_code.get(key) is match:
+        return "code"
+    if product_index.by_name.get(key) is match:
+        return "name"
+    return "unknown"
 
 
 def normalize_tree(systems: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:

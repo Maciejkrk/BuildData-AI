@@ -36,8 +36,11 @@ from data_master_app.mapping import (
     suggest_mapping,
 )
 from data_master_app.main import analyze_products_page, app, home, product_model_accept, product_model_files
+from data_master_app.building_elements_ui import render_building_elements_home
 from data_master_app.colors_ui import render_colors_home
 from data_master_app.web_ui import render_home, render_main_menu
+from mapping_studio.models import ProductReferenceIndex
+from mapping_studio.services.building_preview import preview_building_elements
 from starlette.datastructures import UploadFile
 
 
@@ -114,6 +117,38 @@ class ConverterTests(unittest.TestCase):
 
         self.assertIn("data-color-choice-field", html)
         self.assertIn("color_choice_mapping", html)
+
+    def test_building_elements_ui_explains_product_identity(self):
+        html = render_building_elements_home()
+
+        self.assertIn("identyfikuje produkt w warstwie", html)
+        self.assertIn("Referencyjne products.json jest opcjonalne", html)
+
+    def test_building_preview_splits_comma_separated_layer_products(self):
+        product_a = {"Id": 101}
+        product_b = {"Id": 102}
+        product_index = ProductReferenceIndex(
+            products_count=2,
+            by_code={"sku1": product_a, "sku2": product_b},
+        )
+
+        result = preview_building_elements(
+            [
+                {
+                    "System": "S1",
+                    "Wariant": "W1",
+                    "Warstwa": "L1",
+                    "Produkt": "SKU1, SKU2",
+                }
+            ],
+            {},
+            product_index,
+        )
+
+        products = result["systems"][0]["variants"][0]["layers"][0]["products"]
+        self.assertEqual([item["raw"] for item in products], ["SKU1", "SKU2"])
+        self.assertEqual([item["product_id"] for item in products], [101, 102])
+        self.assertEqual([item["identity_source"] for item in products], ["code", "code"])
 
     def test_systems_endpoint_is_removed_from_app(self):
         paths = {route.path for route in app.routes}
