@@ -722,6 +722,9 @@ def render_building_elements_home() -> str:
         const payload = await postForm("/api/building-elements/model", form);
         elementRootModels = payload.model?.root_models || [];
         activeElementRootModelId = String(payload.model?.root_model_id || activeElementRootModelId || elementRootModels[0]?.id || "");
+        if (activeElementRootModelId && Object.keys(currentElementMapping || {}).length && !elementMappingsByModel[activeElementRootModelId]) {
+          elementMappingsByModel[activeElementRootModelId] = JSON.parse(JSON.stringify(currentElementMapping));
+        }
         restoreElementMappingForActiveModel();
         renderElementRootModelSelect();
         renderElementAnalysis({
@@ -754,6 +757,9 @@ def render_building_elements_home() -> str:
         const payload = await postForm("/api/building-elements/analyze", form);
         elementRootModels = payload.model?.root_models || elementRootModels;
         activeElementRootModelId = String(payload.model?.root_model_id || activeElementRootModelId || elementRootModels[0]?.id || "");
+        if (activeElementRootModelId && Object.keys(currentElementMapping || {}).length && !elementMappingsByModel[activeElementRootModelId]) {
+          elementMappingsByModel[activeElementRootModelId] = JSON.parse(JSON.stringify(currentElementMapping));
+        }
         restoreElementMappingForActiveModel();
         renderElementRootModelSelect();
         renderElementAnalysis(payload);

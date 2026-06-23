@@ -5915,6 +5915,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         activeProductRootModelId = String(loadedProject.active_product_root_model_id || activeProductRootModelId || "");
         productMappingsByModel = loadedProject.product_mappings_by_model || productMappingsByModel;
         productMappingProfilesByModel = loadedProject.product_mapping_profiles_by_model || productMappingProfilesByModel;
+        const legacyProductMapping = loadedProject.product_mapping || {};
+        const legacyProductMappingProfile = loadedProject.product_mapping_profile || {};
         supplementMapping = loadedProject.supplement_mapping || null;
         supplementMappingProfile = loadedProject.supplement_mapping_profile || null;
         supplementProductsUrl = loadedProject.supplement_products_url || "";
@@ -5938,6 +5940,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             await loadProductModelFields(loadedProjectFiles.productModelFiles, activeProductRootModelId);
             pimModelAccepted = true;
             acceptedProductModelSignature = productModelSignature(loadedProjectFiles.productModelFiles);
+            if (activeProductRootModelId && Object.keys(legacyProductMapping).length && !productMappingsByModel[activeProductRootModelId]) {
+              productMappingsByModel[activeProductRootModelId] = legacyProductMapping;
+            }
+            if (activeProductRootModelId && Object.keys(legacyProductMappingProfile).length && !productMappingProfilesByModel[activeProductRootModelId]) {
+              productMappingProfilesByModel[activeProductRootModelId] = legacyProductMappingProfile;
+            }
             restoreProductMappingForActiveModel();
           }
           $("productModelStatus").innerHTML = pimModelAccepted

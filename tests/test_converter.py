@@ -105,6 +105,8 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("renderProductModelPreview", html)
         self.assertIn(".mapping-row.rule-owned-row", html)
         self.assertIn("rowRuleTargetPaths", html)
+        self.assertIn("legacyProductMapping", html)
+        self.assertIn("productMappingsByModel[activeProductRootModelId]", html)
 
     def test_systems_endpoint_is_removed_from_app(self):
         paths = {route.path for route in app.routes}
