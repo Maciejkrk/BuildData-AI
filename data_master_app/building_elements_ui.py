@@ -203,6 +203,43 @@ def render_building_elements_home() -> str:
       font-size:12px;
       line-height:1.4;
     }
+    .model-builder-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+      gap:10px;
+      margin-top:12px;
+    }
+    .model-builder-grid label { margin:0; }
+    .model-builder-grid input, .model-builder-grid textarea, .model-builder-grid select {
+      width:100%;
+      margin-top:5px;
+      padding:8px;
+      border:1px solid var(--line);
+      border-radius:4px;
+      background:#fff;
+    }
+    .model-builder-row {
+      border:1px solid var(--line);
+      border-radius:6px;
+      padding:10px;
+      margin-top:12px;
+      background:#fff;
+    }
+    .model-builder-row-head {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin-bottom:8px;
+    }
+    .model-builder-row button { width:auto; margin:0; }
+    .model-builder-preview {
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+      gap:8px;
+      font-size:12px;
+      color:var(--muted);
+    }
     .status { margin-top:10px; color:var(--muted); line-height:1.45; }
     .notice {
       padding:10px; border:1px solid #fed7aa; border-radius:4px;
@@ -279,6 +316,7 @@ def render_building_elements_home() -> str:
           <input id="elementSourceFile" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">
         </label>
         <button type="button" onclick="analyzeElements()" data-i18n="elements.analyze">Analizuj elementy budowlane</button>
+        <button type="button" class="secondary" onclick="generateBuildingElements()" data-i18n="elements.generate">Generuj building_elements.json</button>
         <div id="modelBuilderPanel" class="notice" hidden>
           <strong data-i18n="modelBuilder.title">Budowanie systemów z modelu</strong>
           <div data-i18n="modelBuilder.help">Najpierw wczytaj model elementów budowlanych. Edytor ręczny musi powstać z hierarchii modelu, więc nie używa pliku importowanego ani stałych pól.</div>
@@ -343,6 +381,7 @@ def render_building_elements_home() -> str:
         "productIdentity.none": "Brak wczytanego modelu produktu",
         "elements.importFile": "Plik importowany",
         "elements.analyze": "Analizuj elementy budowlane",
+        "elements.generate": "Generuj building_elements.json",
         "elements.result": "Wynik analizy",
         "elements.modeBannerTitle": "Aktualnie mapujesz: ELEMENTY BUDOWLANE",
         "elements.modeBannerText": "Na tym etapie importujemy strukturę systemów, wariantów i warstw. Produkty w warstwach można dopasować później.",
@@ -358,7 +397,12 @@ def render_building_elements_home() -> str:
         "project.failed": "Nie udało się obsłużyć projektu.",
         "status.ready": "Analiza gotowa.",
         "status.missing": "Brakuje pliku: ",
-        "status.error": "Błąd żądania"
+        "status.error": "Błąd żądania",
+        "modelBuilder.add": "Dodaj obiekt z modelu",
+        "modelBuilder.empty": "Nie dodano jeszcze żadnego obiektu. Uzupełnij pola z modelu i kliknij Dodaj obiekt z modelu.",
+        "modelBuilder.saved": "Ręczne obiekty z modelu",
+        "modelBuilder.remove": "Usuń",
+        "modelBuilder.valueHelp": "Dla produktów w jednej komórce możesz wpisać kilka identyfikatorów po przecinku."
       },
       en: {
         "nav.products": "Products",
@@ -392,6 +436,7 @@ def render_building_elements_home() -> str:
         "productIdentity.none": "No product model loaded",
         "elements.importFile": "Imported file",
         "elements.analyze": "Analyze building elements",
+        "elements.generate": "Generate building_elements.json",
         "elements.result": "Analysis result",
         "elements.modeBannerTitle": "Currently mapping: BUILDING ELEMENTS",
         "elements.modeBannerText": "This step imports system, variant and layer structure. Layer products can be matched later.",
@@ -407,7 +452,12 @@ def render_building_elements_home() -> str:
         "project.failed": "Could not handle the project.",
         "status.ready": "Analysis ready.",
         "status.missing": "Missing file: ",
-        "status.error": "Request error"
+        "status.error": "Request error",
+        "modelBuilder.add": "Add object from model",
+        "modelBuilder.empty": "No model object has been added yet. Fill model fields and click Add object from model.",
+        "modelBuilder.saved": "Manual model objects",
+        "modelBuilder.remove": "Remove",
+        "modelBuilder.valueHelp": "For product fields you can enter multiple identifiers separated by commas."
       }
     };
     let currentLang = localStorage.getItem("aiDataMasterLang") || "pl";
@@ -421,6 +471,7 @@ def render_building_elements_home() -> str:
     let elementProductIdentityFields = [];
     let selectedElementProductIdentityField = "";
     let elementWorkflowMode = "import";
+    let modelBuilderRows = [];
     let loadedElementProject = null;
     let loadedElementProjectFiles = { modelFiles: [], productModelFiles: [], sourceFile: null, productsReferenceFile: null };
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
@@ -449,6 +500,7 @@ def render_building_elements_home() -> str:
           elementProductIdentityFields,
           selectedElementProductIdentityField,
           elementWorkflowMode,
+          modelBuilderRows,
           status: $("elementStatus")?.textContent || "",
           productIdentityStatus: $("elementProductIdentityStatus")?.textContent || "",
           savedAt: new Date().toISOString(),
@@ -574,6 +626,7 @@ def render_building_elements_home() -> str:
         elementProductIdentityFields = payload.elementProductIdentityFields || elementProductIdentityFields;
         selectedElementProductIdentityField = payload.selectedElementProductIdentityField || selectedElementProductIdentityField;
         elementWorkflowMode = payload.elementWorkflowMode || elementWorkflowMode;
+        modelBuilderRows = Array.isArray(payload.modelBuilderRows) ? payload.modelBuilderRows : modelBuilderRows;
         if ($("elementWorkflowMode")) $("elementWorkflowMode").value = elementWorkflowMode;
         updateElementWorkflowMode();
         if (payload.projectName && $("elementProjectName")) $("elementProjectName").value = payload.projectName;
@@ -617,8 +670,9 @@ def render_building_elements_home() -> str:
       if ($("modelBuilderStatus")) {
         $("modelBuilderStatus").textContent = importMode
           ? ""
-          : (lastElementAnalysis?.model ? (currentLang === "pl" ? "Model jest wczytany. Kolejny krok to modelowy edytor obiektów." : "Model loaded. Next step is the model-driven object editor.") : (currentLang === "pl" ? "Wczytaj model elementów, aby rozpocząć budowanie systemów." : "Load the element model to start building systems."));
+          : (lastElementAnalysis?.model ? (currentLang === "pl" ? "Model jest wczytany. Możesz dodawać obiekty z pól modelu." : "Model loaded. You can add objects from model fields.") : (currentLang === "pl" ? "Wczytaj model elementów, aby rozpocząć budowanie systemów." : "Load the element model to start building systems."));
       }
+      if (lastElementAnalysis?.model) renderElementAnalysis(lastElementAnalysis);
       saveElementWorkspaceState();
     }
     function addFiles(form, name, input) {
@@ -874,6 +928,7 @@ def render_building_elements_home() -> str:
           identity_fields: elementProductIdentityFields || [],
           product_root_models: elementProductRootModels || [],
         },
+        model_builder_rows: modelBuilderRows || [],
         building_element_mapping: currentElementMapping || {},
         analysis: lastElementAnalysis,
         embedded_files: {
@@ -915,6 +970,7 @@ def render_building_elements_home() -> str:
         if ($("elementWorkflowMode")) $("elementWorkflowMode").value = elementWorkflowMode;
         elementMappingsByModel = loadedElementProject.element_mappings_by_model || elementMappingsByModel;
         currentElementMapping = loadedElementProject.building_element_mapping || {};
+        modelBuilderRows = Array.isArray(loadedElementProject.model_builder_rows) ? loadedElementProject.model_builder_rows : [];
         if (activeElementRootModelId) elementMappingsByModel[activeElementRootModelId] = currentElementMapping;
         $("elementProjectName").value = loadedElementProject.name || "mapowanie-elementow-budowlanych";
         $("elementProjectStatus").textContent = `${t("project.loaded")} ${loadedElementProject.name || file.name}`;
@@ -955,7 +1011,12 @@ def render_building_elements_home() -> str:
         renderElementAnalysis({
           model: payload.model,
           tables: [],
-          product_reference: { products_count: 0, message: "Wczytano hierarchię modelu. Dodaj plik importowany, aby mapować kolumny." },
+          product_reference: {
+            products_count: 0,
+            message: elementWorkflowMode === "modelBuilder"
+              ? "Wczytano hierarchię modelu. Możesz tworzyć elementy z pól modelu bez pliku importowanego."
+              : "Wczytano hierarchię modelu. Dodaj plik importowany, aby mapować kolumny.",
+          },
         });
         $("elementStatus").textContent = t("status.ready");
         saveElementWorkspaceState();
@@ -1002,16 +1063,24 @@ def render_building_elements_home() -> str:
         $("elementStatus").textContent = currentLang === "pl"
           ? "Generuję building_elements.json."
           : "Generating building_elements.json.";
-        if ((!selectedElementModelFiles().length && !loadedElementProjectFiles.modelFiles.length) || (!$("elementSourceFile").files[0] && !loadedElementProjectFiles.sourceFile)) {
+        const builderMode = elementWorkflowMode === "modelBuilder";
+        if ((!selectedElementModelFiles().length && !loadedElementProjectFiles.modelFiles.length) || (!builderMode && !$("elementSourceFile").files[0] && !loadedElementProjectFiles.sourceFile)) {
           await restoreElementWorkspaceFilesState();
         }
         const modelFiles = effectiveElementModelFiles();
         if (modelFiles.length < 2) throw new Error(currentLang === "pl" ? "Wczytaj oba pliki modelu: Models i Attributes." : "Load both model files: Models and Attributes.");
         addFilesFromList(form, "model_files", modelFiles);
         addOptionalProjectFile(form, "products_reference", $("productReferenceFile"), loadedElementProjectFiles.productsReferenceFile);
-        addRequiredProjectFile(form, "file", $("elementSourceFile"), loadedElementProjectFiles.sourceFile, t("elements.importFile"));
+        if (builderMode) {
+          if (!modelBuilderRows.length) {
+            throw new Error(currentLang === "pl" ? "Dodaj przynajmniej jeden obiekt z modelu." : "Add at least one object from the model.");
+          }
+          form.append("file", modelBuilderSourceFile());
+        } else {
+          addRequiredProjectFile(form, "file", $("elementSourceFile"), loadedElementProjectFiles.sourceFile, t("elements.importFile"));
+        }
         if (activeElementRootModelId) form.append("root_model_id", activeElementRootModelId);
-        form.append("mapping_json", JSON.stringify(currentElementMapping || {}));
+        form.append("mapping_json", JSON.stringify(builderMode ? modelBuilderMappingProfile() : (currentElementMapping || {})));
         const payload = await postForm("/api/building-elements/convert", form);
         const saved = await saveGeneratedElementFile(payload.files.building_elements_json, "building_elements.json");
         $("elementStatus").textContent = currentLang === "pl"
@@ -1027,6 +1096,143 @@ def render_building_elements_home() -> str:
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       }[char]));
+    }
+    function modelBuilderFieldsFromHierarchy(model) {
+      const fields = [];
+      const seen = new Set();
+      function visit(node, trail = []) {
+        if (!node) return;
+        const labelTrail = [...trail, node.label || node.key || ""].filter(Boolean);
+        for (const field of node.fields || []) {
+          if (!field?.key || seen.has(field.key)) continue;
+          seen.add(field.key);
+          fields.push({ ...field, _level_label: labelTrail.join(" / "), _level_key: node.key || "" });
+        }
+        for (const child of node.children || []) visit(child, labelTrail);
+      }
+      visit(model?.hierarchy);
+      if (!fields.length) {
+        for (const field of model?.fields || []) {
+          if (!field?.key || seen.has(field.key)) continue;
+          seen.add(field.key);
+          fields.push(field);
+        }
+      }
+      return fields;
+    }
+    function modelBuilderInputHtml(field) {
+      const key = escapeHtml(field.key);
+      const label = escapeHtml(field.label || field.key);
+      const level = field._level_label ? `<span>${escapeHtml(field._level_label)}</span>` : "";
+      const help = field.kind === "product_ref" ? `<span class="helper">${escapeHtml(t("modelBuilder.valueHelp"))}</span>` : "";
+      if (field.kind === "single_choice" && (field.options || []).length) {
+        const options = (field.options || []).map((option) => {
+          const value = option.label || option.value || option.id || "";
+          return `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`;
+        }).join("");
+        return `<label><strong>${label}</strong>${level}<select data-model-builder-input="${key}"><option value=""></option>${options}</select>${help}</label>`;
+      }
+      if (field.kind === "multi_choice" || field.kind === "product_ref" || field.kind === "text") {
+        return `<label><strong>${label}</strong>${level}<textarea data-model-builder-input="${key}" placeholder="${escapeHtml(field.key)}"></textarea>${help}</label>`;
+      }
+      return `<label><strong>${label}</strong>${level}<input type="text" data-model-builder-input="${key}" placeholder="${escapeHtml(field.key)}">${help}</label>`;
+    }
+    function renderModelBuilderEditor(model) {
+      if (elementWorkflowMode !== "modelBuilder") return "";
+      const fields = modelBuilderFieldsFromHierarchy(model);
+      if (!fields.length) {
+        return `<div class="notice">Nie odczytano pól modelu do ręcznego budowania elementów.</div>`;
+      }
+      return `
+        <h3>Tworzenie elementów budowlanych z modelu</h3>
+        <p>Uzupełnij pola odczytane z modelu PIM. Każdy dodany obiekt zostanie potraktowany jako wiersz danych wejściowych do wygenerowania building_elements.json.</p>
+        <div class="model-builder-grid">${fields.map(modelBuilderInputHtml).join("")}</div>
+        <button type="button" class="secondary" onclick="addModelBuilderRow()">${escapeHtml(t("modelBuilder.add"))}</button>
+        <div id="modelBuilderRows">${renderModelBuilderRows(model)}</div>
+      `;
+    }
+    function addModelBuilderRow() {
+      const row = {};
+      for (const input of document.querySelectorAll("[data-model-builder-input]")) {
+        const key = input.dataset.modelBuilderInput;
+        if (key && input.value.trim()) row[key] = input.value.trim();
+      }
+      if (!Object.keys(row).length) {
+        $("elementStatus").textContent = currentLang === "pl" ? "Uzupełnij przynajmniej jedno pole modelu." : "Fill at least one model field.";
+        return;
+      }
+      modelBuilderRows.push(row);
+      for (const input of document.querySelectorAll("[data-model-builder-input]")) input.value = "";
+      syncElementMappingState();
+      renderModelBuilderRowsIntoDom();
+    }
+    function removeModelBuilderRow(index) {
+      modelBuilderRows.splice(index, 1);
+      syncElementMappingState();
+      renderModelBuilderRowsIntoDom();
+    }
+    function renderModelBuilderRows(model) {
+      const fields = modelBuilderFieldsFromHierarchy(model || lastElementAnalysis?.model);
+      const fieldByKey = Object.fromEntries(fields.map((field) => [field.key, field]));
+      if (!modelBuilderRows.length) {
+        return `<div class="notice" style="margin-top:12px;">${escapeHtml(t("modelBuilder.empty"))}</div>`;
+      }
+      const rows = modelBuilderRows.map((row, index) => {
+        const items = Object.entries(row).map(([key, value]) => {
+          const field = fieldByKey[key] || { label: key, key };
+          return `<div><strong>${escapeHtml(field.label || key)}</strong><br>${escapeHtml(value)}</div>`;
+        }).join("");
+        return `
+          <div class="model-builder-row">
+            <div class="model-builder-row-head">
+              <strong>${escapeHtml(t("modelBuilder.saved"))} ${index + 1}</strong>
+              <button type="button" class="secondary" onclick="removeModelBuilderRow(${index})">${escapeHtml(t("modelBuilder.remove"))}</button>
+            </div>
+            <div class="model-builder-preview">${items}</div>
+          </div>
+        `;
+      }).join("");
+      return rows;
+    }
+    function renderModelBuilderRowsIntoDom() {
+      const holder = $("modelBuilderRows");
+      if (holder) holder.innerHTML = renderModelBuilderRows(lastElementAnalysis?.model);
+      if ($("modelBuilderStatus")) {
+        $("modelBuilderStatus").textContent = modelBuilderRows.length
+          ? `${t("modelBuilder.saved")}: ${modelBuilderRows.length}`
+          : "";
+      }
+      saveElementWorkspaceState();
+    }
+    function modelBuilderMappingProfile() {
+      const fields = modelBuilderFieldsFromHierarchy(lastElementAnalysis?.model);
+      const mapping = JSON.parse(JSON.stringify(currentElementMapping || {}));
+      if (!mapping._product_identity) {
+        mapping._product_identity = {
+          model_id: activeElementProductRootModelId || "",
+          field_key: selectedElementProductIdentityField || "",
+        };
+      }
+      const rootKey = lastElementAnalysis?.model?.hierarchy?.key || `model.${lastElementAnalysis?.model?.root_model_id || "root"}`;
+      if (!mapping._levels) mapping._levels = {};
+      if (!mapping._levels[rootKey]) mapping._levels[rootKey] = {};
+      if (!mapping._levels[rootKey].level_name_field) {
+        const firstRootField = fields.find((field) => !field.parent_relation_key) || fields[0];
+        if (firstRootField) mapping._levels[rootKey].level_name_field = firstRootField.key;
+      }
+      for (const field of fields) {
+        mapping[field.key] = {
+          level: field._level_key || rootKey,
+          table: "json",
+          column: field.key,
+          cleanup: { trim: true },
+        };
+      }
+      return mapping;
+    }
+    function modelBuilderSourceFile() {
+      const content = JSON.stringify(modelBuilderRows || [], null, 2);
+      return new File([content], "manual-building-elements.json", { type: "application/json" });
     }
     function renderElementMappingEditor(payload) {
       const tables = payload.tables || [];
@@ -1332,6 +1538,7 @@ def render_building_elements_home() -> str:
       const reference = payload.product_reference || {};
       const tableItems = tables.map((table) => `<li>${escapeHtml(table.name)}: ${table.rows || 0} wierszy, ${(table.columns || []).length} kolumn</li>`).join("");
       const mappingEditor = renderElementMappingEditor(payload);
+      const builderEditor = renderModelBuilderEditor(payload.model);
       $("elementSummary").className = "panel";
       $("elementSummary").innerHTML = `
         <h3>Analiza elementów budowlanych</h3>
@@ -1345,9 +1552,7 @@ def render_building_elements_home() -> str:
         <p>${escapeHtml(reference.message || "")}</p>
         <h3>Wczytane tabele</h3>
         <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
-        <div style="margin:14px 0; display:flex; gap:10px; flex-wrap:wrap;">
-          <button type="button" onclick="generateBuildingElements()">Generuj building_elements.json</button>
-        </div>
+        ${builderEditor}
         ${mappingEditor}
       `;
       renderElementRootModelSelect();

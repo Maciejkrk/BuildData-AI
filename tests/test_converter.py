@@ -137,6 +137,9 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("elementWorkflowMode", html)
         self.assertIn("modelBuilderPanel", html)
         self.assertIn("Stwórz własne systemy z modelu", html)
+        self.assertIn("modelBuilderRows", html)
+        self.assertIn("modelBuilderMappingProfile", html)
+        self.assertIn("Dodaj obiekt z modelu", html)
 
     def test_building_preview_splits_comma_separated_layer_products(self):
         product_a = {"Id": 101}
@@ -300,7 +303,7 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Mapping: products", body)
         self.assertIn("Cecha modelu PIM", body)
-        self.assertIn("Reguły wierszy i hierarchii", body)
+        self.assertIn("Reguła wiersza i hierarchii", body)
         self.assertIn('data-row-rule="rowMode"', body)
         self.assertIn('data-map-mode="products"', body)
         self.assertIn("client.json", body)
@@ -368,7 +371,7 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("Type series", html)
         self.assertIn("Cecha wariantu", html)
         self.assertIn("type_series[].thickness.value", html)
-        self.assertIn("Reguły wierszy i hierarchii", html)
+        self.assertIn("Reguła wiersza i hierarchii", html)
 
     def test_web_ui_does_not_show_unaccepted_initial_product_model(self):
         html = render_home({"target_fields": [{"key": "product.name.value", "label": "Nazwa", "group": "Product identity"}]})
@@ -1119,6 +1122,28 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(mapped[0]["product.name.value"], "FAST EPS 70")
         self.assertEqual(mapped[0]["product.code.value"], "EPS-70")
         self.assertEqual(mapped[0]["product.category[].value"], "Izolacje fasadowe")
+
+    def test_mapping_profile_accepts_multiple_row_type_values(self):
+        rows = [
+            {"Typ": "produkt", "ID": "P-1", "Parent ID": "", "Nazwa": "System 1"},
+            {"Typ": "wyrób", "ID": "P-2", "Parent ID": "", "Nazwa": "System 2"},
+            {"Typ": "wariant", "ID": "V-1", "Parent ID": "P-1", "Nazwa": "Wariant 1"},
+        ]
+        mapped = apply_mapping_profile_to_rows(
+            rows,
+            {
+                "_row_rules": {
+                    "row_type_column": "Typ",
+                    "product_row_values": "produkt; wyrób",
+                    "group_row_values": "wariant",
+                    "id_column": "ID",
+                    "parent_id_column": "Parent ID",
+                },
+                "Nazwa": {"target_path": "product.name.value"},
+            },
+        )
+
+        self.assertEqual([item["product.name.value"] for item in mapped], ["System 1", "System 2"])
 
     def test_mapping_profile_uses_row_type_and_parent_id_for_group_context(self):
         rows = [

@@ -1282,9 +1282,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "model.singleChoice": "jedna z wielu",
         "model.multiChoice": "wiele z wielu",
         "model.options": "opcje",
-        "rows.title": "Reguły wierszy i hierarchii",
+        "rows.title": "Reguła wiersza i hierarchii",
         "rows.help": "Użyj tego, gdy plik ma osobne wiersze produktów i osobne wiersze wariantów. Wskaż typ wiersza oraz relację ID produktu -> Parent ID wariantu.",
-        "rows.openMenu": "Reguły wierszy i hierarchii",
+        "rows.openMenu": "Reguła wiersza i hierarchii",
         "rows.closeMenu": "Zamknij reguły",
         "rows.menuHint": "Otwórz tylko wtedy, gdy import ma wiersze grup, produktów albo relacje parent-child.",
         "rows.summaryEmpty": "Brak aktywnych reguł.",
@@ -1294,10 +1294,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "rows.mode": "Typ relacji wierszy",
         "rows.modeProductVariants": "Produkt -> warianty typoszeregu",
         "rows.modeHelp": "Wiersz oznaczony jako produkt tworzy produkt, a wiersz oznaczony jako wariant tworzy wiersz tabeli typoszeregu.",
-        "rows.productValues": "Wartość w kolumnie oznaczająca produkt",
-        "rows.productValuesHelp": "Wpisz albo wybierz wartość z kolumny typu wiersza, np. Product albo PR. Ten wiersz utworzy produkt.",
-        "rows.groupValues": "Wartość w kolumnie oznaczająca wariant",
-        "rows.groupValuesHelp": "Wpisz albo wybierz wartość z kolumny typu wiersza, np. Article albo AR. Ten wiersz utworzy wariant w tabeli typoszeregu.",
+        "rows.productValues": "Wartości w kolumnie oznaczające produkt",
+        "rows.productValuesHelp": "Wpisz albo wybierz jedną lub kilka wartości z kolumny typu wiersza, np. Product, Item albo PR. Oddziel je przecinkiem, średnikiem, kreską pionową albo nową linią.",
+        "rows.groupValues": "Wartości w kolumnie oznaczające wariant",
+        "rows.groupValuesHelp": "Wpisz albo wybierz jedną lub kilka wartości z kolumny typu wiersza, np. Article, Variant albo AR. Oddziel je przecinkiem, średnikiem, kreską pionową albo nową linią.",
         "rows.productIdColumn": "Kolumna ID produktu",
         "rows.productIdColumnHelp": "Wartość z tej kolumny identyfikuje wiersz produktu, do którego mają być przypięte warianty.",
         "rows.variantParentIdColumn": "Kolumna Parent ID wariantu",
@@ -1570,7 +1570,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "model.singleChoice": "single choice",
         "model.multiChoice": "multiple choice",
         "model.options": "options",
-        "rows.title": "Row and Hierarchy Rules",
+        "rows.title": "Row and Hierarchy Rule",
         "rows.help": "Use this when the file has separate product rows and variant rows. Select the row type and the product ID -> variant Parent ID relation.",
         "rows.openMenu": "Row and hierarchy rules",
         "rows.closeMenu": "Close rules",
@@ -1582,10 +1582,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "rows.mode": "Row relation type",
         "rows.modeProductVariants": "Product -> type-series variants",
         "rows.modeHelp": "Rows marked as products create products. Rows marked as variants create type-series table rows under the parent product.",
-        "rows.productValues": "Value meaning product",
-        "rows.productValuesHelp": "Enter or choose the value from the row-type column, for example Product or PR. This row creates a product.",
-        "rows.groupValues": "Value meaning variant",
-        "rows.groupValuesHelp": "Enter or choose the value from the row-type column, for example Article or AR. This row creates a type-series variant.",
+        "rows.productValues": "Values meaning product",
+        "rows.productValuesHelp": "Enter or choose one or more values from the row-type column, for example Product, Item or PR. Separate them with commas, semicolons, pipes or new lines.",
+        "rows.groupValues": "Values meaning variant",
+        "rows.groupValuesHelp": "Enter or choose one or more values from the row-type column, for example Article, Variant or AR. Separate them with commas, semicolons, pipes or new lines.",
         "rows.productIdColumn": "Product ID column",
         "rows.productIdColumnHelp": "The value in this column identifies the product row that variants should attach to.",
         "rows.variantParentIdColumn": "Variant Parent ID column",
@@ -4645,7 +4645,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     function normalizedValues(text) {
-      return new Set(String(text || "").split(",").map(item => item.trim().toLowerCase()).filter(Boolean));
+      return new Set(String(text || "").split(/[;\n|,]+/).map(item => item.trim().toLowerCase()).filter(Boolean));
     }
 
     function mappedRowsForPreview() {
@@ -6503,14 +6503,14 @@ def render_initial_analysis_report(initial_analysis: dict) -> str:
         for value in all_type_values
     ) + "</datalist>"
     row_rules = f"""<div class="mapping-tools">
-      <button type="button" class="secondary" id="rowRulesToggle">Reguły wierszy i hierarchii</button>
+      <button type="button" class="secondary" id="rowRulesToggle">Reguła wiersza i hierarchii</button>
       <button type="button" class="secondary" id="checkMappingBtn">Sprawdź aktualne mapowanie</button>
       <span class="rule-summary" id="rowRulesSummary">Brak aktywnych reguł.</span>
     </div>
     <div id="rowRulesPanel" class="panel rule-menu">
       <div class="rule-menu-header">
         <div>
-          <h2>Reguły wierszy i hierarchii</h2>
+          <h2>Reguła wiersza i hierarchii</h2>
           <div class="muted">Ustal, które wiersze są produktem, a które wariantem typoszeregu.</div>
         </div>
         <button type="button" class="secondary" id="rowRulesClose">Zamknij menu</button>

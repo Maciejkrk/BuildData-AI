@@ -1132,7 +1132,7 @@ def is_product_row(
 
 def normalized_set(values: list[Any] | str) -> set[str]:
     if isinstance(values, str):
-        values = [item.strip() for item in values.split(",")]
+        values = [item.strip() for item in re.split(r"[,;|\n]+", values)]
     return {normalize(value) for value in values if str(value).strip()}
 
 
