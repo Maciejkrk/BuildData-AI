@@ -1216,9 +1216,9 @@ def render_building_elements_home() -> str:
       const rootKey = lastElementAnalysis?.model?.hierarchy?.key || `model.${lastElementAnalysis?.model?.root_model_id || "root"}`;
       if (!mapping._levels) mapping._levels = {};
       if (!mapping._levels[rootKey]) mapping._levels[rootKey] = {};
-      if (!mapping._levels[rootKey].level_name_field) {
+      if (!mapping._levels[rootKey].id_column) {
         const firstRootField = fields.find((field) => !field.parent_relation_key) || fields[0];
-        if (firstRootField) mapping._levels[rootKey].level_name_field = firstRootField.key;
+        if (firstRootField) mapping._levels[rootKey].id_column = firstRootField.key;
       }
       for (const field of fields) {
         mapping[field.key] = {
@@ -1260,15 +1260,10 @@ def render_building_elements_home() -> str:
       function levelTable(levelKey) {
         return levelConfig(levelKey).table || "";
       }
-      function parentLevelKeyFor(node) {
-        return node.parent_relation_key || (lastElementAnalysis?.model?.hierarchy?.key || `model.${lastElementAnalysis?.model?.root_model_id || "root"}`);
-      }
-      function levelNameMapped(levelKey) {
-        const fieldKey = levelConfig(levelKey).level_name_field || "";
-        return Boolean(fieldKey && currentElementMapping[fieldKey]?.column);
-      }
       function nodeUnlocked(node) {
-        return node.type !== "relation" || levelNameMapped(parentLevelKeyFor(node));
+        if (node.type !== "relation") return true;
+        const config = levelConfig(node.key);
+        return Boolean(config.table && config.parent_id_column);
       }
       function elementSourceValues(tableName, columnName) {
         if (!tableName || !columnName) return [];
@@ -1367,40 +1362,19 @@ def render_building_elements_home() -> str:
           `<option value="">-- wybierz kolumnę --</option>`,
           ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
         ].join("");
-        const nameFieldOptions = [
-          `<option value="">-- wybierz pole nazwy levela --</option>`,
-          ...(node.fields || []).map((field) => `<option value="${escapeHtml(field.key)}" ${field.key === config.level_name_field ? "selected" : ""}>${escapeHtml(field.label || field.key)}</option>`)
-        ].join("");
-        const parentLevelKey = parentLevelKeyFor(node);
-        const parentColumns = columnsForElementTable(levelTable(parentLevelKey));
-        const parentColumnOptions = (selected) => [
-          `<option value="">-- wybierz kolumnę --</option>`,
-          ...parentColumns.map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
-        ].join("");
         const parentControls = node.type === "relation" ? `
-          <label>Parent tego poziomu
-            <select data-element-level="${escapeHtml(node.key)}" data-level-key="parent_level_key" onchange="syncElementMappingState()"${disabledAttr}>
-              <option value="${escapeHtml(parentLevelKey)}">${escapeHtml(node.parent_relation_key ? "Poziom nadrzędny" : "Model główny")}</option>
+          <label>ID parenta
+            <select data-element-level="${escapeHtml(node.key)}" data-level-key="parent_id_column" onchange="refreshElementLevelState('${escapeHtml(node.key)}')">
+              ${columnOptionsForLevel(config.parent_id_column || "")}
             </select>
-          </label>
-          <label>Kolumna ID parenta w poziomie nadrzędnym
-            <select data-element-level="${escapeHtml(node.key)}" data-level-key="parent_id_column" onchange="syncElementMappingState()"${disabledAttr}>${parentColumnOptions(config.parent_id_column || "")}</select>
-          </label>
-          <label>Kolumna wskazująca parenta w tym poziomie
-            <select data-element-level="${escapeHtml(node.key)}" data-level-key="child_parent_id_column" onchange="syncElementMappingState()"${disabledAttr}>${columnOptionsForLevel(config.child_parent_id_column || "")}</select>
           </label>
         ` : "";
         return `
           <div class="model-level-config">
-            ${unlocked ? "" : `<div class="notice">Najpierw zmapuj nazwę levela w poziomie nadrzędnym. Dopiero wtedy można parentować ten poziom.</div>`}
+            ${unlocked ? "" : `<div class="notice">Dla tego poziomu wybierz arkusz / tabelę oraz ID parenta. Dopiero wtedy można edytować pola tego poziomu.</div>`}
             <label>Arkusz / tabela dla tego levela
-              <select data-element-level="${escapeHtml(node.key)}" data-level-key="table" onchange="refreshElementLevelState('${escapeHtml(node.key)}')"${disabledAttr}>
+              <select data-element-level="${escapeHtml(node.key)}" data-level-key="table" onchange="refreshElementLevelState('${escapeHtml(node.key)}')">
                 ${tableOptions(selectedTable)}
-              </select>
-            </label>
-            <label>Level name z mapowania
-              <select data-element-level="${escapeHtml(node.key)}" data-level-key="level_name_field" onchange="refreshElementLevelState('${escapeHtml(node.key)}')"${disabledAttr}>
-                ${nameFieldOptions}
               </select>
             </label>
             <label>Kolumna ID tego levela

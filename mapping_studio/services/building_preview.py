@@ -76,10 +76,28 @@ def mapped_rows_from_profile(tables: list[SourceTable], mapping_profile: dict[st
     tables_by_name = {table.name: table for table in tables}
     fallback_table = tables[0] if tables else SourceTable("data", [])
     row_count = max((len(table.rows) for table in tables), default=0)
+    levels = mapping_profile.get("_levels") if isinstance(mapping_profile.get("_levels"), dict) else {}
     result: list[dict[str, Any]] = []
     for index in range(row_count):
         mapped: dict[str, Any] = {}
         source_context: dict[str, Any] = {}
+        level_ids: dict[str, dict[str, Any]] = {}
+        for level_key, config in levels.items():
+            if not isinstance(config, dict):
+                continue
+            table = tables_by_name.get(str(config.get("table") or "")) or fallback_table
+            if index >= len(table.rows):
+                continue
+            source_row = table.rows[index]
+            level_data: dict[str, Any] = {}
+            id_column = config.get("id_column")
+            if id_column:
+                level_data["id"] = source_row.get(str(id_column))
+            parent_id_column = config.get("parent_id_column")
+            if parent_id_column:
+                level_data["parent_id"] = source_row.get(str(parent_id_column))
+            if level_data:
+                level_ids[str(level_key)] = level_data
         for target_path, rule in mapping_profile.items():
             if str(target_path).startswith("_") or not isinstance(rule, dict):
                 continue
@@ -102,6 +120,8 @@ def mapped_rows_from_profile(tables: list[SourceTable], mapping_profile: dict[st
             }
         if mapped:
             mapped["_source_context"] = source_context
+            if level_ids:
+                mapped["_level_ids"] = level_ids
             result.append(mapped)
     return result
 
@@ -181,11 +201,12 @@ def convert_building_elements_from_tables(
     root_key = f"model.{model.root_model_id}"
     levels = mapping_profile.get("_levels") if isinstance(mapping_profile.get("_levels"), dict) else {}
     root_level = levels.get(root_key, {}) if isinstance(levels.get(root_key), dict) else {}
-    root_name_field = root_level.get("level_name_field") or next((field.key for field in model.fields if field.parent_relation_key is None), "")
+    root_name_field = root_level.get("level_name_field") or root_level.get("id_column") or next((field.key for field in model.fields if field.parent_relation_key is None), "")
 
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
-        name = row.get(root_name_field) or row.get("building_element.name.value") or row.get("system.name") or "Building element"
+        root_id = level_identity_value(row, root_key, "id")
+        name = root_id or row.get(root_name_field) or row.get("building_element.name.value") or row.get("system.name") or "Building element"
         grouped.setdefault(str(name), []).append(row)
 
     elements = [
@@ -240,11 +261,11 @@ def build_element_entry(
             if relation_key:
                 relation = relation_by_key.get(relation_key)
                 parent_attribute_id = relation.attribute_id if relation else 0
-                relation_value = relation_identity_value(row, relation_key, field_by_key) or str(row_index + 1)
+                relation_value = level_identity_value(row, relation_key, "id") or relation_identity_value(row, relation_key, field_by_key) or str(row_index + 1)
                 row_hash = relation_hashes.setdefault((relation_key, relation_value), stable_hash(relation_key, relation_value))
                 parent_relation_key = relation.parent_relation_key if relation else None
                 if parent_relation_key:
-                    parent_value = relation_identity_value(row, parent_relation_key, field_by_key) or "root"
+                    parent_value = level_identity_value(row, relation_key, "parent_id") or relation_identity_value(row, parent_relation_key, field_by_key) or "root"
                     parent_hash = relation_hashes.setdefault((parent_relation_key, parent_value), stable_hash(parent_relation_key, parent_value))
             add_field_attrs(attrs, field, value, product_index, parent_attribute_id=parent_attribute_id, row_hash=row_hash, parent_hash=parent_hash, row_i=row_index)
     return {
@@ -268,6 +289,11 @@ def relation_identity_value(row: dict[str, Any], relation_key: str, field_by_key
         if field and field.parent_relation_key == relation_key and value not in (None, ""):
             return str(value)
     return ""
+
+
+def level_identity_value(row: dict[str, Any], level_key: str, kind: str) -> str:
+    value = ((row.get("_level_ids") or {}).get(level_key) or {}).get(kind)
+    return "" if value in (None, "") else str(value)
 
 
 def add_field_attrs(

@@ -140,6 +140,9 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("modelBuilderRows", html)
         self.assertIn("modelBuilderMappingProfile", html)
         self.assertIn("Dodaj obiekt z modelu", html)
+        self.assertIn("ID parenta", html)
+        self.assertIn("Kolumna ID tego levela", html)
+        self.assertNotIn("Level name z mapowania", html)
 
     def test_building_preview_splits_comma_separated_layer_products(self):
         product_a = {"Id": 101}
@@ -205,6 +208,55 @@ class ConverterTests(unittest.TestCase):
         self.assertTrue(any(attr["AttributeId"] == 280 and attr["varcharValue"] == "S1" for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 284 and attr["ParentAttributeId"] == 283 for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 287 and attr["ParentAttributeId"] == 285 for attr in attrs))
+
+    def test_building_elements_convert_uses_level_parent_ids_for_nested_hashes(self):
+        model = load_building_element_model(
+            {
+                "buildingElementsModels.json": b"""{
+                  "models": [
+                    {"Id": 74, "Name": "Building Element", "modelType": "Building_Element"},
+                    {"Id": 75, "Name": "Variant", "modelType": "Attribute"},
+                    {"Id": 76, "Name": "Layer", "modelType": "Attribute"}
+                  ]
+                }""",
+                "buildingElementsAttributes.json": b"""{
+                  "attributes": [
+                    {"Id": 280, "ProductModelId": 74, "AttributeName": "name", "DispName": "Name", "AttributeType": "VarChar", "deleted": false},
+                    {"Id": 283, "ProductModelId": 74, "AttributeName": "variants", "DispName": "Variants", "AttributeType": "Model_Array", "TargetModelId": 75, "deleted": false},
+                    {"Id": 284, "ProductModelId": 75, "AttributeName": "variant_name", "DispName": "Variant Name", "AttributeType": "VarChar", "deleted": false},
+                    {"Id": 285, "ProductModelId": 75, "AttributeName": "layers", "DispName": "Layers", "AttributeType": "Model_Array", "TargetModelId": 76, "deleted": false},
+                    {"Id": 287, "ProductModelId": 76, "AttributeName": "layer_name", "DispName": "Layer name", "AttributeType": "VarChar", "deleted": false}
+                  ]
+                }""",
+            }
+        )
+        tables = [
+            SourceTable(
+                "Systemy",
+                [{"SystemId": "S1", "VariantId": "V1", "LayerId": "L1", "System": "System 1", "Wariant": "Wariant 1", "Warstwa": "Warstwa 1"}],
+            )
+        ]
+        profile = {
+            "_levels": {
+                "model.74": {"table": "Systemy", "id_column": "SystemId"},
+                "model.74.attribute.283": {"table": "Systemy", "id_column": "VariantId", "parent_id_column": "SystemId"},
+                "model.75.attribute.285": {"table": "Systemy", "id_column": "LayerId", "parent_id_column": "VariantId"},
+            },
+            "building_element.name.value": {"table": "Systemy", "column": "System", "cleanup": {"trim": True}},
+            "building_element.variant_name.value": {"table": "Systemy", "column": "Wariant", "cleanup": {"trim": True}},
+            "building_element.layer_name.value": {"table": "Systemy", "column": "Warstwa", "cleanup": {"trim": True}},
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = convert_building_elements_from_tables("systems.json", b"{}", tables, profile, model, None, Path(tmp))
+            payload = json.loads((Path(tmp) / result["job_id"] / "building_elements.json").read_text(encoding="utf-8"))
+
+        attrs = payload["buildingElements"][0]["dataVersions"][0]["productAttributes"]
+        variant_attr = next(attr for attr in attrs if attr["AttributeId"] == 284)
+        layer_attr = next(attr for attr in attrs if attr["AttributeId"] == 287)
+
+        self.assertTrue(variant_attr["hash"])
+        self.assertEqual(layer_attr["parentHash"], variant_attr["hash"])
 
     def test_systems_endpoint_is_removed_from_app(self):
         paths = {route.path for route in app.routes}
