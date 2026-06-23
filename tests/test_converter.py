@@ -142,7 +142,7 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("modelBuilderRows", html)
         self.assertIn("modelBuilderMappingProfile", html)
         self.assertIn("Dodaj obiekt z modelu", html)
-        self.assertIn("modelBuilderEditorInline", html)
+        self.assertNotIn("modelBuilderEditorInline", html)
         self.assertIn("data-model-builder-input", html)
         self.assertIn("data-model-builder-level-id", html)
         self.assertIn("data-model-builder-parent-id", html)

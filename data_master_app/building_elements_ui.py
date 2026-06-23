@@ -322,7 +322,6 @@ def render_building_elements_home() -> str:
           <div data-i18n="modelBuilder.help">Najpierw wczytaj model elementów budowlanych. Edytor ręczny musi powstać z hierarchii modelu, więc nie używa pliku importowanego ani stałych pól.</div>
           <button type="button" class="secondary" onclick="loadElementModelHierarchy()" data-i18n="modelBuilder.load">Wczytaj / odśwież model</button>
           <div id="modelBuilderStatus" class="status"></div>
-          <div id="modelBuilderEditorInline"></div>
         </div>
         <div id="elementStatus" class="status"></div>
       </div>
@@ -673,7 +672,6 @@ def render_building_elements_home() -> str:
           ? ""
           : (lastElementAnalysis?.model ? (currentLang === "pl" ? "Model jest wczytany. Możesz dodawać obiekty z pól modelu." : "Model loaded. You can add objects from model fields.") : (currentLang === "pl" ? "Wczytaj model elementów, aby rozpocząć budowanie systemów." : "Load the element model to start building systems."));
       }
-      renderModelBuilderEditorInline();
       if (lastElementAnalysis?.model) renderElementAnalysis(lastElementAnalysis);
       saveElementWorkspaceState();
     }
@@ -1198,13 +1196,6 @@ def render_building_elements_home() -> str:
         <div id="modelBuilderRows">${renderModelBuilderRows(model)}</div>
       `;
     }
-    function renderModelBuilderEditorInline() {
-      const holder = $("modelBuilderEditorInline");
-      if (!holder) return;
-      holder.innerHTML = elementWorkflowMode === "modelBuilder" && lastElementAnalysis?.model
-        ? renderModelBuilderEditor(lastElementAnalysis.model)
-        : "";
-    }
     function addModelBuilderRow() {
       const row = {};
       for (const input of document.querySelectorAll("[data-model-builder-level-id]")) {
@@ -1584,10 +1575,13 @@ def render_building_elements_home() -> str:
       const rows = tables.reduce((sum, table) => sum + (table.rows || 0), 0);
       const reference = payload.product_reference || {};
       const tableItems = tables.map((table) => `<li>${escapeHtml(table.name)}: ${table.rows || 0} wierszy, ${(table.columns || []).length} kolumn</li>`).join("");
-      const mappingEditor = renderElementMappingEditor(payload);
+      const mainTitle = elementWorkflowMode === "modelBuilder" ? "Tworzenie elementów budowlanych" : "Analiza elementów budowlanych";
+      const mainEditor = elementWorkflowMode === "modelBuilder"
+        ? renderModelBuilderEditor(payload.model)
+        : renderElementMappingEditor(payload);
       $("elementSummary").className = "panel";
       $("elementSummary").innerHTML = `
-        <h3>Analiza elementów budowlanych</h3>
+        <h3>${escapeHtml(mainTitle)}</h3>
         <div class="summary-grid">
           <div class="summary-card"><strong>${tables.length}</strong><span>tabele</span></div>
           <div class="summary-card"><strong>${rows}</strong><span>wiersze</span></div>
@@ -1596,11 +1590,12 @@ def render_building_elements_home() -> str:
           <div class="summary-card"><strong>${reference.products_count || 0}</strong><span>produkty referencyjne</span></div>
         </div>
         <p>${escapeHtml(reference.message || "")}</p>
-        <h3>Wczytane tabele</h3>
-        <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
-        ${mappingEditor}
+        ${elementWorkflowMode === "modelBuilder" ? "" : `
+          <h3>Wczytane tabele</h3>
+          <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
+        `}
+        ${mainEditor}
       `;
-      renderModelBuilderEditorInline();
       renderElementRootModelSelect();
       syncElementMappingState();
       saveElementWorkspaceState();
