@@ -61,6 +61,8 @@ def preview_building_elements(
                 "variant_hash": reference.get("variant_hash") if reference else "",
                 "variant_label": reference.get("variant_label") if reference else "",
                 "variant_row_i": reference.get("variant_row_i") if reference else None,
+                "variant_scope": product_variant_scope(reference),
+                "variant_scope_label": product_variant_scope_label(reference),
                 "identity_source": reference.get("source") if reference else product_identity_source(product_value, product_index, match),
             }
             layer["products"].append(product_entry)
@@ -218,6 +220,21 @@ def resolve_product_reference(value: Any, product_index: ProductReferenceIndex |
 def variant_label(variant: dict[str, Any]) -> str:
     aliases = variant.get("aliases") or []
     return str(aliases[0]) if aliases else ""
+
+
+def product_variant_scope(reference: dict[str, Any] | None) -> str:
+    if not reference:
+        return "unresolved"
+    return "specific_variant" if reference.get("variant_hash") else "all_variants"
+
+
+def product_variant_scope_label(reference: dict[str, Any] | None) -> str:
+    scope = product_variant_scope(reference)
+    if scope == "specific_variant":
+        return "tylko wskazany wariant"
+    if scope == "all_variants":
+        return "wszystkie warianty produktu"
+    return "brak dopasowania"
 
 
 def resolve_product(value: Any, product_index: ProductReferenceIndex | None) -> dict[str, Any] | None:

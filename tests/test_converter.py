@@ -153,6 +153,8 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("variant-visual-card", html)
         self.assertIn("layer-visual-card", html)
         self.assertIn("product-visual-chip", html)
+        self.assertIn("wszystkie warianty produktu", html)
+        self.assertIn("tylko wskazany wariant", html)
         self.assertIn('class="live-preview-table-wrap" hidden', html)
         self.assertIn('id="busyOverlay"', html)
         self.assertIn("busy-spinner", html)

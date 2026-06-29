@@ -1298,8 +1298,11 @@ def render_building_elements_home() -> str:
         for (const layer of variant.layers || []) {
           const productCards = [];
           for (const product of layer.products || []) {
+            const scopeLabel = product.variant_scope_label || (product.resolved
+              ? (product.variant_hash ? "tylko wskazany wariant" : "wszystkie warianty produktu")
+              : "brak dopasowania");
             const status = product.resolved
-              ? (product.variant_hash ? "wariant produktu" : "produkt")
+              ? (product.variant_hash ? "wariant produktu" : "produkt z wariantami")
               : "nie rozpoznano";
             const recognized = product.resolved
               ? `${product.variant_hash ? "Wariant" : "Produkt"}: ${product.product_name || product.product_id || ""}${product.variant_label ? ` / ${product.variant_label}` : ""}`
@@ -1308,6 +1311,7 @@ def render_building_elements_home() -> str:
               <div class="product-visual-chip ${product.resolved ? "is-ok" : "is-warn"}">
                 <strong>${escapeHtml(product.raw || "")}</strong>
                 <span>${escapeHtml(recognized)}</span>
+                <span>Zakres: ${escapeHtml(scopeLabel)}</span>
                 <span>Status: ${escapeHtml(status)}${product.identity_source ? ` / dopasowanie: ${escapeHtml(product.identity_source)}` : ""}</span>
               </div>
             `);
@@ -1369,8 +1373,11 @@ def render_building_elements_home() -> str:
         for (const variant of system.variants || []) {
           for (const layer of variant.layers || []) {
             for (const product of layer.products || []) {
+              const scopeLabel = product.variant_scope_label || (product.resolved
+                ? (product.variant_hash ? "tylko wskazany wariant" : "wszystkie warianty produktu")
+                : "brak dopasowania");
               const status = product.resolved
-                ? (product.variant_hash ? "wariant produktu" : "produkt")
+                ? (product.variant_hash ? "wariant produktu" : "produkt z wariantami")
                 : "nie rozpoznano";
               const recognized = product.resolved
                 ? `${product.variant_hash ? "Wariant" : "Produkt"}: ${product.product_name || product.product_id || ""}${product.variant_label ? ` / ${product.variant_label}` : ""}`
@@ -1382,7 +1389,7 @@ def render_building_elements_home() -> str:
                   <td>${escapeHtml(product.raw || "")}</td>
                   <td>${escapeHtml(recognized)}</td>
                   <td class="${product.resolved ? "status-ok" : "status-warn"}">${escapeHtml(status)}</td>
-                  <td>${escapeHtml(product.identity_source || "")}</td>
+                  <td>${escapeHtml(scopeLabel)}${product.identity_source ? ` / ${escapeHtml(product.identity_source)}` : ""}</td>
                 </tr>
               `);
             }
@@ -1747,6 +1754,7 @@ def render_building_elements_home() -> str:
           <div class="notice">
             To pole identyfikuje produkt w warstwie. Najlepiej mapować stabilny kod lub ID produktu; nazwa jest dopasowaniem awaryjnym.
             Jeśli klient wpisuje kilka produktów w jednej komórce, rozdziel je przecinkiem, średnikiem, pionową kreską albo nową linią.
+            Nazwa produktu oznacza wszystkie jego warianty; nazwa albo kod wariantu oznacza tylko wskazany wariant.
             Aktualny identyfikator z modelu produktu: ${escapeHtml(selectedIdentityText)}.
           </div>
         ` : "";
