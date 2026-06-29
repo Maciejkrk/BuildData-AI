@@ -1710,7 +1710,7 @@ def render_building_elements_home() -> str:
       function nodeUnlocked(node) {
         if (node.type !== "relation") return true;
         const config = levelConfig(node.key);
-        return Boolean(config.table && config.parent_id_column);
+        return Boolean(config.table);
       }
       function elementSourceValues(tableName, columnName) {
         if (!tableName || !columnName) return [];
@@ -1805,13 +1805,12 @@ def render_building_elements_home() -> str:
         const selectedTable = config.table || "";
         const columns = columnsForElementTable(selectedTable);
         const unlocked = nodeUnlocked(node);
-        const disabledAttr = unlocked ? "" : " disabled";
         const columnOptionsForLevel = (selected) => [
           `<option value="">-- wybierz kolumnę --</option>`,
           ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
         ].join("");
         const parentControls = node.type === "relation" ? `
-          <label>ID parenta
+          <label>ID parenta poziomu nadrzednego (opcjonalnie)
             <select data-element-level="${escapeHtml(node.key)}" data-level-key="parent_id_column" onchange="refreshElementLevelState('${escapeHtml(node.key)}')">
               ${columnOptionsForLevel(config.parent_id_column || "")}
             </select>
@@ -1819,14 +1818,11 @@ def render_building_elements_home() -> str:
         ` : "";
         return `
           <div class="model-level-config">
-            ${unlocked ? "" : `<div class="notice">Dla tego poziomu wybierz arkusz / tabelę oraz ID parenta. Dopiero wtedy można edytować pola tego poziomu.</div>`}
+            ${unlocked ? "" : `<div class="notice">Dla tego poziomu wybierz arkusz / tabelę. ID parenta jest opcjonalne i ma sens tylko wtedy, gdy plik klienta rozdziela poziomy hierarchii na powiązane rekordy.</div>`}
             <label>Arkusz / tabela dla tego levela
               <select data-element-level="${escapeHtml(node.key)}" data-level-key="table" onchange="refreshElementLevelState('${escapeHtml(node.key)}')">
                 ${tableOptions(selectedTable)}
               </select>
-            </label>
-            <label>Kolumna ID tego levela
-              <select data-element-level="${escapeHtml(node.key)}" data-level-key="id_column" onchange="syncElementMappingState()"${disabledAttr}>${columnOptionsForLevel(config.id_column || "")}</select>
             </label>
             ${parentControls}
           </div>

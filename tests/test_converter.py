@@ -176,8 +176,8 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("data-model-builder-parent-id", html)
         self.assertIn("__level_id__", html)
         self.assertIn("__parent_id__", html)
-        self.assertIn("ID parenta", html)
-        self.assertIn("Kolumna ID tego levela", html)
+        self.assertIn("ID parenta poziomu nadrzednego (opcjonalnie)", html)
+        self.assertNotIn("Kolumna ID tego levela", html)
         self.assertNotIn("Level name z mapowania", html)
 
     def test_building_preview_splits_comma_separated_layer_products(self):

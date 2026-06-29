@@ -105,7 +105,7 @@ def test_building_preview_reads_profile_table_column_and_cleanup() -> None:
     assert preview["systems"][0]["variants"][0]["layers"][0]["products"][0]["raw"] == "SKU-1"
 
 
-def test_building_preview_from_tables_stops_after_preview_window() -> None:
+def test_building_preview_from_tables_keeps_exact_system_count() -> None:
     tables = [
         SourceTable(
             "Systemy",
@@ -125,8 +125,8 @@ def test_building_preview_from_tables_stops_after_preview_window() -> None:
 
     preview = preview_building_elements_from_tables(tables, profile, None, preview_offset=0, preview_limit=1)
 
-    assert preview["quality"]["systems"] == 2
-    assert preview["quality"]["systems_count_is_exact"] is False
+    assert preview["quality"]["systems"] == 3
+    assert preview["quality"]["systems_count_is_exact"] is True
     assert preview["quality"]["has_next"] is True
     assert [system["name"] for system in preview["systems"]] == ["S1"]
 

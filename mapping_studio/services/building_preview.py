@@ -131,7 +131,6 @@ def preview_building_elements_from_tables(
             product_index,
             preview_offset=preview_offset,
             preview_limit=preview_limit,
-            stop_after_preview_window=True,
         )
     if is_legacy_mapping(mapping_profile):
         return preview_building_elements(
@@ -140,7 +139,6 @@ def preview_building_elements_from_tables(
             product_index,
             preview_offset=preview_offset,
             preview_limit=preview_limit,
-            stop_after_preview_window=True,
         )
 
     rows = iter_mapped_rows_from_profile(tables, mapping_profile)
@@ -150,7 +148,6 @@ def preview_building_elements_from_tables(
         product_index,
         preview_offset=preview_offset,
         preview_limit=preview_limit,
-        stop_after_preview_window=True,
     )
 
 
