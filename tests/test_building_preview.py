@@ -105,6 +105,32 @@ def test_building_preview_reads_profile_table_column_and_cleanup() -> None:
     assert preview["systems"][0]["variants"][0]["layers"][0]["products"][0]["raw"] == "SKU-1"
 
 
+def test_building_preview_from_tables_stops_after_preview_window() -> None:
+    tables = [
+        SourceTable(
+            "Systemy",
+            [
+                {"System": "S1", "Wariant": "A", "Warstwa": "L1", "Produkt": "P1"},
+                {"System": "S2", "Wariant": "A", "Warstwa": "L1", "Produkt": "P2"},
+                {"System": "S3", "Wariant": "A", "Warstwa": "L1", "Produkt": "P3"},
+            ],
+        )
+    ]
+    profile = {
+        "building_element.name.value": {"table": "Systemy", "column": "System"},
+        "building_element.variant_name.value": {"table": "Systemy", "column": "Wariant"},
+        "building_element.layer_name.value": {"table": "Systemy", "column": "Warstwa"},
+        "building_element.product.value": {"table": "Systemy", "column": "Produkt"},
+    }
+
+    preview = preview_building_elements_from_tables(tables, profile, None, preview_offset=0, preview_limit=1)
+
+    assert preview["quality"]["systems"] == 2
+    assert preview["quality"]["systems_count_is_exact"] is False
+    assert preview["quality"]["has_next"] is True
+    assert [system["name"] for system in preview["systems"]] == ["S1"]
+
+
 def test_building_elements_convert_writes_json_from_profile(tmp_path: Path) -> None:
     model = load_building_element_model(
         {

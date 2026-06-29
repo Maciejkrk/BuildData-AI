@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from data_master_app.mapping import apply_cleanup
@@ -18,16 +19,19 @@ BUILDING_ELEMENT_TYPE_ID = 1
 
 
 def preview_building_elements(
-    rows: list[dict[str, Any]],
+    rows: Iterable[dict[str, Any]],
     mapping: dict[str, str],
     product_index: ProductReferenceIndex | None,
     *,
     preview_offset: int = 0,
     preview_limit: int | None = None,
+    stop_after_preview_window: bool = False,
 ) -> dict[str, Any]:
     systems: dict[str, dict[str, Any]] = {}
     unresolved_products: list[dict[str, Any]] = []
     system_order: list[str] = []
+    system_indexes: dict[str, int] = {}
+    stopped_after_window = False
     preview_offset = max(preview_offset, 0)
     preview_limit = max(preview_limit, 1) if preview_limit is not None else None
     for source_index, row in enumerate(rows, start=1):
@@ -37,9 +41,13 @@ def preview_building_elements(
         layer_name = mapped.get("building_element.layer_name.value") or row.get("Nazwa warstwy") or row.get("Warstwa") or "Warstwa bez nazwy"
         product_key = first_product_value(mapped) or first_product_value(row)
         system_key = str(system_name)
-        if system_key not in system_order:
+        if system_key not in system_indexes:
+            system_indexes[system_key] = len(system_order)
             system_order.append(system_key)
-        system_index = system_order.index(system_key)
+        system_index = system_indexes[system_key]
+        if stop_after_preview_window and preview_limit is not None and system_index >= preview_offset + preview_limit:
+            stopped_after_window = True
+            break
         if system_index < preview_offset:
             continue
         if preview_limit is not None and system_index >= preview_offset + preview_limit:
@@ -76,6 +84,7 @@ def preview_building_elements(
             "preview_offset": preview_offset,
             "preview_limit": preview_limit,
             "preview_systems_count": len(systems),
+            "systems_count_is_exact": not stopped_after_window,
             "has_previous": preview_offset > 0,
             "has_next": preview_limit is not None and len(system_order) > preview_offset + len(systems),
             "unresolved_products": unresolved_products,
@@ -116,12 +125,33 @@ def preview_building_elements_from_tables(
     preview_limit: int | None = None,
 ) -> dict[str, Any]:
     if not mapping_profile:
-        return preview_building_elements(tables[0].rows if tables else [], {}, product_index, preview_offset=preview_offset, preview_limit=preview_limit)
+        return preview_building_elements(
+            tables[0].rows if tables else [],
+            {},
+            product_index,
+            preview_offset=preview_offset,
+            preview_limit=preview_limit,
+            stop_after_preview_window=True,
+        )
     if is_legacy_mapping(mapping_profile):
-        return preview_building_elements(tables[0].rows if tables else [], mapping_profile, product_index, preview_offset=preview_offset, preview_limit=preview_limit)
+        return preview_building_elements(
+            tables[0].rows if tables else [],
+            mapping_profile,
+            product_index,
+            preview_offset=preview_offset,
+            preview_limit=preview_limit,
+            stop_after_preview_window=True,
+        )
 
-    rows = mapped_rows_from_profile(tables, mapping_profile)
-    return preview_building_elements(rows, {}, product_index, preview_offset=preview_offset, preview_limit=preview_limit)
+    rows = iter_mapped_rows_from_profile(tables, mapping_profile)
+    return preview_building_elements(
+        rows,
+        {},
+        product_index,
+        preview_offset=preview_offset,
+        preview_limit=preview_limit,
+        stop_after_preview_window=True,
+    )
 
 
 def is_legacy_mapping(mapping_profile: dict[str, Any]) -> bool:
@@ -129,11 +159,14 @@ def is_legacy_mapping(mapping_profile: dict[str, Any]) -> bool:
 
 
 def mapped_rows_from_profile(tables: list[SourceTable], mapping_profile: dict[str, Any]) -> list[dict[str, Any]]:
+    return list(iter_mapped_rows_from_profile(tables, mapping_profile))
+
+
+def iter_mapped_rows_from_profile(tables: list[SourceTable], mapping_profile: dict[str, Any]) -> Iterator[dict[str, Any]]:
     tables_by_name = {table.name: table for table in tables}
     fallback_table = tables[0] if tables else SourceTable("data", [])
     row_count = max((len(table.rows) for table in tables), default=0)
     levels = mapping_profile.get("_levels") if isinstance(mapping_profile.get("_levels"), dict) else {}
-    result: list[dict[str, Any]] = []
     for index in range(row_count):
         mapped: dict[str, Any] = {}
         source_context: dict[str, Any] = {}
@@ -178,8 +211,7 @@ def mapped_rows_from_profile(tables: list[SourceTable], mapping_profile: dict[st
             mapped["_source_context"] = source_context
             if level_ids:
                 mapped["_level_ids"] = level_ids
-            result.append(mapped)
-    return result
+            yield mapped
 
 
 def apply_simple_mapping(row: dict[str, Any], mapping: dict[str, str]) -> dict[str, Any]:

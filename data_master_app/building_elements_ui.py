@@ -630,6 +630,8 @@ def render_building_elements_home() -> str:
     let elementPreviewIndex = 0;
     let elementPreviewTimer = null;
     let elementPreviewRequestId = 0;
+    let elementPreviewInFlight = false;
+    let elementPreviewPending = false;
     let busyOperationCount = 0;
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
     const ELEMENT_WORKSPACE_FILES_KEY = "building-elements-files";
@@ -1276,7 +1278,7 @@ def render_building_elements_home() -> str:
         clearBusy();
       }
     }
-    function scheduleElementLivePreview(delay = 350) {
+    function scheduleElementLivePreview(delay = 900) {
       if (elementPreviewTimer) clearTimeout(elementPreviewTimer);
       elementPreviewTimer = setTimeout(updateElementLivePreview, delay);
     }
@@ -1366,8 +1368,8 @@ def render_building_elements_home() -> str:
       const totalSystems = Number(quality.systems || systems.length || 0);
       elementPreviewIndex = currentOffset;
       const currentLabel = totalSystems
-        ? `Element ${currentOffset + 1} / ${totalSystems}`
-        : "Element 0 / 0";
+        ? (quality.systems_count_is_exact ? `Element ${currentOffset + 1} / ${totalSystems}` : `Element ${currentOffset + 1}`)
+        : "Element 0";
       const rows = [];
       if (system) {
         for (const variant of system.variants || []) {
@@ -1415,7 +1417,7 @@ def render_building_elements_home() -> str:
             <button type="button" class="secondary" onclick="setElementPreviewIndex(-1)"${quality.has_previous ? "" : " disabled"}>Poprzedni element</button>
             <span class="pill">${escapeHtml(currentLabel)}</span>
             <button type="button" class="secondary" onclick="setElementPreviewIndex(1)"${quality.has_next ? "" : " disabled"}>Następny element</button>
-            <span class="pill">systemy: ${escapeHtml(quality.systems || 0)}</span>
+            <span class="pill">${quality.systems_count_is_exact ? "systemy" : "systemy sprawdzone"}: ${escapeHtml(quality.systems || 0)}</span>
             <span class="pill">nierozpoznane produkty: ${escapeHtml(quality.unresolved_products_count || 0)}</span>
             <span class="pill">referencja produktów: ${quality.product_reference_loaded ? "wczytana" : "brak"}</span>
           </div>
@@ -1432,6 +1434,12 @@ def render_building_elements_home() -> str:
     async function updateElementLivePreview() {
       const holder = $("elementLivePreview");
       if (!holder || !lastElementAnalysis) return;
+      if (elementPreviewInFlight) {
+        elementPreviewPending = true;
+        return;
+      }
+      elementPreviewInFlight = true;
+      elementPreviewPending = false;
       const requestId = ++elementPreviewRequestId;
       try {
         setBusy(currentLang === "pl" ? "Odświeżam podgląd mapowania..." : "Refreshing mapping preview...");
@@ -1459,7 +1467,12 @@ def render_building_elements_home() -> str:
         const currentHolder = $("elementLivePreview");
         if (currentHolder) currentHolder.outerHTML = renderElementLivePreview(null, error?.message || "Nie udało się odświeżyć podglądu.");
       } finally {
+        elementPreviewInFlight = false;
         clearBusy();
+        if (elementPreviewPending) {
+          elementPreviewPending = false;
+          scheduleElementLivePreview(150);
+        }
       }
     }
     function escapeHtml(value) {
