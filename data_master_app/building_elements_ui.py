@@ -48,6 +48,36 @@ def render_building_elements_home() -> str:
       background:var(--accent); color:#fff; font-weight:700; cursor:pointer;
     }
     button.secondary { background:var(--secondary); }
+    body.is-busy button { pointer-events:none; opacity:.62; }
+    .busy-overlay {
+      position:fixed;
+      right:18px;
+      bottom:18px;
+      z-index:50;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      max-width:min(420px, calc(100vw - 36px));
+      padding:14px 16px;
+      border:1px solid #99f6e4;
+      border-radius:8px;
+      background:#f0fdfa;
+      color:#115e59;
+      box-shadow:0 16px 38px rgba(15, 23, 42, .18);
+      font-weight:700;
+    }
+    .busy-overlay[hidden] { display:none; }
+    .busy-spinner {
+      width:22px;
+      height:22px;
+      border:3px solid #99f6e4;
+      border-top-color:var(--accent);
+      border-radius:50%;
+      animation:busy-spin .85s linear infinite;
+      flex:0 0 auto;
+    }
+    .busy-overlay span { display:block; font-weight:600; line-height:1.35; }
+    @keyframes busy-spin { to { transform:rotate(360deg); } }
     pre {
       min-height:220px; max-height:520px; overflow:auto; padding:12px; border-radius:4px;
       background:#0f172a; color:#e5e7eb; white-space:pre-wrap;
@@ -465,6 +495,10 @@ def render_building_elements_home() -> str:
       <div id="elementSummary" class="notice" data-i18n="elements.emptyResult">Wczytaj model elementów i plik importowany, a następnie kliknij analizę. Referencyjne products.json jest opcjonalne na tym etapie.</div>
     </section>
   </main>
+  <div id="busyOverlay" class="busy-overlay" hidden>
+    <div class="busy-spinner" aria-hidden="true"></div>
+    <span id="busyMessage">Przetwarzam dane...</span>
+  </div>
   <script>
     const I18N = {
       pl: {
@@ -596,11 +630,27 @@ def render_building_elements_home() -> str:
     let elementPreviewIndex = 0;
     let elementPreviewTimer = null;
     let elementPreviewRequestId = 0;
+    let busyOperationCount = 0;
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
     const ELEMENT_WORKSPACE_FILES_KEY = "building-elements-files";
     const WORKSPACE_NAVIGATION_KEY = "buildDataAiPreserveWorkspaceNavigation";
     const $ = (id) => document.getElementById(id);
     function t(key) { return I18N[currentLang]?.[key] || I18N.pl[key] || key; }
+    function setBusy(message) {
+      busyOperationCount += 1;
+      document.body.classList.add("is-busy");
+      const overlay = $("busyOverlay");
+      const messageTarget = $("busyMessage");
+      if (messageTarget) messageTarget.textContent = message || (currentLang === "pl" ? "Przetwarzam dane..." : "Processing data...");
+      if (overlay) overlay.hidden = false;
+    }
+    function clearBusy() {
+      busyOperationCount = Math.max(0, busyOperationCount - 1);
+      if (busyOperationCount > 0) return;
+      document.body.classList.remove("is-busy");
+      const overlay = $("busyOverlay");
+      if (overlay) overlay.hidden = true;
+    }
     function applyLanguage() {
       document.documentElement.lang = currentLang;
       $("languageSelect").value = currentLang;
@@ -905,6 +955,7 @@ def render_building_elements_home() -> str:
     }
     async function loadElementProductModel() {
       try {
+        setBusy(currentLang === "pl" ? "Odczytuję model produktu..." : "Reading product model...");
         $("elementProductIdentityStatus").textContent = currentLang === "pl" ? "Odczytuję model produktu." : "Reading product model.";
         if (!selectedElementProductModelFiles().length && !loadedElementProjectFiles.productModelFiles.length) {
           await restoreElementWorkspaceFilesState();
@@ -928,6 +979,8 @@ def render_building_elements_home() -> str:
       } catch (error) {
         $("elementProductIdentityStatus").textContent = error.message;
         saveElementWorkspaceState();
+      } finally {
+        clearBusy();
       }
     }
     function addRequiredFile(form, name, input, label) {
@@ -1112,6 +1165,7 @@ def render_building_elements_home() -> str:
     async function loadElementModelHierarchy() {
       const form = new FormData();
       try {
+        setBusy(currentLang === "pl" ? "Wczytuję hierarchię modelu..." : "Loading model hierarchy...");
         $("elementStatus").textContent = currentLang === "pl"
           ? "Proszę czekać, trwa odczyt hierarchii modelu."
           : "Please wait, model hierarchy is loading.";
@@ -1145,11 +1199,14 @@ def render_building_elements_home() -> str:
       } catch (error) {
         $("elementStatus").textContent = error.message;
         saveElementWorkspaceState();
+      } finally {
+        clearBusy();
       }
     }
     async function analyzeElements() {
       const form = new FormData();
       try {
+        setBusy(currentLang === "pl" ? "Analizuję duży plik klienta..." : "Analyzing customer file...");
         $("elementStatus").textContent = currentLang === "pl"
           ? "Proszę czekać, trwa analiza pliku klienta."
           : "Please wait, customer file analysis is running.";
@@ -1176,11 +1233,14 @@ def render_building_elements_home() -> str:
       } catch (error) {
         $("elementStatus").textContent = error.message;
         saveElementWorkspaceState();
+      } finally {
+        clearBusy();
       }
     }
     async function generateBuildingElements() {
       const form = new FormData();
       try {
+        setBusy(currentLang === "pl" ? "Generuję building_elements.json..." : "Generating building_elements.json...");
         syncElementMappingState(false);
         $("elementStatus").textContent = currentLang === "pl"
           ? "Generuję building_elements.json."
@@ -1212,6 +1272,8 @@ def render_building_elements_home() -> str:
       } catch (error) {
         $("elementStatus").textContent = error.message;
         saveElementWorkspaceState();
+      } finally {
+        clearBusy();
       }
     }
     function scheduleElementLivePreview(delay = 350) {
@@ -1363,6 +1425,7 @@ def render_building_elements_home() -> str:
       if (!holder || !lastElementAnalysis) return;
       const requestId = ++elementPreviewRequestId;
       try {
+        setBusy(currentLang === "pl" ? "Odświeżam podgląd mapowania..." : "Refreshing mapping preview...");
         syncElementMappingState(false);
         const builderMode = elementWorkflowMode === "modelBuilder";
         const sourceFile = builderMode ? modelBuilderSourceFile() : ($("elementSourceFile").files[0] || loadedElementProjectFiles.sourceFile);
@@ -1384,6 +1447,8 @@ def render_building_elements_home() -> str:
         if (requestId !== elementPreviewRequestId) return;
         const currentHolder = $("elementLivePreview");
         if (currentHolder) currentHolder.outerHTML = renderElementLivePreview(null, error?.message || "Nie udało się odświeżyć podglądu.");
+      } finally {
+        clearBusy();
       }
     }
     function escapeHtml(value) {
