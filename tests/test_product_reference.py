@@ -58,3 +58,45 @@ def test_product_reference_indexes_current_export_and_type_series_aliases() -> N
     assert index.by_variant["11620533"]["product"]["Id"] == 900001
     assert index.by_variant["ar00233378"]["product"]["Id"] == 900001
 
+
+def test_product_reference_duplicate_report_accepts_lowercase_id() -> None:
+    payload = b"""[
+      {
+        "id": 1,
+        "productAttributes": [
+          {"AttributeId": 225, "varcharValue": "FAST AQUA"}
+        ]
+      },
+      {
+        "id": 2,
+        "productAttributes": [
+          {"AttributeId": 225, "varcharValue": "FAST AQUA"}
+        ]
+      }
+    ]"""
+
+    index = build_product_reference_index(payload)
+
+    assert index.duplicates["name:fastaqua"] == ["1", "2"]
+
+
+def test_product_reference_variant_duplicate_report_accepts_lowercase_id() -> None:
+    payload = b"""[
+      {
+        "id": 1,
+        "productAttributes": [
+          {"ParentAttributeId": 135, "AttributeId": 319, "RowI": 0, "varcharValue": "VAR-1", "hash": "variant-a"}
+        ]
+      },
+      {
+        "id": 2,
+        "productAttributes": [
+          {"ParentAttributeId": 135, "AttributeId": 319, "RowI": 0, "varcharValue": "VAR-1", "hash": "variant-b"}
+        ]
+      }
+    ]"""
+
+    index = build_product_reference_index(payload)
+
+    assert index.duplicates["variant:var1"] == ["1:variant-a", "2:variant-b"]
+

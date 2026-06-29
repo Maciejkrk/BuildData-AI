@@ -119,10 +119,10 @@ def add_unique(
         return
     duplicate_key = f"{namespace}:{key}"
     if key in target:
-        if str(target[key].get("Id") or "") == str(product.get("Id") or ""):
+        if product_id_text(target[key]) == product_id_text(product):
             return
-        duplicates.setdefault(duplicate_key, [str(target[key].get("Id") or "")])
-        duplicates[duplicate_key].append(str(product.get("Id") or ""))
+        duplicates.setdefault(duplicate_key, [product_id_text(target[key])])
+        duplicates[duplicate_key].append(product_id_text(product))
         return
     target[key] = product
 
@@ -137,16 +137,20 @@ def add_unique_variant(
     if not key:
         return
     product = variant.get("product") or {}
-    variant_id = f"{product.get('Id') or ''}:{variant.get('hash') or ''}"
+    variant_id = f"{product_id_text(product)}:{variant.get('hash') or ''}"
     duplicate_key = f"{namespace}:{key}"
     if key in target:
         existing = target[key]
         existing_product = existing.get("product") or {}
-        existing_id = f"{existing_product.get('Id') or ''}:{existing.get('hash') or ''}"
+        existing_id = f"{product_id_text(existing_product)}:{existing.get('hash') or ''}"
         if existing_id == variant_id:
             return
         duplicates.setdefault(duplicate_key, [existing_id])
         duplicates[duplicate_key].append(variant_id)
         return
     target[key] = variant
+
+
+def product_id_text(product: dict[str, Any]) -> str:
+    return str(product.get("Id") or product.get("id") or "")
 

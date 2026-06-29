@@ -39,6 +39,22 @@ class MappingModelTests(unittest.TestCase):
 
         self.assertEqual(result, 0.035)
 
+    def test_value_transforms_remove_regex_and_ignore_empty_search(self):
+        result = apply_text_transforms(
+            "Lambda: 0,035 W/mK (deklarowana)",
+            [
+                ValueTransform(kind=ValueTransformKind.REPLACE_TEXT, search="", replace_with="X"),
+                ValueTransform(kind=ValueTransformKind.REMOVE_TEXT, search=""),
+                ValueTransform(kind=ValueTransformKind.REMOVE_REGEX, search=r"\s*\([^)]*\)"),
+                ValueTransform(kind=ValueTransformKind.REMOVE_TEXT, search="Lambda:"),
+                ValueTransform(kind=ValueTransformKind.REMOVE_TEXT, search="W/mK"),
+                ValueTransform(kind=ValueTransformKind.DECIMAL_COMMA_TO_DOT),
+                ValueTransform(kind=ValueTransformKind.PARSE_NUMBER),
+            ],
+        )
+
+        self.assertEqual(result, 0.035)
+
     def test_typical_data_rule_can_fill_missing_type_series_field(self):
         profile = TypicalDataProfile(
             name="Dane typowe izolacji",
