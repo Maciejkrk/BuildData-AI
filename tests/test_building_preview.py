@@ -172,6 +172,48 @@ def test_building_preview_joins_parent_element_with_many_layer_rows() -> None:
     assert preview["quality"]["systems"] == 2
 
 
+def test_building_preview_builds_element_variants_layers_from_model_levels() -> None:
+    tables = [
+        SourceTable("Elementy", [{"Kod": "E1", "Nazwa": "System fasadowy", "Klasa": "A"}]),
+        SourceTable(
+            "Warianty",
+            [
+                {"Element": "E1", "WariantId": "V1", "Nazwa": "Mineralny"},
+                {"Element": "E1", "WariantId": "V2", "Nazwa": "EPS"},
+            ],
+        ),
+        SourceTable(
+            "Warstwy",
+            [
+                {"Wariant": "V1", "Pozycja": 1, "Nazwa": "Klej", "Produkt": "P1"},
+                {"Wariant": "V1", "Pozycja": 2, "Nazwa": "Wełna", "Produkt": "P2"},
+                {"Wariant": "V2", "Pozycja": 1, "Nazwa": "EPS", "Produkt": "P3"},
+            ],
+        ),
+    ]
+    profile = {
+        "_levels": {
+            "model.1": {"table": "Elementy"},
+            "model.1.attribute.variants": {"table": "Warianty", "parent_id_column": "Element"},
+            "model.2.attribute.layers": {"table": "Warstwy", "parent_id_column": "Wariant"},
+        },
+        "building_element.nazwa.value": {"level": "model.1", "table": "Elementy", "column": "Nazwa", "field_label": "Nazwa", "field_kind": "free_text"},
+        "building_element.klasa.value": {"level": "model.1", "table": "Elementy", "column": "Klasa", "field_label": "Klasa", "field_kind": "free_text"},
+        "building_element.wariant_nazwa.value": {"level": "model.1.attribute.variants", "table": "Warianty", "column": "Nazwa", "field_label": "Nazwa", "field_kind": "free_text"},
+        "building_element.warstwa_nazwa.value": {"level": "model.2.attribute.layers", "table": "Warstwy", "column": "Nazwa", "field_label": "Nazwa", "field_kind": "free_text"},
+        "building_element.produkty_w_warstwie.value": {"level": "model.2.attribute.layers", "table": "Warstwy", "column": "Produkt", "field_label": "Produkty w warstwie", "field_kind": "product_ref"},
+    }
+
+    preview = preview_building_elements_from_tables(tables, profile, None)
+
+    system = preview["systems"][0]
+    assert system["name"] == "System fasadowy"
+    assert [variant["name"] for variant in system["variants"]] == ["Mineralny", "EPS"]
+    assert [layer["name"] for layer in system["variants"][0]["layers"]] == ["Klej", "Wełna"]
+    assert [layer["products"][0]["raw"] for layer in system["variants"][0]["layers"]] == ["P1", "P2"]
+    assert [layer["name"] for layer in system["variants"][1]["layers"]] == ["EPS"]
+
+
 def test_building_elements_convert_writes_json_from_profile(tmp_path: Path) -> None:
     model = load_building_element_model(
         {

@@ -26,6 +26,7 @@ def preview_building_elements(
     preview_offset: int = 0,
     preview_limit: int | None = None,
     stop_after_preview_window: bool = False,
+    preview_roles: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     systems: dict[str, dict[str, Any]] = {}
     unresolved_products: list[dict[str, Any]] = []
@@ -34,12 +35,13 @@ def preview_building_elements(
     stopped_after_window = False
     preview_offset = max(preview_offset, 0)
     preview_limit = max(preview_limit, 1) if preview_limit is not None else None
+    preview_roles = preview_roles or preview_roles_from_mapping_profile(mapping if isinstance(mapping, dict) else {})
     for source_index, row in enumerate(rows, start=1):
         mapped = apply_simple_mapping(row, mapping)
-        system_name = first_system_value(mapped) or first_system_value(row) or "System bez nazwy"
-        variant_name = first_variant_value(mapped) or first_variant_value(row) or "Wariant domyślny"
-        layer_name = first_layer_value(mapped) or first_layer_value(row) or "Warstwa bez nazwy"
-        product_key = first_product_value(mapped) or first_product_value(row)
+        system_name = role_value(mapped, preview_roles, "system_name") or first_system_value(mapped) or first_system_value(row) or "System bez nazwy"
+        variant_name = role_value(mapped, preview_roles, "variant_name") or first_variant_value(mapped) or first_variant_value(row) or "Wariant domyślny"
+        layer_name = role_value(mapped, preview_roles, "layer_name") or first_layer_value(mapped) or first_layer_value(row) or "Warstwa bez nazwy"
+        product_key = role_value(mapped, preview_roles, "product") or first_product_value(mapped) or first_product_value(row)
         system_key = str(system_name)
         if system_key not in system_indexes:
             system_indexes[system_key] = len(system_order)
@@ -279,6 +281,7 @@ def preview_building_elements_from_tables(
         product_index,
         preview_offset=preview_offset,
         preview_limit=preview_limit,
+        preview_roles=preview_roles_from_mapping_profile(mapping_profile),
     )
 
 
@@ -358,6 +361,85 @@ def should_join_levels_by_parent(tables_by_name: dict[str, SourceTable], levels:
         and str(config.get("table") or "") in tables_by_name
         for config in levels.values()
     )
+
+
+def preview_roles_from_mapping_profile(mapping_profile: dict[str, Any]) -> dict[str, str]:
+    explicit = mapping_profile.get("_preview_roles")
+    if isinstance(explicit, dict):
+        return {str(key): str(value) for key, value in explicit.items() if value}
+    rules = [
+        (str(target), rule)
+        for target, rule in mapping_profile.items()
+        if not str(target).startswith("_") and isinstance(rule, dict)
+    ]
+    levels = mapping_profile.get("_levels") if isinstance(mapping_profile.get("_levels"), dict) else {}
+    ordered_level_keys = [str(key) for key in levels.keys()]
+    root_level = next((key for key in ordered_level_keys if not isinstance(levels.get(key), dict) or not levels[key].get("parent_id_column")), ordered_level_keys[0] if ordered_level_keys else "")
+    child_levels = [key for key in ordered_level_keys if key != root_level]
+    product_level = next((str(rule.get("level") or "") for target, rule in rules if is_product_rule(target, rule)), "")
+    layer_level = product_level or next((level for level in child_levels if select_role_field(rules, level, ("nazwa", "name", "warstwa", "layer"), prefer_non_product=True)), "")
+    variant_level = ""
+    if layer_level and layer_level in ordered_level_keys:
+        layer_index = ordered_level_keys.index(layer_level)
+        if layer_index > 0:
+            variant_level = ordered_level_keys[layer_index - 1]
+    if variant_level == root_level:
+        variant_level = root_level if select_role_field(rules, root_level, ("wariant", "variant"), prefer_non_product=True) else ""
+    elif not variant_level and child_levels:
+        variant_level = child_levels[0]
+    roles: dict[str, str] = {}
+    roles["system_name"] = select_role_field(rules, root_level, ("nazwa", "name", "system", "element"), prefer_non_product=True)
+    if variant_level:
+        roles["variant_name"] = select_role_field(rules, variant_level, ("nazwa", "name", "wariant", "variant"), prefer_non_product=True)
+    if layer_level:
+        roles["layer_name"] = select_role_field(rules, layer_level, ("nazwa", "name", "warstwa", "layer"), prefer_non_product=True)
+    if not roles.get("variant_name"):
+        roles["variant_name"] = select_any_role_field(rules, ("wariant", "variant"))
+    if not roles.get("layer_name"):
+        roles["layer_name"] = select_any_role_field(rules, ("warstwa", "layer"))
+    roles["product"] = select_role_field(rules, layer_level, ("produkt", "product"), product_only=True) or select_role_field(rules, "", ("produkt", "product"), product_only=True) or select_any_role_field(rules, ("produkt", "product"))
+    return {key: value for key, value in roles.items() if value}
+
+
+def is_product_rule(target: str, rule: dict[str, Any]) -> bool:
+    return str(rule.get("field_kind") or "") == "product_ref" or field_rule_matches(target, rule, ("produkt", "product"))
+
+
+def select_role_field(
+    rules: list[tuple[str, dict[str, Any]]],
+    level_key: str,
+    markers: tuple[str, ...],
+    *,
+    prefer_non_product: bool = False,
+    product_only: bool = False,
+) -> str:
+    candidates = [(target, rule) for target, rule in rules if not level_key or str(rule.get("level") or "") == level_key]
+    if product_only:
+        product = next((target for target, rule in candidates if str(rule.get("field_kind") or "") == "product_ref"), "")
+        if product:
+            return product
+    for marker in markers:
+        marked = next((target for target, rule in candidates if field_rule_matches(target, rule, (marker,))), "")
+        if marked:
+            return marked
+    if prefer_non_product:
+        return next((target for target, rule in candidates if str(rule.get("field_kind") or "") != "product_ref"), "")
+    return candidates[0][0] if candidates else ""
+
+
+def select_any_role_field(rules: list[tuple[str, dict[str, Any]]], markers: tuple[str, ...]) -> str:
+    return next((target for target, rule in rules if field_rule_matches(target, rule, markers)), "")
+
+
+def field_rule_matches(target: str, rule: dict[str, Any], markers: tuple[str, ...]) -> bool:
+    haystack = field_lookup_key(" ".join([target, str(rule.get("field_label") or ""), str(rule.get("column") or "")]))
+    return any(marker in haystack for marker in markers)
+
+
+def role_value(row: dict[str, Any], roles: dict[str, str], role: str) -> Any:
+    key = roles.get(role)
+    value = row.get(key) if key else None
+    return value if value not in (None, "") else None
 
 
 def iter_joined_mapped_rows_from_profile(

@@ -1956,11 +1956,14 @@ def render_building_elements_home() -> str:
         const row = columnSelect.closest("[data-element-field-row]");
         const levelKey = row?.dataset.elementFieldLevel || "";
         const table = levels[levelKey]?.table || "";
+        const field = elementFieldByKey(target) || {};
         if (!target || !table || !columnSelect.value) continue;
         mapping[target] = {
           level: levelKey,
           table,
           column: columnSelect.value,
+          field_kind: field.kind || "",
+          field_label: field.label || target,
           cleanup: cleanupForTarget(target),
         };
       }
