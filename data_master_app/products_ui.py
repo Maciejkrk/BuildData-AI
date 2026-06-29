@@ -1318,6 +1318,33 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "rows.statsVariantRows": "Wiersze wariantu",
         "rows.statsMatchedVariants": "Warianty dopięte po Parent ID",
         "rows.statsOrphanVariants": "Warianty bez pasującego produktu",
+        "filters.openMenu": "Filtr importu produktów",
+        "filters.title": "Filtr importu produktów",
+        "filters.help": "Określ, które wiersze z pliku klienta mają zostać zaimportowane. Filtr działa przed generowaniem products.json.",
+        "filters.column": "Kolumna do sprawdzenia",
+        "filters.condition": "Warunek",
+        "filters.value": "Wartość",
+        "filters.notEmpty": "nie jest pusta",
+        "filters.empty": "jest pusta",
+        "filters.equals": "jest równa",
+        "filters.notEquals": "jest różna",
+        "filters.contains": "zawiera",
+        "filters.notContains": "nie zawiera",
+        "filters.oneOf": "jest jedną z wartości",
+        "filters.notOneOf": "nie jest jedną z wartości",
+        "filters.add": "Dodaj filtr",
+        "filters.remove": "Usuń filtr",
+        "filters.summaryEmpty": "Brak aktywnego filtra.",
+        "filters.summary": "Aktywne filtry",
+        "productType.title": "Typ produktu w bazie",
+        "productType.help": "Wskaż kolumnę z pliku klienta, która rozróżnia produkt firmowy i obcy. Generator wpisze wynik do pola prodctTypeId w products.json.",
+        "productType.column": "Kolumna/cecha z typem produktu",
+        "productType.ownValues": "Wartości oznaczające produkt firmowy",
+        "productType.otherValues": "Wartości oznaczające produkt obcy",
+        "productType.ownTypeId": "prodctTypeId dla firmowych",
+        "productType.otherTypeId": "prodctTypeId dla obcych",
+        "productType.defaultTypeId": "Domyślny prodctTypeId",
+        "productType.valueHelp": "Możesz wpisać kilka wartości po przecinku, średniku, kresce pionowej albo w nowych liniach.",
         "mapping.check": "Sprawdź aktualne mapowanie",
         "mapping.checkTitle": "Wynik aktualnego mapowania",
         "mapping.checkHelp": "To jest wynik dla próbki danych po zastosowaniu aktualnych reguł wierszy, mapowania kolumn i czyszczenia.",
@@ -1606,6 +1633,33 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "rows.statsVariantRows": "Variant rows",
         "rows.statsMatchedVariants": "Variants matched by Parent ID",
         "rows.statsOrphanVariants": "Variants without a matching product",
+        "filters.openMenu": "Product import filter",
+        "filters.title": "Product import filter",
+        "filters.help": "Define which rows from the customer file should be imported. The filter runs before products.json is generated.",
+        "filters.column": "Column to check",
+        "filters.condition": "Condition",
+        "filters.value": "Value",
+        "filters.notEmpty": "is not empty",
+        "filters.empty": "is empty",
+        "filters.equals": "equals",
+        "filters.notEquals": "does not equal",
+        "filters.contains": "contains",
+        "filters.notContains": "does not contain",
+        "filters.oneOf": "is one of",
+        "filters.notOneOf": "is not one of",
+        "filters.add": "Add filter",
+        "filters.remove": "Remove filter",
+        "filters.summaryEmpty": "No active filter.",
+        "filters.summary": "Active filters",
+        "productType.title": "Database product type",
+        "productType.help": "Select the customer-file column that distinguishes own/company products from other products. The generator writes the result to prodctTypeId in products.json.",
+        "productType.column": "Product type column/feature",
+        "productType.ownValues": "Values meaning own/company product",
+        "productType.otherValues": "Values meaning other product",
+        "productType.ownTypeId": "prodctTypeId for own products",
+        "productType.otherTypeId": "prodctTypeId for other products",
+        "productType.defaultTypeId": "Default prodctTypeId",
+        "productType.valueHelp": "You can enter multiple values separated by commas, semicolons, pipes or new lines.",
         "mapping.check": "Check current mapping",
         "mapping.checkTitle": "Current Mapping Result",
         "mapping.checkHelp": "This is the sample-data result after applying current row rules, column mapping and cleanup.",
@@ -4447,6 +4501,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       const result = {};
       const profile = {};
       const rowRules = mode === "products" ? collectRowRules() : { rules: [] };
+      const productTypeRule = mode === "products" ? collectProductTypeRule() : {};
       const ruleOwnedColumns = mode === "products" ? columnsHandledByRowRules(rowRules.rules || []) : new Set();
       const ruleOwnedTargets = mode === "products" ? rowRuleTargetPaths(rowRules.rules || []) : new Set();
       for (const select of document.querySelectorAll(`select[data-map-mode="${mode}"]`)) {
@@ -4506,6 +4561,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       }
       if (mode === "products") {
         profile._row_rules = rowRules;
+        profile._product_type_rule = productTypeRule;
         productMapping = result;
         productMappingProfile = profile;
         storeProductMappingForActiveModel();
@@ -4583,6 +4639,21 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         parent_id_column: rule.querySelector("[data-row-rule='parentIdColumn']")?.value || ""
       })).filter(isActiveRowRule);
       return { rules };
+    }
+
+    function collectProductTypeRule() {
+      const panel = $("productTypeRulePanel");
+      if (!panel) return {};
+      const rule = {
+        source_column: panel.querySelector("[data-product-type-rule='sourceColumn']")?.value || "",
+        own_values: panel.querySelector("[data-product-type-rule='ownValues']")?.value || "",
+        other_values: panel.querySelector("[data-product-type-rule='otherValues']")?.value || "",
+        own_type_id: panel.querySelector("[data-product-type-rule='ownTypeId']")?.value || "1",
+        other_type_id: panel.querySelector("[data-product-type-rule='otherTypeId']")?.value || "2",
+        default_type_id: panel.querySelector("[data-product-type-rule='defaultTypeId']")?.value || "1",
+        apply_default: true
+      };
+      return rule.source_column ? rule : {};
     }
 
     function isActiveRowRule(rule) {
@@ -5566,6 +5637,36 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       }
     }
 
+    function renderProductTypeRule(table) {
+      const rule = productMappingProfile?._product_type_rule || loadedProject?.product_mapping_profile?._product_type_rule || {};
+      return `<div class="mapping-card" id="productTypeRulePanel">
+        <h2 class="mapping-section-title">${esc(t("productType.title"))}</h2>
+        <div class="muted">${esc(t("productType.help"))}</div>
+        <div class="rule-grid">
+          <label>${esc(t("productType.column"))}
+            <select data-product-type-rule="sourceColumn">${columnOptions(table.columns, rule.source_column || rule.column || "")}</select>
+          </label>
+          <label>${esc(t("productType.ownValues"))}
+            <input type="text" data-product-type-rule="ownValues" value="${esc(rule.own_values || rule.company_values || "")}" placeholder="1">
+            <span class="helper">${esc(t("productType.valueHelp"))}</span>
+          </label>
+          <label>${esc(t("productType.otherValues"))}
+            <input type="text" data-product-type-rule="otherValues" value="${esc(rule.other_values || rule.foreign_values || "")}" placeholder="3">
+            <span class="helper">${esc(t("productType.valueHelp"))}</span>
+          </label>
+          <label>${esc(t("productType.ownTypeId"))}
+            <input type="number" min="1" step="1" data-product-type-rule="ownTypeId" value="${esc(rule.own_type_id || rule.company_type_id || "1")}">
+          </label>
+          <label>${esc(t("productType.otherTypeId"))}
+            <input type="number" min="1" step="1" data-product-type-rule="otherTypeId" value="${esc(rule.other_type_id || rule.foreign_type_id || "2")}">
+          </label>
+          <label>${esc(t("productType.defaultTypeId"))}
+            <input type="number" min="1" step="1" data-product-type-rule="defaultTypeId" value="${esc(rule.default_type_id || rule.own_type_id || rule.company_type_id || "1")}">
+          </label>
+        </div>
+      </div>`;
+    }
+
     function renderRowRuleCard(table, rule, index) {
       return `<div class="row-rule panel" data-rule-index="${esc(index)}">
         <h2>${esc(t("rows.rule"))} ${esc(index + 1)}</h2>
@@ -5638,6 +5739,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             ${mode === "products" ? renderEnrichmentPanel() : ""}
           </div>
           <div class="workspace-pane" data-workspace-pane="mapping"${mappingWorkspaceTab === "mapping" ? "" : " hidden"}>
+            ${mode === "products" ? renderProductTypeRule(table) : ""}
             ${mode === "products" ? renderRowRules(table) : ""}
             ${mode === "products" ? `<div id="mappingCheckTopResult"></div>` : ""}
             ${mode === "products" ? `<div id="ruleOwnedNotice"></div>` : ""}
@@ -5661,7 +5763,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     function attachMappingEvents(mode) {
-      for (const input of document.querySelectorAll("[data-cleanup], [data-source-column-select], select[data-map-mode], #rowRulesPanel input, #rowRulesPanel select")) {
+      for (const input of document.querySelectorAll("[data-cleanup], [data-source-column-select], select[data-map-mode], #rowRulesPanel input, #rowRulesPanel select, #productTypeRulePanel input, #productTypeRulePanel select")) {
         input.oninput = () => collectMapping(mode);
         input.onchange = () => {
           if (input.dataset.rowRule === "rowTypeColumn") {

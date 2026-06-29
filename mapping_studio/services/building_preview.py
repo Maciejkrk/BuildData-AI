@@ -32,12 +32,15 @@ def preview_building_elements(rows: list[dict[str, Any]], mapping: dict[str, str
         layer["source_rows"].append(source_index)
 
         for product_value in product_values(product_key):
-            match = resolve_product(product_value, product_index)
+            reference = resolve_product_reference(product_value, product_index)
+            match = reference.get("product") if reference else None
             product_entry = {
                 "raw": product_value,
                 "resolved": bool(match),
                 "product_id": match.get("Id") if match else None,
-                "identity_source": product_identity_source(product_value, product_index, match),
+                "variant_hash": reference.get("variant_hash") if reference else "",
+                "variant_row_i": reference.get("variant_row_i") if reference else None,
+                "identity_source": reference.get("source") if reference else product_identity_source(product_value, product_index, match),
             }
             layer["products"].append(product_entry)
             if not match:
@@ -136,11 +139,33 @@ def apply_simple_mapping(row: dict[str, Any], mapping: dict[str, str]) -> dict[s
     return mapped
 
 
-def resolve_product(value: Any, product_index: ProductReferenceIndex | None) -> dict[str, Any] | None:
+def resolve_product_reference(value: Any, product_index: ProductReferenceIndex | None) -> dict[str, Any] | None:
     if product_index is None:
         return None
     key = lookup_key(value)
-    return product_index.by_id.get(str(value)) or product_index.by_code.get(key) or product_index.by_name.get(key)
+    product = product_index.by_id.get(str(value))
+    if product:
+        return {"product": product, "source": "id", "variant_hash": "", "variant_row_i": None}
+    variant = product_index.by_variant.get(key)
+    if variant:
+        return {
+            "product": variant.get("product"),
+            "source": "variant",
+            "variant_hash": variant.get("hash") or "",
+            "variant_row_i": variant.get("row_i"),
+        }
+    product = product_index.by_code.get(key)
+    if product:
+        return {"product": product, "source": "code", "variant_hash": "", "variant_row_i": None}
+    product = product_index.by_name.get(key)
+    if product:
+        return {"product": product, "source": "name", "variant_hash": "", "variant_row_i": None}
+    return None
+
+
+def resolve_product(value: Any, product_index: ProductReferenceIndex | None) -> dict[str, Any] | None:
+    reference = resolve_product_reference(value, product_index)
+    return reference.get("product") if reference else None
 
 
 def product_values(value: Any) -> list[str]:
@@ -322,9 +347,10 @@ def add_field_attrs(
 
 def attr_payload_for_value(field: Any, value: Any, product_index: ProductReferenceIndex | None) -> dict[str, Any]:
     if str(field.kind) == "product_ref":
-        match = resolve_product(value, product_index)
+        reference = resolve_product_reference(value, product_index)
+        match = reference.get("product") if reference else None
         if match and str(match.get("Id") or "").isdigit():
-            return {"int_value": int(match["Id"])}
+            return {"int_value": int(match["Id"]), "varchar": str(reference.get("variant_hash") or "")}
         return {"varchar": str(value)}
     if str(field.kind) == "number":
         number = parse_number(value)

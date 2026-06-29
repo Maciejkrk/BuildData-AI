@@ -40,8 +40,8 @@ def test_product_reference_indexes_current_export_and_type_series_aliases() -> N
               "productAttributes": [
                 {"AttributeId": 116, "varcharValue": "Rigips PRO"},
                 {"AttributeId": 318, "varcharValue": "PR00058890"},
-                {"ParentAttributeId": 135, "AttributeId": 319, "varcharValue": "11620533"},
-                {"ParentAttributeId": 135, "AttributeId": 321, "varcharValue": "AR00233378"}
+                {"ParentAttributeId": 135, "AttributeId": 319, "RowI": 0, "varcharValue": "11620533", "hash": "variant-hash-1"},
+                {"ParentAttributeId": 135, "AttributeId": 321, "RowI": 0, "varcharValue": "AR00233378", "hash": "variant-hash-1"}
               ]
             }
           ]
@@ -55,4 +55,6 @@ def test_product_reference_indexes_current_export_and_type_series_aliases() -> N
     assert index.by_code["pr00058890"]["Id"] == 900001
     assert index.by_name["11620533"]["Id"] == 900001
     assert index.by_code["ar00233378"]["Id"] == 900001
+    assert index.by_variant["11620533"]["product"]["Id"] == 900001
+    assert index.by_variant["ar00233378"]["product"]["Id"] == 900001
 

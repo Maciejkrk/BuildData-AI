@@ -922,12 +922,17 @@ def source_column_from_profile_key(profile_key: Any) -> str:
 
 def apply_mapping_profile_to_rows(rows: list[dict[str, Any]], profile: dict[str, Any]) -> list[dict[str, Any]]:
     rules = row_rule_list(profile.get("_row_rules") or {})
+    filters = import_filter_list(profile.get("_import_filters") or {})
     if not rules:
-        return [apply_column_mapping_profile(row, profile) for row in rows]
+        return [
+            apply_product_type_rule(apply_column_mapping_profile(row, profile), row, profile)
+            for row in rows
+            if row_matches_import_filters(row, filters)
+        ]
 
     variant_rule = next((rule for rule in rules if rule.get("row_mode") == "product_variants"), None)
     if variant_rule:
-        return apply_product_variant_rule(rows, profile, variant_rule)
+        return apply_product_variant_rule(rows, profile, variant_rule, filters)
 
     contexts = [build_rule_context(rows, rule) for rule in rules]
     mapped_rows: list[dict[str, Any]] = []
@@ -943,8 +948,10 @@ def apply_mapping_profile_to_rows(rows: list[dict[str, Any]], profile: dict[str,
             continue
         if has_product_filters and not any(is_product_row_for_rule(row, rule) for rule in rules):
             continue
+        if not row_matches_import_filters(row, filters):
+            continue
 
-        mapped = apply_column_mapping_profile(row, profile)
+        mapped = apply_product_type_rule(apply_column_mapping_profile(row, profile), row, profile)
         for index, rule in enumerate(rules):
             if not rule_has_product_filter(rule) or is_product_row_for_rule(row, rule):
                 product_id_column = rule.get("product_id_column") or ""
@@ -967,7 +974,12 @@ def apply_mapping_profile_to_rows(rows: list[dict[str, Any]], profile: dict[str,
     return mapped_rows
 
 
-def apply_product_variant_rule(rows: list[dict[str, Any]], profile: dict[str, Any], rule: dict[str, Any]) -> list[dict[str, Any]]:
+def apply_product_variant_rule(
+    rows: list[dict[str, Any]],
+    profile: dict[str, Any],
+    rule: dict[str, Any],
+    filters: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     products_by_id: dict[str, dict[str, Any]] = {}
     ordered_ids: list[str] = []
     id_column = rule.get("id_column") or ""
@@ -975,15 +987,18 @@ def apply_product_variant_rule(rows: list[dict[str, Any]], profile: dict[str, An
     product_profile = mapping_profile_for_scope(profile, type_series=False)
     variant_profile = mapping_profile_for_scope(profile, type_series=True)
     has_parent_reference = bool(id_column and parent_id_column)
+    filters = filters or []
 
     if has_parent_reference:
         for row in rows:
             if not is_parent_product_row_for_variant_rule(row, rule):
                 continue
+            if not row_matches_import_filters(row, filters):
+                continue
             product_id = normalize(row.get(id_column))
             if not product_id:
                 continue
-            mapped = apply_column_mapping_profile(row, product_profile)
+            mapped = apply_product_type_rule(apply_column_mapping_profile(row, product_profile), row, profile)
             apply_rule_product_identity(mapped, row, rule)
             if product_id not in products_by_id:
                 ordered_ids.append(product_id)
@@ -997,6 +1012,8 @@ def apply_product_variant_rule(rows: list[dict[str, Any]], profile: dict[str, An
                 continue
             parent = products_by_id.get(parent_id)
             if parent is None:
+                if filters:
+                    continue
                 parent = {}
                 products_by_id[parent_id] = parent
                 ordered_ids.append(parent_id)
@@ -1006,8 +1023,11 @@ def apply_product_variant_rule(rows: list[dict[str, Any]], profile: dict[str, An
         current_product_id = ""
         for row in rows:
             if is_parent_product_row_for_variant_rule(row, rule):
+                if not row_matches_import_filters(row, filters):
+                    current_product_id = ""
+                    continue
                 product_id = f"product-{len(ordered_ids) + 1}"
-                mapped = apply_column_mapping_profile(row, product_profile)
+                mapped = apply_product_type_rule(apply_column_mapping_profile(row, product_profile), row, profile)
                 apply_rule_product_identity(mapped, row, rule)
                 ordered_ids.append(product_id)
                 products_by_id[product_id] = mapped
@@ -1071,6 +1091,75 @@ def row_rule_list(row_rules: dict[str, Any] | list[Any]) -> list[dict[str, Any]]
     if isinstance(rules, list):
         return [rule for rule in rules if isinstance(rule, dict)]
     return [row_rules] if row_rules else []
+
+
+def import_filter_list(filters: dict[str, Any] | list[Any]) -> list[dict[str, Any]]:
+    if isinstance(filters, list):
+        return [item for item in filters if isinstance(item, dict) and import_filter_is_active(item)]
+    if not isinstance(filters, dict):
+        return []
+    rules = filters.get("rules")
+    if isinstance(rules, list):
+        return [item for item in rules if isinstance(item, dict) and import_filter_is_active(item)]
+    return [filters] if import_filter_is_active(filters) else []
+
+
+def import_filter_is_active(rule: dict[str, Any]) -> bool:
+    return bool(str(rule.get("column") or rule.get("source_column") or "").strip())
+
+
+def row_matches_import_filters(row: dict[str, Any], filters: list[dict[str, Any]]) -> bool:
+    return all(row_matches_import_filter(row, rule) for rule in filters)
+
+
+def row_matches_import_filter(row: dict[str, Any], rule: dict[str, Any]) -> bool:
+    column = str(rule.get("column") or rule.get("source_column") or "")
+    if not column:
+        return True
+    actual = str(row.get(column) if row.get(column) is not None else "").strip()
+    expected = str(rule.get("value") if rule.get("value") is not None else "").strip()
+    operator = normalize(rule.get("operator") or rule.get("condition") or "not_empty")
+    if operator in {"not_empty", "filled", "is_filled"}:
+        return actual != ""
+    if operator in {"empty", "is_empty"}:
+        return actual == ""
+    actual_norm = normalize(actual)
+    expected_norm = normalize(expected)
+    if operator in {"equals", "eq"}:
+        return actual_norm == expected_norm
+    if operator in {"not_equals", "neq"}:
+        return actual_norm != expected_norm
+    if operator == "contains":
+        return bool(expected_norm and expected_norm in actual_norm)
+    if operator == "not_contains":
+        return bool(expected_norm and expected_norm not in actual_norm)
+    if operator in {"one_of", "in"}:
+        return actual_norm in normalized_set(expected)
+    if operator in {"not_one_of", "not_in"}:
+        return actual_norm not in normalized_set(expected)
+    return actual != ""
+
+
+def apply_product_type_rule(mapped: dict[str, Any], source_row: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+    rule = profile.get("_product_type_rule") or {}
+    if not isinstance(rule, dict):
+        return mapped
+    source_column = str(rule.get("source_column") or rule.get("column") or "").strip()
+    if not source_column:
+        return mapped
+    value = normalize(source_row.get(source_column))
+    own_values = normalized_set(rule.get("own_values") or rule.get("company_values") or "")
+    other_values = normalized_set(rule.get("other_values") or rule.get("foreign_values") or "")
+    own_type_id = int_value(rule.get("own_type_id") or rule.get("company_type_id")) or 1
+    other_type_id = int_value(rule.get("other_type_id") or rule.get("foreign_type_id")) or 2
+    default_type_id = int_value(rule.get("default_type_id")) or own_type_id
+    if other_values and value in other_values:
+        mapped["__product_type_id__"] = other_type_id
+    elif own_values and value in own_values:
+        mapped["__product_type_id__"] = own_type_id
+    elif value or rule.get("apply_default"):
+        mapped["__product_type_id__"] = default_type_id
+    return mapped
 
 
 def build_rule_context(rows: list[dict[str, Any]], rule: dict[str, Any]) -> dict[str, Any]:

@@ -87,6 +87,9 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("product.name.value", html)
         self.assertIn("data-cleanup=\"choiceMap\"", html)
         self.assertIn("data-choice-map-target", html)
+        self.assertIn("data-product-type-rule=\"sourceColumn\"", html)
+        self.assertIn("data-product-type-rule=\"otherValues\"", html)
+        self.assertIn("prodctTypeId", html)
         self.assertNotIn("value=\"custom_attribute\"", html)
         self.assertNotIn("value=\"type_series[].additional_properties[]\"", html)
         self.assertNotIn("data-cleanup=\"customName\"", html)
@@ -1204,6 +1207,32 @@ class ConverterTests(unittest.TestCase):
         )
 
         self.assertEqual([item["product.name.value"] for item in mapped], ["System 1", "System 2"])
+
+    def test_mapping_profile_sets_database_product_type_id(self):
+        rows = [
+            {"Nazwa": "Produkt firmowy", "Typ": "1"},
+            {"Nazwa": "Produkt obcy", "Typ": "3"},
+        ]
+        mapped = apply_mapping_profile_to_rows(
+            rows,
+            {
+                "_product_type_rule": {
+                    "source_column": "Typ",
+                    "own_values": "1",
+                    "other_values": "3",
+                    "own_type_id": "1",
+                    "other_type_id": "2",
+                    "default_type_id": "1",
+                },
+                "Nazwa": {"target_path": "product.name.value"},
+            },
+        )
+        products = [
+            build_pim_product(map_source_row(row), index)
+            for index, row in enumerate(mapped, start=1)
+        ]
+
+        self.assertEqual([product["prodctTypeId"] for product in products], [1, 2])
 
     def test_mapping_profile_uses_row_type_and_parent_id_for_group_context(self):
         rows = [

@@ -73,4 +73,5 @@ class ProductReferenceIndex:
     by_id: dict[str, dict[str, Any]] = field(default_factory=dict)
     by_code: dict[str, dict[str, Any]] = field(default_factory=dict)
     by_name: dict[str, dict[str, Any]] = field(default_factory=dict)
+    by_variant: dict[str, dict[str, Any]] = field(default_factory=dict)
     duplicates: dict[str, list[str]] = field(default_factory=dict)

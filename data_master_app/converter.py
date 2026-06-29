@@ -1646,6 +1646,9 @@ def map_source_row(row: dict[str, Any]) -> dict[str, Any]:
     for raw_key, value in row.items():
         if value in (None, ""):
             continue
+        if raw_key == "__product_type_id__":
+            mapped.setdefault("meta", {})["product_type_id"] = value
+            continue
         field = pim_export_field_from_canonical(raw_key) or pim_attribute_field(raw_key) or guess_field(raw_key)
         mapped["column_mapping"][raw_key] = field or "unmapped"
         if field in {"product_name", "external_id", "unit", "categories"}:
@@ -1901,9 +1904,10 @@ def build_pim_product(
     add_documents(attrs, mapped["documents"])
     add_generic_pim_attributes(attrs, mapped["pim_attributes"], export_schema)
 
+    product_type_id = int_value(mapped.get("meta", {}).get("product_type_id")) or PRODUCT_TYPE_ID
     return {
         "Id": product_id,
-        "prodctTypeId": PRODUCT_TYPE_ID,
+        "prodctTypeId": product_type_id,
         "ModelType": export_schema.product_model_id,
         "dataVersions": [
             {

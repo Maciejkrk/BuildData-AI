@@ -126,3 +126,82 @@ def test_building_elements_convert_writes_json_from_profile(tmp_path: Path) -> N
     assert any(attr["AttributeId"] == 280 and attr["varcharValue"] == "S1" for attr in attrs)
     assert any(attr["AttributeId"] == 284 and attr["ParentAttributeId"] == 283 for attr in attrs)
     assert any(attr["AttributeId"] == 287 and attr["ParentAttributeId"] == 285 for attr in attrs)
+
+
+def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_path: Path) -> None:
+    model = load_building_element_model(
+        {
+            "buildingElementsModels.json": b"""{
+              "models": [
+                {"Id": 46, "Name": "Struktura warstwowa", "modelType": "Building_Element"},
+                {"Id": 48, "Name": "Model wariantu BE", "modelType": "Attribute"},
+                {"Id": 47, "Name": "Model produktu BE", "modelType": "Attribute"},
+                {"Id": 87, "Name": "Duzo produktow", "modelType": "Attribute"}
+              ]
+            }""",
+            "buildingElementsAttributes.json": b"""{
+              "attributes": [
+                {"Id": 142, "ProductModelId": 46, "AttributeName": "Nazwa systemu", "DispName": "Nazwa systemu", "AttributeType": "VarChar", "deleted": false},
+                {"Id": 145, "ProductModelId": 46, "AttributeName": "Warianty", "DispName": "Warianty", "AttributeType": "Model_Array", "TargetModelId": 48, "deleted": false},
+                {"Id": 332, "ProductModelId": 48, "AttributeName": "Nazwa wariantu", "DispName": "Nazwa wariantu", "AttributeType": "VarChar", "deleted": false},
+                {"Id": 144, "ProductModelId": 48, "AttributeName": "Warstwy", "DispName": "Warstwy", "AttributeType": "Model_Array", "TargetModelId": 47, "deleted": false},
+                {"Id": 146, "ProductModelId": 47, "AttributeName": "Nazwa warstwy", "DispName": "Nazwa warstwy", "AttributeType": "Text", "deleted": false},
+                {"Id": 143, "ProductModelId": 47, "AttributeName": "Produkty w warstwie", "DispName": "Produkty w warstwie", "AttributeType": "Model_Array", "TargetModelId": 87, "deleted": false},
+                {"Id": 333, "ProductModelId": 87, "AttributeName": "Produkt", "DispName": "Produkt", "AttributeType": "Product", "deleted": false}
+              ]
+            }""",
+        }
+    )
+    variant_hash = "227306e72ac7c4487916577c76d1d916"
+    product_index = build_product_reference_index(
+        f"""{{
+          "products": [
+            {{
+              "Id": 2945,
+              "dataVersions": [{{"productAttributes": [
+                {{"AttributeId": 225, "varcharValue": "ISOVER Fasoterm 35"}},
+                {{"AttributeId": 321, "ParentAttributeId": 135, "RowI": 0, "varcharValue": "11111", "hash": "{variant_hash}"}}
+              ]}}]
+            }},
+            {{
+              "Id": 4469,
+              "dataVersions": [{{"productAttributes": [
+                {{"AttributeId": 225, "varcharValue": "ISOVER Super-Mata Plus"}}
+              ]}}]
+            }}
+          ]
+        }}""".encode("utf-8")
+    )
+    tables = [
+        SourceTable(
+            "Systemy",
+            [
+                {
+                    "System": "S1",
+                    "Wariant": "W1",
+                    "Warstwa": "Izolacja",
+                    "Produkty": "11111, ISOVER Super-Mata Plus",
+                }
+            ],
+        )
+    ]
+    profile = {
+        "_levels": {"model.46": {"level_name_field": "building_element.nazwa_systemu.value"}},
+        "building_element.nazwa_systemu.value": {"table": "Systemy", "column": "System", "cleanup": {"trim": True}},
+        "building_element.nazwa_wariantu.value": {"table": "Systemy", "column": "Wariant", "cleanup": {"trim": True}},
+        "building_element.nazwa_warstwy.value": {"table": "Systemy", "column": "Warstwa", "cleanup": {"trim": True}},
+        "building_element.produkt.value": {"table": "Systemy", "column": "Produkty", "cleanup": {"trim": True}},
+    }
+
+    result = convert_building_elements_from_tables("systems.xlsx", b"{}", tables, profile, model, product_index, tmp_path)
+    payload = json.loads((tmp_path / result["job_id"] / "building_elements.json").read_text(encoding="utf-8"))
+
+    product_attrs = [
+        attr
+        for attr in payload["buildingElements"][0]["dataVersions"][0]["productAttributes"]
+        if attr["AttributeId"] == 333
+    ]
+    assert [(attr["IntValue"], attr["varcharValue"]) for attr in product_attrs] == [
+        (2945, variant_hash),
+        (4469, ""),
+    ]
