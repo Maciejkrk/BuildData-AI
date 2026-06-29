@@ -36,9 +36,9 @@ def preview_building_elements(
     preview_limit = max(preview_limit, 1) if preview_limit is not None else None
     for source_index, row in enumerate(rows, start=1):
         mapped = apply_simple_mapping(row, mapping)
-        system_name = mapped.get("building_element.name.value") or mapped.get("system.name") or row.get("Nazwa systemu") or row.get("System") or "System bez nazwy"
-        variant_name = mapped.get("building_element.variant_name.value") or row.get("Wariant") or "Wariant domyślny"
-        layer_name = mapped.get("building_element.layer_name.value") or row.get("Nazwa warstwy") or row.get("Warstwa") or "Warstwa bez nazwy"
+        system_name = first_system_value(mapped) or first_system_value(row) or "System bez nazwy"
+        variant_name = first_variant_value(mapped) or first_variant_value(row) or "Wariant domyślny"
+        layer_name = first_layer_value(mapped) or first_layer_value(row) or "Warstwa bez nazwy"
         product_key = first_product_value(mapped) or first_product_value(row)
         system_key = str(system_name)
         if system_key not in system_indexes:
@@ -94,15 +94,74 @@ def preview_building_elements(
     }
 
 
+def first_system_value(row: dict[str, Any]) -> Any:
+    return first_value_by_role(
+        row,
+        (
+            "building_element.name.value",
+            "building_element.nazwa_systemu.value",
+            "system.name",
+            "system_name",
+            "Nazwa systemu",
+            "System",
+        ),
+        ("nazwasystemu", "systemname", "system"),
+        ("produkt", "product", "wariant", "variant", "warstwa", "layer"),
+    )
+
+
+def first_variant_value(row: dict[str, Any]) -> Any:
+    return first_value_by_role(
+        row,
+        (
+            "building_element.variant_name.value",
+            "building_element.nazwa_wariantu.value",
+            "variant_name",
+            "Wariant",
+            "Nazwa wariantu",
+        ),
+        ("nazwawariantu", "variantname", "wariant", "variant"),
+        ("produkt", "product", "warstwa", "layer"),
+    )
+
+
+def first_layer_value(row: dict[str, Any]) -> Any:
+    return first_value_by_role(
+        row,
+        (
+            "building_element.layer_name.value",
+            "building_element.nazwa_warstwy.value",
+            "layer_name",
+            "Nazwa warstwy",
+            "Warstwa",
+        ),
+        ("nazwawarstwy", "layername", "warstwa", "layer"),
+        ("produkt", "product", "wariant", "variant"),
+    )
+
+
 def first_product_value(row: dict[str, Any]) -> Any:
-    preferred = (
+    return first_value_by_role(
+        row,
+        (
         "building_element.product.value",
         "building_element.produkt.value",
         "Kod produktu",
         "Nazwa produktu",
         "Produkt",
         "Produkty",
+        ),
+        ("nazwaproduktu", "kodproduktu", "productname", "productcode", "produkty", "produkt", "product"),
+        (),
     )
+
+
+def first_value_by_role(
+    row: dict[str, Any],
+    preferred: tuple[str, ...],
+    include_markers: tuple[str, ...],
+    exclude_markers: tuple[str, ...],
+) -> Any:
     for key in preferred:
         value = row.get(key)
         if value not in (None, ""):
@@ -111,7 +170,7 @@ def first_product_value(row: dict[str, Any]) -> Any:
         if str(key).startswith("_") or value in (None, ""):
             continue
         normalized_key = lookup_key(key)
-        if "product" in normalized_key or "produkt" in normalized_key:
+        if any(marker in normalized_key for marker in include_markers) and not any(marker in normalized_key for marker in exclude_markers):
             return value
     return None
 

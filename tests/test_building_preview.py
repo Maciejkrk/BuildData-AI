@@ -238,6 +238,9 @@ def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_pat
     preview = preview_building_elements_from_tables(tables, profile, product_index)
 
     preview_products = preview["systems"][0]["variants"][0]["layers"][0]["products"]
+    assert preview["systems"][0]["name"] == "S1"
+    assert preview["systems"][0]["variants"][0]["name"] == "W1"
+    assert preview["systems"][0]["variants"][0]["layers"][0]["name"] == "Izolacja"
     assert [(item["product_id"], item["variant_hash"], item["identity_source"]) for item in preview_products] == [
         (2945, variant_hash, "variant"),
         (4469, "", "name"),
