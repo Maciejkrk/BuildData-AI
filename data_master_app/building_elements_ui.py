@@ -1899,8 +1899,9 @@ def render_building_elements_home() -> str:
     }
     function rerenderElementMapping() {
       if (!lastElementAnalysis) return;
-      syncElementMappingState();
-      renderElementAnalysis(lastElementAnalysis);
+      syncElementMappingState(false);
+      renderElementAnalysis(lastElementAnalysis, { schedulePreview: false });
+      scheduleElementLivePreview(350);
     }
     function refreshElementFieldState(target) {
       rerenderElementMapping();
@@ -1975,7 +1976,7 @@ def render_building_elements_home() -> str:
       saveElementWorkspaceState();
       if (schedulePreview) scheduleElementLivePreview();
     }
-    function renderElementAnalysis(payload) {
+    function renderElementAnalysis(payload, options = {}) {
       lastElementAnalysis = payload;
       const tables = payload.tables || [];
       const fields = payload.model?.fields || [];
@@ -2006,8 +2007,8 @@ def render_building_elements_home() -> str:
         ${renderElementLivePreview(lastElementPreview)}
       `;
       renderElementRootModelSelect();
-      syncElementMappingState();
-      scheduleElementLivePreview(0);
+      syncElementMappingState(false);
+      if (options.schedulePreview !== false) scheduleElementLivePreview(0);
       saveElementWorkspaceState();
     }
     $("elementProjectName").addEventListener("input", saveElementWorkspaceState);

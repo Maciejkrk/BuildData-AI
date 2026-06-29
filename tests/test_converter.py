@@ -164,6 +164,8 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("setBusy", html)
         self.assertIn("elementPreviewInFlight", html)
         self.assertIn("elementPreviewPending", html)
+        self.assertIn("renderElementAnalysis(lastElementAnalysis, { schedulePreview: false })", html)
+        self.assertIn("if (options.schedulePreview !== false) scheduleElementLivePreview(0)", html)
         self.assertIn("clearBusy", html)
         self.assertIn("Analizuję duży plik klienta", html)
         self.assertIn("Podgląd na żywo mapowania", html)
