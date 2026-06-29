@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Any
 
@@ -90,9 +91,14 @@ def apply_text_transforms(value: Any, transforms: list[ValueTransform]) -> Any:
         if transform.kind == ValueTransformKind.TRIM:
             result = str(result).strip()
         elif transform.kind == ValueTransformKind.REPLACE_TEXT:
-            result = str(result).replace(transform.search or "", transform.replace_with or "")
+            if transform.search:
+                result = str(result).replace(transform.search, transform.replace_with or "")
         elif transform.kind == ValueTransformKind.REMOVE_TEXT:
-            result = str(result).replace(transform.search or "", "")
+            if transform.search:
+                result = str(result).replace(transform.search, "")
+        elif transform.kind == ValueTransformKind.REMOVE_REGEX:
+            if transform.search:
+                result = re.sub(transform.search, "", str(result))
         elif transform.kind == ValueTransformKind.DECIMAL_COMMA_TO_DOT:
             result = str(result).replace(",", ".")
         elif transform.kind == ValueTransformKind.PARSE_NUMBER:

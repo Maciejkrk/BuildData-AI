@@ -91,10 +91,14 @@ def add_unique(
         return
     duplicate_key = f"{namespace}:{key}"
     if key in target:
-        if str(target[key].get("Id") or "") == str(product.get("Id") or ""):
+        if product_id_text(target[key]) == product_id_text(product):
             return
-        duplicates.setdefault(duplicate_key, [str(target[key].get("Id") or "")])
-        duplicates[duplicate_key].append(str(product.get("Id") or ""))
+        duplicates.setdefault(duplicate_key, [product_id_text(target[key])])
+        duplicates[duplicate_key].append(product_id_text(product))
         return
     target[key] = product
+
+
+def product_id_text(product: dict[str, Any]) -> str:
+    return str(product.get("Id") or product.get("id") or "")
 

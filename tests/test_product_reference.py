@@ -56,3 +56,24 @@ def test_product_reference_indexes_current_export_and_type_series_aliases() -> N
     assert index.by_name["11620533"]["Id"] == 900001
     assert index.by_code["ar00233378"]["Id"] == 900001
 
+
+def test_product_reference_duplicate_report_accepts_lowercase_id() -> None:
+    payload = b"""[
+      {
+        "id": 1,
+        "productAttributes": [
+          {"AttributeId": 225, "varcharValue": "FAST AQUA"}
+        ]
+      },
+      {
+        "id": 2,
+        "productAttributes": [
+          {"AttributeId": 225, "varcharValue": "FAST AQUA"}
+        ]
+      }
+    ]"""
+
+    index = build_product_reference_index(payload)
+
+    assert index.duplicates["name:fastaqua"] == ["1", "2"]
+
