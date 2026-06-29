@@ -178,7 +178,7 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("data-model-builder-parent-id", html)
         self.assertIn("__level_id__", html)
         self.assertIn("__parent_id__", html)
-        self.assertIn("ID parenta poziomu nadrzednego (opcjonalnie)", html)
+        self.assertIn("Kolumna wskazujaca element nadrzedny (opcjonalnie)", html)
         self.assertNotIn("Kolumna ID tego levela", html)
         self.assertNotIn("Level name z mapowania", html)
 

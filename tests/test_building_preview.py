@@ -131,6 +131,47 @@ def test_building_preview_from_tables_keeps_exact_system_count() -> None:
     assert [system["name"] for system in preview["systems"]] == ["S1"]
 
 
+def test_building_preview_joins_parent_element_with_many_layer_rows() -> None:
+    tables = [
+        SourceTable(
+            "Elementy",
+            [
+                {"Element": "ETICS-1", "Wariant": "Mineralny", "Typ": "ETICS"},
+                {"Element": "ETICS-2", "Wariant": "EPS", "Typ": "ETICS"},
+            ],
+        ),
+        SourceTable(
+            "Warstwy",
+            [
+                {"Element": "ETICS-1", "Pozycja": 1, "Warstwa": "Klej", "Produkt": "P1"},
+                {"Element": "ETICS-1", "Pozycja": 2, "Warstwa": "Izolacja", "Produkt": "P2"},
+                {"Element": "ETICS-2", "Pozycja": 1, "Warstwa": "Izolacja", "Produkt": "P3"},
+            ],
+        ),
+    ]
+    profile = {
+        "_levels": {
+            "model.74": {"table": "Elementy", "level_name_field": "building_element.name.value"},
+            "model.74.attribute.285": {"table": "Warstwy", "parent_id_column": "Element"},
+        },
+        "building_element.name.value": {"level": "model.74", "table": "Elementy", "column": "Element"},
+        "building_element.variant_name.value": {"level": "model.74", "table": "Elementy", "column": "Wariant"},
+        "building_element.typ_systemu.value": {"level": "model.74", "table": "Elementy", "column": "Typ"},
+        "building_element.layer_position.value": {"level": "model.74.attribute.285", "table": "Warstwy", "column": "Pozycja"},
+        "building_element.layer_name.value": {"level": "model.74.attribute.285", "table": "Warstwy", "column": "Warstwa"},
+        "building_element.product.value": {"level": "model.74.attribute.285", "table": "Warstwy", "column": "Produkt"},
+    }
+
+    preview = preview_building_elements_from_tables(tables, profile, None, preview_offset=0, preview_limit=1)
+
+    system = preview["systems"][0]
+    layers = system["variants"][0]["layers"]
+    assert system["name"] == "ETICS-1"
+    assert [layer["name"] for layer in layers] == ["Klej", "Izolacja"]
+    assert [layer["products"][0]["raw"] for layer in layers] == ["P1", "P2"]
+    assert preview["quality"]["systems"] == 2
+
+
 def test_building_elements_convert_writes_json_from_profile(tmp_path: Path) -> None:
     model = load_building_element_model(
         {

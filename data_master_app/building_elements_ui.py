@@ -1834,7 +1834,7 @@ def render_building_elements_home() -> str:
           ...columns.map((column) => `<option value="${escapeHtml(column)}" ${column === selected ? "selected" : ""}>${escapeHtml(column)}</option>`)
         ].join("");
         const parentControls = node.type === "relation" ? `
-          <label>ID parenta poziomu nadrzednego (opcjonalnie)
+          <label>Kolumna wskazujaca element nadrzedny (opcjonalnie)
             <select data-element-level="${escapeHtml(node.key)}" data-level-key="parent_id_column" onchange="refreshElementLevelState('${escapeHtml(node.key)}')">
               ${columnOptionsForLevel(config.parent_id_column || "")}
             </select>

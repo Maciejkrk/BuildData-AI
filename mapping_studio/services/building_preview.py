@@ -293,8 +293,12 @@ def mapped_rows_from_profile(tables: list[SourceTable], mapping_profile: dict[st
 def iter_mapped_rows_from_profile(tables: list[SourceTable], mapping_profile: dict[str, Any]) -> Iterator[dict[str, Any]]:
     tables_by_name = {table.name: table for table in tables}
     fallback_table = tables[0] if tables else SourceTable("data", [])
-    row_count = max((len(table.rows) for table in tables), default=0)
     levels = mapping_profile.get("_levels") if isinstance(mapping_profile.get("_levels"), dict) else {}
+    if should_join_levels_by_parent(tables_by_name, levels):
+        yield from iter_joined_mapped_rows_from_profile(tables_by_name, fallback_table, mapping_profile, levels)
+        return
+
+    row_count = max((len(table.rows) for table in tables), default=0)
     for index in range(row_count):
         mapped: dict[str, Any] = {}
         source_context: dict[str, Any] = {}
@@ -340,6 +344,140 @@ def iter_mapped_rows_from_profile(tables: list[SourceTable], mapping_profile: di
             if level_ids:
                 mapped["_level_ids"] = level_ids
             yield mapped
+
+
+def should_join_levels_by_parent(tables_by_name: dict[str, SourceTable], levels: dict[str, Any]) -> bool:
+    level_tables = {
+        str(config.get("table") or "")
+        for config in levels.values()
+        if isinstance(config, dict) and config.get("table")
+    }
+    return len(level_tables) > 1 and any(
+        isinstance(config, dict)
+        and config.get("parent_id_column")
+        and str(config.get("table") or "") in tables_by_name
+        for config in levels.values()
+    )
+
+
+def iter_joined_mapped_rows_from_profile(
+    tables_by_name: dict[str, SourceTable],
+    fallback_table: SourceTable,
+    mapping_profile: dict[str, Any],
+    levels: dict[str, Any],
+) -> Iterator[dict[str, Any]]:
+    ordered_levels = [(str(key), config) for key, config in levels.items() if isinstance(config, dict)]
+    if not ordered_levels:
+        return
+    root_key, root_config = next(
+        ((key, config) for key, config in ordered_levels if not config.get("parent_id_column")),
+        ordered_levels[0],
+    )
+    root_table = tables_by_name.get(str(root_config.get("table") or "")) or fallback_table
+    child_levels = [(key, config) for key, config in ordered_levels if key != root_key]
+    for root_index, root_row in enumerate(root_table.rows):
+        mapped, source_context = mapped_values_for_level(mapping_profile, tables_by_name, fallback_table, root_key, root_row, root_index)
+        level_ids = level_ids_for_row(root_key, root_config, root_row)
+        candidates = row_candidate_values(root_row, mapped)
+        combinations = [(mapped, source_context, level_ids, candidates)]
+        for level_key, config in child_levels:
+            table = tables_by_name.get(str(config.get("table") or "")) or fallback_table
+            parent_id_column = str(config.get("parent_id_column") or "")
+            next_combinations: list[tuple[dict[str, Any], dict[str, Any], dict[str, dict[str, Any]], set[str]]] = []
+            for base_mapped, base_context, base_level_ids, parent_candidates in combinations:
+                if parent_id_column:
+                    matching_rows = [
+                        (index, row)
+                        for index, row in enumerate(table.rows)
+                        if normalized_match_value(row.get(parent_id_column)) in parent_candidates
+                    ]
+                else:
+                    matching_rows = [(root_index, table.rows[root_index])] if root_index < len(table.rows) else []
+                if not matching_rows:
+                    next_combinations.append((base_mapped, base_context, base_level_ids, parent_candidates))
+                    continue
+                for child_index, child_row in matching_rows:
+                    child_mapped, child_context = mapped_values_for_level(
+                        mapping_profile,
+                        tables_by_name,
+                        fallback_table,
+                        level_key,
+                        child_row,
+                        child_index,
+                    )
+                    if not child_mapped:
+                        continue
+                    merged = {**base_mapped, **child_mapped}
+                    merged_context = {**base_context, **child_context}
+                    merged_level_ids = {**base_level_ids, **level_ids_for_row(level_key, config, child_row)}
+                    child_candidates = row_candidate_values(child_row, child_mapped)
+                    next_combinations.append((merged, merged_context, merged_level_ids, child_candidates))
+            combinations = next_combinations
+        for mapped, source_context, level_ids, _candidates in combinations:
+            if not mapped:
+                continue
+            mapped["_source_context"] = source_context
+            if level_ids:
+                mapped["_level_ids"] = level_ids
+            yield mapped
+
+
+def mapped_values_for_level(
+    mapping_profile: dict[str, Any],
+    tables_by_name: dict[str, SourceTable],
+    fallback_table: SourceTable,
+    level_key: str,
+    source_row: dict[str, Any],
+    source_index: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    mapped: dict[str, Any] = {}
+    source_context: dict[str, Any] = {}
+    for target_path, rule in mapping_profile.items():
+        if str(target_path).startswith("_") or not isinstance(rule, dict):
+            continue
+        rule_level = str(rule.get("level") or "")
+        table = tables_by_name.get(str(rule.get("table") or "")) or fallback_table
+        if rule_level and rule_level != level_key:
+            continue
+        if not rule_level and table.rows and source_row not in table.rows:
+            continue
+        column = rule.get("column")
+        if not column:
+            continue
+        value = source_row.get(str(column))
+        value = apply_cleanup(value, rule.get("cleanup") or {}, source_row)
+        if value not in (None, ""):
+            mapped[target_path] = value
+        source_context[target_path] = {
+            "table": table.name,
+            "column": column,
+            "row": source_index + 1,
+        }
+    return mapped, source_context
+
+
+def level_ids_for_row(level_key: str, config: dict[str, Any], source_row: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    level_data: dict[str, Any] = {}
+    id_column = config.get("id_column")
+    if id_column:
+        level_data["id"] = source_row.get(str(id_column))
+    parent_id_column = config.get("parent_id_column")
+    if parent_id_column:
+        level_data["parent_id"] = source_row.get(str(parent_id_column))
+    return {level_key: level_data} if level_data else {}
+
+
+def row_candidate_values(source_row: dict[str, Any], mapped: dict[str, Any]) -> set[str]:
+    values = set()
+    for value in list(source_row.values()) + list(mapped.values()):
+        normalized = normalized_match_value(value)
+        if normalized:
+            values.add(normalized)
+    return values
+
+
+def normalized_match_value(value: Any) -> str:
+    return lookup_key(value) if value not in (None, "") else ""
 
 
 def apply_simple_mapping(row: dict[str, Any], mapping: dict[str, str]) -> dict[str, Any]:
