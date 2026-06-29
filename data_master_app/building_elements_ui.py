@@ -203,6 +203,45 @@ def render_building_elements_home() -> str:
       font-size:12px;
       line-height:1.4;
     }
+    .live-preview {
+      margin-top:14px;
+      border:1px solid var(--line);
+      border-radius:6px;
+      background:#fff;
+      overflow:hidden;
+    }
+    .live-preview-head {
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+      padding:12px;
+      background:#f8fafc;
+      border-bottom:1px solid var(--line);
+    }
+    .live-preview-head p { margin:4px 0 0; }
+    .live-preview-table-wrap { overflow:auto; }
+    .live-preview-table {
+      width:100%;
+      border-collapse:collapse;
+      min-width:760px;
+      font-size:12px;
+    }
+    .live-preview-table th,
+    .live-preview-table td {
+      padding:8px 10px;
+      border-bottom:1px solid #eef2f6;
+      vertical-align:top;
+      text-align:left;
+    }
+    .live-preview-table th {
+      background:#fbfcfd;
+      color:#344054;
+      font-weight:700;
+    }
+    .status-ok { color:#166534; font-weight:700; }
+    .status-warn { color:#9a3412; font-weight:700; }
+    .preview-path { color:var(--muted); font-size:11px; }
     .model-builder-grid {
       display:grid;
       grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
@@ -474,6 +513,9 @@ def render_building_elements_home() -> str:
     let modelBuilderRows = [];
     let loadedElementProject = null;
     let loadedElementProjectFiles = { modelFiles: [], productModelFiles: [], sourceFile: null, productsReferenceFile: null };
+    let lastElementPreview = null;
+    let elementPreviewTimer = null;
+    let elementPreviewRequestId = 0;
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
     const ELEMENT_WORKSPACE_FILES_KEY = "building-elements-files";
     const WORKSPACE_NAVIGATION_KEY = "buildDataAiPreserveWorkspaceNavigation";
@@ -1059,7 +1101,7 @@ def render_building_elements_home() -> str:
     async function generateBuildingElements() {
       const form = new FormData();
       try {
-        syncElementMappingState();
+        syncElementMappingState(false);
         $("elementStatus").textContent = currentLang === "pl"
           ? "Generuję building_elements.json."
           : "Generating building_elements.json.";
@@ -1090,6 +1132,103 @@ def render_building_elements_home() -> str:
       } catch (error) {
         $("elementStatus").textContent = error.message;
         saveElementWorkspaceState();
+      }
+    }
+    function scheduleElementLivePreview(delay = 350) {
+      if (elementPreviewTimer) clearTimeout(elementPreviewTimer);
+      elementPreviewTimer = setTimeout(updateElementLivePreview, delay);
+    }
+    function renderElementLivePreview(preview, message = "") {
+      if (!preview) {
+        return `<div class="live-preview" id="elementLivePreview">
+          <div class="live-preview-head">
+            <div>
+              <h3>Podgląd na żywo mapowania</h3>
+              <p>${escapeHtml(message || "Wybierz mapowanie kolumn, aby zobaczyć rozpoznane systemy, warstwy oraz produkty i warianty.")}</p>
+            </div>
+          </div>
+        </div>`;
+      }
+      const quality = preview.quality || {};
+      const rows = [];
+      for (const system of preview.systems || []) {
+        for (const variant of system.variants || []) {
+          for (const layer of variant.layers || []) {
+            for (const product of layer.products || []) {
+              const status = product.resolved
+                ? (product.variant_hash ? "wariant produktu" : "produkt")
+                : "nie rozpoznano";
+              const recognized = product.resolved
+                ? `${product.variant_hash ? "Wariant" : "Produkt"}: ${product.product_name || product.product_id || ""}${product.variant_label ? ` / ${product.variant_label}` : ""}`
+                : "Brak dopasowania w referencyjnym products.json";
+              rows.push(`
+                <tr>
+                  <td>${escapeHtml(system.name || "")}<div class="preview-path">${escapeHtml(variant.name || "")}</div></td>
+                  <td>${escapeHtml(layer.name || "")}</td>
+                  <td>${escapeHtml(product.raw || "")}</td>
+                  <td>${escapeHtml(recognized)}</td>
+                  <td class="${product.resolved ? "status-ok" : "status-warn"}">${escapeHtml(status)}</td>
+                  <td>${escapeHtml(product.identity_source || "")}</td>
+                </tr>
+              `);
+            }
+            if (!layer.products?.length) {
+              rows.push(`
+                <tr>
+                  <td>${escapeHtml(system.name || "")}<div class="preview-path">${escapeHtml(variant.name || "")}</div></td>
+                  <td>${escapeHtml(layer.name || "")}</td>
+                  <td colspan="4" class="status-warn">Brak zmapowanych produktów dla tej warstwy</td>
+                </tr>
+              `);
+            }
+          }
+        }
+      }
+      return `<div class="live-preview" id="elementLivePreview">
+        <div class="live-preview-head">
+          <div>
+            <h3>Podgląd na żywo mapowania</h3>
+            <p>Pokazuje, jak aktualne mapowanie zostanie odczytane przed wygenerowaniem building_elements.json.</p>
+          </div>
+          <div>
+            <span class="pill">systemy: ${escapeHtml(quality.systems || 0)}</span>
+            <span class="pill">nierozpoznane produkty: ${escapeHtml(quality.unresolved_products_count || 0)}</span>
+            <span class="pill">referencja produktów: ${quality.product_reference_loaded ? "wczytana" : "brak"}</span>
+          </div>
+        </div>
+        <div class="live-preview-table-wrap">
+          <table class="live-preview-table">
+            <thead><tr><th>System / wariant</th><th>Warstwa</th><th>Wartość klienta</th><th>Rozpoznanie</th><th>Status</th><th>Dopasowanie</th></tr></thead>
+            <tbody>${rows.join("") || `<tr><td colspan="6">Brak danych do podglądu.</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }
+    async function updateElementLivePreview() {
+      const holder = $("elementLivePreview");
+      if (!holder || !lastElementAnalysis) return;
+      const requestId = ++elementPreviewRequestId;
+      try {
+        syncElementMappingState(false);
+        const builderMode = elementWorkflowMode === "modelBuilder";
+        const sourceFile = builderMode ? modelBuilderSourceFile() : ($("elementSourceFile").files[0] || loadedElementProjectFiles.sourceFile);
+        if (!sourceFile) {
+          holder.outerHTML = renderElementLivePreview(null, "Wczytaj plik klienta, aby zobaczyć podgląd na żywo.");
+          return;
+        }
+        const form = new FormData();
+        form.append("file", sourceFile);
+        addOptionalProjectFile(form, "products_reference", $("productReferenceFile"), loadedElementProjectFiles.productsReferenceFile);
+        form.append("mapping_json", JSON.stringify(builderMode ? modelBuilderMappingProfile() : (currentElementMapping || {})));
+        const preview = await postForm("/api/building-elements/preview", form);
+        if (requestId !== elementPreviewRequestId) return;
+        lastElementPreview = preview;
+        const currentHolder = $("elementLivePreview");
+        if (currentHolder) currentHolder.outerHTML = renderElementLivePreview(preview);
+      } catch (error) {
+        if (requestId !== elementPreviewRequestId) return;
+        const currentHolder = $("elementLivePreview");
+        if (currentHolder) currentHolder.outerHTML = renderElementLivePreview(null, error?.message || "Nie udało się odświeżyć podglądu.");
       }
     }
     function escapeHtml(value) {
@@ -1562,10 +1701,11 @@ def render_building_elements_home() -> str:
       }
       return mapping;
     }
-    function syncElementMappingState() {
+    function syncElementMappingState(schedulePreview = true) {
       currentElementMapping = collectElementMapping();
       storeElementMappingForActiveModel();
       saveElementWorkspaceState();
+      if (schedulePreview) scheduleElementLivePreview();
     }
     function renderElementAnalysis(payload) {
       lastElementAnalysis = payload;
@@ -1595,9 +1735,11 @@ def render_building_elements_home() -> str:
           <ul class="tree-list">${tableItems || "<li>Nie znaleziono tabel w pliku importowanym.</li>"}</ul>
         `}
         ${mainEditor}
+        ${renderElementLivePreview(lastElementPreview)}
       `;
       renderElementRootModelSelect();
       syncElementMappingState();
+      scheduleElementLivePreview(0);
       saveElementWorkspaceState();
     }
     $("elementProjectName").addEventListener("input", saveElementWorkspaceState);

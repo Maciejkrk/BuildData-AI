@@ -193,6 +193,14 @@ def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_pat
         "building_element.produkt.value": {"table": "Systemy", "column": "Produkty", "cleanup": {"trim": True}},
     }
 
+    preview = preview_building_elements_from_tables(tables, profile, product_index)
+
+    preview_products = preview["systems"][0]["variants"][0]["layers"][0]["products"]
+    assert [(item["product_id"], item["variant_hash"], item["identity_source"]) for item in preview_products] == [
+        (2945, variant_hash, "variant"),
+        (4469, "", "name"),
+    ]
+
     result = convert_building_elements_from_tables("systems.xlsx", b"{}", tables, profile, model, product_index, tmp_path)
     payload = json.loads((tmp_path / result["job_id"] / "building_elements.json").read_text(encoding="utf-8"))
 

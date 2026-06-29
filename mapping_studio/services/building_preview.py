@@ -10,6 +10,7 @@ from data_master_app.mapping import apply_cleanup
 from mapping_studio.models import PimModelBundle, ProductReferenceIndex
 from mapping_studio.services.source_reader import SourceTable
 from mapping_studio.services.normalization import lookup_key
+from mapping_studio.services.product_reference import product_identity
 
 
 BUILDING_ELEMENT_ID_START = 910000
@@ -24,7 +25,7 @@ def preview_building_elements(rows: list[dict[str, Any]], mapping: dict[str, str
         system_name = mapped.get("building_element.name.value") or mapped.get("system.name") or row.get("Nazwa systemu") or row.get("System") or "System bez nazwy"
         variant_name = mapped.get("building_element.variant_name.value") or row.get("Wariant") or "Wariant domyślny"
         layer_name = mapped.get("building_element.layer_name.value") or row.get("Nazwa warstwy") or row.get("Warstwa") or "Warstwa bez nazwy"
-        product_key = mapped.get("building_element.product.value") or row.get("Kod produktu") or row.get("Nazwa produktu") or row.get("Produkt")
+        product_key = first_product_value(mapped) or first_product_value(row)
 
         system = systems.setdefault(str(system_name), {"name": system_name, "variants": {}})
         variant = system["variants"].setdefault(str(variant_name), {"name": variant_name, "layers": {}})
@@ -38,7 +39,9 @@ def preview_building_elements(rows: list[dict[str, Any]], mapping: dict[str, str
                 "raw": product_value,
                 "resolved": bool(match),
                 "product_id": match.get("Id") if match else None,
+                "product_name": product_identity(match)[0] if match else "",
                 "variant_hash": reference.get("variant_hash") if reference else "",
+                "variant_label": reference.get("variant_label") if reference else "",
                 "variant_row_i": reference.get("variant_row_i") if reference else None,
                 "identity_source": reference.get("source") if reference else product_identity_source(product_value, product_index, match),
             }
@@ -55,6 +58,28 @@ def preview_building_elements(rows: list[dict[str, Any]], mapping: dict[str, str
             "product_reference_loaded": product_index is not None and product_index.products_count > 0,
         },
     }
+
+
+def first_product_value(row: dict[str, Any]) -> Any:
+    preferred = (
+        "building_element.product.value",
+        "building_element.produkt.value",
+        "Kod produktu",
+        "Nazwa produktu",
+        "Produkt",
+        "Produkty",
+    )
+    for key in preferred:
+        value = row.get(key)
+        if value not in (None, ""):
+            return value
+    for key, value in row.items():
+        if str(key).startswith("_") or value in (None, ""):
+            continue
+        normalized_key = lookup_key(key)
+        if "product" in normalized_key or "produkt" in normalized_key:
+            return value
+    return None
 
 
 def preview_building_elements_from_tables(
@@ -152,6 +177,7 @@ def resolve_product_reference(value: Any, product_index: ProductReferenceIndex |
             "product": variant.get("product"),
             "source": "variant",
             "variant_hash": variant.get("hash") or "",
+            "variant_label": variant_label(variant),
             "variant_row_i": variant.get("row_i"),
         }
     product = product_index.by_code.get(key)
@@ -161,6 +187,11 @@ def resolve_product_reference(value: Any, product_index: ProductReferenceIndex |
     if product:
         return {"product": product, "source": "name", "variant_hash": "", "variant_row_i": None}
     return None
+
+
+def variant_label(variant: dict[str, Any]) -> str:
+    aliases = variant.get("aliases") or []
+    return str(aliases[0]) if aliases else ""
 
 
 def resolve_product(value: Any, product_index: ProductReferenceIndex | None) -> dict[str, Any] | None:
