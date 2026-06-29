@@ -343,6 +343,23 @@ def render_building_elements_home() -> str:
     .product-visual-chip.is-warn { border-left-color:#ea580c; background:#fff7ed; }
     .product-visual-chip strong { display:block; color:var(--text); }
     .product-visual-chip span { display:block; margin-top:3px; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+    .feature-visual-list {
+      display:grid;
+      gap:6px;
+      padding:0 10px 10px;
+    }
+    .feature-visual-item {
+      display:grid;
+      grid-template-columns:minmax(110px, 180px) 1fr;
+      gap:8px;
+      padding:7px 8px;
+      border:1px solid #eef2f6;
+      border-radius:4px;
+      background:#fbfcfd;
+      font-size:12px;
+    }
+    .feature-visual-item strong { color:#344054; overflow-wrap:anywhere; }
+    .feature-visual-item span { color:var(--text); overflow-wrap:anywhere; }
     .visual-empty {
       padding:14px;
       color:var(--muted);
@@ -1299,6 +1316,12 @@ def render_building_elements_home() -> str:
         const layerCards = [];
         for (const layer of variant.layers || []) {
           const productCards = [];
+          const featureCards = (layer.features || []).map((feature) => `
+            <div class="feature-visual-item">
+              <strong>${escapeHtml(feature.label || feature.key || "")}</strong>
+              <span>${escapeHtml(feature.value ?? "")}</span>
+            </div>
+          `);
           for (const product of layer.products || []) {
             const scopeLabel = product.variant_scope_label || (product.resolved
               ? (product.variant_hash ? "tylko wskazany wariant" : "wszystkie warianty produktu")
@@ -1330,6 +1353,7 @@ def render_building_elements_home() -> str:
             <div class="layer-visual-card">
               <div class="layer-visual-head">${escapeHtml(layer.name || "Warstwa bez nazwy")}</div>
               <div class="product-visual-list">${productCards.join("")}</div>
+              ${featureCards.length ? `<div class="feature-visual-list"><strong>Odczytane cechy</strong>${featureCards.join("")}</div>` : ""}
             </div>
           `);
         }

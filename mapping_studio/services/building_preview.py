@@ -55,8 +55,9 @@ def preview_building_elements(
 
         system = systems.setdefault(system_key, {"name": system_name, "variants": {}})
         variant = system["variants"].setdefault(str(variant_name), {"name": variant_name, "layers": {}})
-        layer = variant["layers"].setdefault(str(layer_name), {"name": layer_name, "source_rows": [], "products": []})
+        layer = variant["layers"].setdefault(str(layer_name), {"name": layer_name, "source_rows": [], "products": [], "features": []})
         layer["source_rows"].append(source_index)
+        merge_features(layer["features"], row_features(mapped, source_index))
 
         for product_value in product_values(product_key):
             reference = resolve_product_reference(product_value, product_index)
@@ -169,10 +170,81 @@ def first_value_by_role(
     for key, value in row.items():
         if str(key).startswith("_") or value in (None, ""):
             continue
-        normalized_key = lookup_key(key)
+        normalized_key = field_lookup_key(key)
         if any(marker in normalized_key for marker in include_markers) and not any(marker in normalized_key for marker in exclude_markers):
             return value
     return None
+
+
+def field_lookup_key(key: Any) -> str:
+    return lookup_key(str(key).replace(".", "_"))
+
+
+STRUCTURE_FIELD_KEYS = {
+    "buildingelementnamevalue",
+    "buildingelementnazwasystemuvalue",
+    "systemname",
+    "nazwasystemu",
+    "system",
+    "buildingelementvariantnamevalue",
+    "buildingelementnazwawariantuvalue",
+    "variantname",
+    "nazwawariantu",
+    "wariant",
+    "variant",
+    "buildingelementlayernamevalue",
+    "buildingelementnazwawarstwyvalue",
+    "layername",
+    "nazwawarstwy",
+    "warstwa",
+    "layer",
+    "buildingelementproductvalue",
+    "buildingelementproduktvalue",
+    "productname",
+    "productcode",
+    "nazwaproduktu",
+    "kodproduktu",
+    "produkty",
+    "produkt",
+    "product",
+}
+
+
+def row_features(row: dict[str, Any], source_index: int) -> list[dict[str, Any]]:
+    features: list[dict[str, Any]] = []
+    for key, value in row.items():
+        if str(key).startswith("_") or value in (None, ""):
+            continue
+        normalized_key = field_lookup_key(key)
+        if normalized_key in STRUCTURE_FIELD_KEYS:
+            continue
+        features.append(
+            {
+                "key": str(key),
+                "label": feature_label(key),
+                "value": value,
+                "source_row": source_index,
+            }
+        )
+    return features
+
+
+def merge_features(target: list[dict[str, Any]], features: list[dict[str, Any]]) -> None:
+    seen = {(item.get("key"), str(item.get("value"))) for item in target}
+    for feature in features:
+        identity = (feature.get("key"), str(feature.get("value")))
+        if identity not in seen:
+            target.append(feature)
+            seen.add(identity)
+
+
+def feature_label(key: Any) -> str:
+    text = str(key)
+    if text.startswith("building_element."):
+        text = text.removeprefix("building_element.")
+    if text.endswith(".value"):
+        text = text.removesuffix(".value")
+    return text.replace("_", " ").replace(".", " / ")
 
 
 def preview_building_elements_from_tables(

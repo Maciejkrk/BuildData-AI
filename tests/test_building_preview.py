@@ -223,6 +223,8 @@ def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_pat
                     "Wariant": "W1",
                     "Warstwa": "Izolacja",
                     "Produkty": "11111, ISOVER Super-Mata Plus",
+                    "Typ": "ETICS",
+                    "Grubosc": "200 mm",
                 }
             ],
         )
@@ -233,6 +235,8 @@ def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_pat
         "building_element.nazwa_wariantu.value": {"table": "Systemy", "column": "Wariant", "cleanup": {"trim": True}},
         "building_element.nazwa_warstwy.value": {"table": "Systemy", "column": "Warstwa", "cleanup": {"trim": True}},
         "building_element.produkt.value": {"table": "Systemy", "column": "Produkty", "cleanup": {"trim": True}},
+        "building_element.typ_systemu.value": {"table": "Systemy", "column": "Typ", "cleanup": {"trim": True}},
+        "building_element.grubosc.value": {"table": "Systemy", "column": "Grubosc", "cleanup": {"trim": True}},
     }
 
     preview = preview_building_elements_from_tables(tables, profile, product_index)
@@ -241,6 +245,11 @@ def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_pat
     assert preview["systems"][0]["name"] == "S1"
     assert preview["systems"][0]["variants"][0]["name"] == "W1"
     assert preview["systems"][0]["variants"][0]["layers"][0]["name"] == "Izolacja"
+    preview_features = preview["systems"][0]["variants"][0]["layers"][0]["features"]
+    assert [(item["key"], item["value"]) for item in preview_features] == [
+        ("building_element.typ_systemu.value", "ETICS"),
+        ("building_element.grubosc.value", "200 mm"),
+    ]
     assert [(item["product_id"], item["variant_hash"], item["identity_source"]) for item in preview_products] == [
         (2945, variant_hash, "variant"),
         (4469, "", "name"),
