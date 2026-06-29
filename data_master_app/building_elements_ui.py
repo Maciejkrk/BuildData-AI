@@ -251,6 +251,73 @@ def render_building_elements_home() -> str:
       color:#344054;
       font-weight:700;
     }
+    .element-visual-preview {
+      display:grid;
+      gap:12px;
+      padding:12px;
+      background:#fbfcfd;
+    }
+    .element-visual-card {
+      border:1px solid var(--line);
+      border-radius:6px;
+      background:#fff;
+      overflow:hidden;
+    }
+    .element-visual-title {
+      padding:12px;
+      background:#ecfdf5;
+      border-bottom:1px solid #bbf7d0;
+    }
+    .element-visual-title strong { display:block; font-size:16px; color:#14532d; }
+    .element-visual-title span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
+    .variant-visual-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));
+      gap:12px;
+      padding:12px;
+    }
+    .variant-visual-card {
+      border:1px solid #dbeafe;
+      border-radius:6px;
+      background:#f8fbff;
+      overflow:hidden;
+    }
+    .variant-visual-head {
+      padding:10px 12px;
+      background:#eff6ff;
+      border-bottom:1px solid #dbeafe;
+      font-weight:700;
+      color:#1e3a8a;
+    }
+    .layer-visual-card {
+      margin:10px;
+      border:1px solid #e5e7eb;
+      border-radius:6px;
+      background:#fff;
+    }
+    .layer-visual-head {
+      padding:9px 10px;
+      border-bottom:1px solid #eef2f6;
+      font-weight:700;
+      color:#344054;
+    }
+    .product-visual-list { display:grid; gap:8px; padding:10px; }
+    .product-visual-chip {
+      border:1px solid #e5e7eb;
+      border-left:4px solid #9ca3af;
+      border-radius:6px;
+      padding:9px 10px;
+      background:#fff;
+    }
+    .product-visual-chip.is-ok { border-left-color:#16a34a; background:#f0fdf4; }
+    .product-visual-chip.is-warn { border-left-color:#ea580c; background:#fff7ed; }
+    .product-visual-chip strong { display:block; color:var(--text); }
+    .product-visual-chip span { display:block; margin-top:3px; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+    .visual-empty {
+      padding:14px;
+      color:var(--muted);
+      background:#fff;
+    }
     .status-ok { color:#166534; font-weight:700; }
     .status-warn { color:#9a3412; font-weight:700; }
     .preview-path { color:var(--muted); font-size:11px; }
@@ -1159,6 +1226,62 @@ def render_building_elements_home() -> str:
       if (holder) holder.outerHTML = renderElementLivePreview(lastElementPreview);
       saveElementWorkspaceState();
     }
+    function renderElementVisualPreview(system, currentLabel) {
+      if (!system) {
+        return `<div class="element-visual-preview"><div class="visual-empty">Brak danych do podglądu.</div></div>`;
+      }
+      const variantCards = [];
+      for (const variant of system.variants || []) {
+        const layerCards = [];
+        for (const layer of variant.layers || []) {
+          const productCards = [];
+          for (const product of layer.products || []) {
+            const status = product.resolved
+              ? (product.variant_hash ? "wariant produktu" : "produkt")
+              : "nie rozpoznano";
+            const recognized = product.resolved
+              ? `${product.variant_hash ? "Wariant" : "Produkt"}: ${product.product_name || product.product_id || ""}${product.variant_label ? ` / ${product.variant_label}` : ""}`
+              : "Brak dopasowania w referencyjnym products.json";
+            productCards.push(`
+              <div class="product-visual-chip ${product.resolved ? "is-ok" : "is-warn"}">
+                <strong>${escapeHtml(product.raw || "")}</strong>
+                <span>${escapeHtml(recognized)}</span>
+                <span>Status: ${escapeHtml(status)}${product.identity_source ? ` / dopasowanie: ${escapeHtml(product.identity_source)}` : ""}</span>
+              </div>
+            `);
+          }
+          if (!layer.products?.length) {
+            productCards.push(`
+              <div class="product-visual-chip is-warn">
+                <strong>Brak produktu</strong>
+                <span>Brak zmapowanych produktów dla tej warstwy.</span>
+              </div>
+            `);
+          }
+          layerCards.push(`
+            <div class="layer-visual-card">
+              <div class="layer-visual-head">${escapeHtml(layer.name || "Warstwa bez nazwy")}</div>
+              <div class="product-visual-list">${productCards.join("")}</div>
+            </div>
+          `);
+        }
+        variantCards.push(`
+          <div class="variant-visual-card">
+            <div class="variant-visual-head">${escapeHtml(variant.name || "Wariant domyślny")}</div>
+            ${layerCards.join("") || `<div class="visual-empty">Brak warstw w tym wariancie.</div>`}
+          </div>
+        `);
+      }
+      return `<div class="element-visual-preview">
+        <div class="element-visual-card">
+          <div class="element-visual-title">
+            <strong>${escapeHtml(system.name || "System bez nazwy")}</strong>
+            <span>${escapeHtml(currentLabel)} / warianty: ${(system.variants || []).length}</span>
+          </div>
+          <div class="variant-visual-grid">${variantCards.join("") || `<div class="visual-empty">Brak wariantów dla tego elementu.</div>`}</div>
+        </div>
+      </div>`;
+    }
     function renderElementLivePreview(preview, message = "") {
       if (!preview) {
         return `<div class="live-preview" id="elementLivePreview">
@@ -1226,7 +1349,8 @@ def render_building_elements_home() -> str:
             <span class="pill">referencja produktów: ${quality.product_reference_loaded ? "wczytana" : "brak"}</span>
           </div>
         </div>
-        <div class="live-preview-table-wrap">
+        ${renderElementVisualPreview(system, currentLabel)}
+        <div class="live-preview-table-wrap" hidden>
           <table class="live-preview-table">
             <thead><tr><th>System / wariant</th><th>Warstwa</th><th>Wartość klienta</th><th>Rozpoznanie</th><th>Status</th><th>Dopasowanie</th></tr></thead>
             <tbody>${rows.join("") || `<tr><td colspan="6">Brak danych do podglądu.</td></tr>`}</tbody>
