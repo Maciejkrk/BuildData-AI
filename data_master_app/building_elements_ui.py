@@ -220,6 +220,18 @@ def render_building_elements_home() -> str:
       border-bottom:1px solid var(--line);
     }
     .live-preview-head p { margin:4px 0 0; }
+    .live-preview-nav {
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .live-preview-nav button {
+      width:auto;
+      margin:0;
+      padding:8px 10px;
+    }
     .live-preview-table-wrap { overflow:auto; }
     .live-preview-table {
       width:100%;
@@ -514,6 +526,7 @@ def render_building_elements_home() -> str:
     let loadedElementProject = null;
     let loadedElementProjectFiles = { modelFiles: [], productModelFiles: [], sourceFile: null, productsReferenceFile: null };
     let lastElementPreview = null;
+    let elementPreviewIndex = 0;
     let elementPreviewTimer = null;
     let elementPreviewRequestId = 0;
     const ELEMENT_WORKSPACE_KEY = "buildDataAiBuildingElementsWorkspace";
@@ -1138,6 +1151,14 @@ def render_building_elements_home() -> str:
       if (elementPreviewTimer) clearTimeout(elementPreviewTimer);
       elementPreviewTimer = setTimeout(updateElementLivePreview, delay);
     }
+    function setElementPreviewIndex(delta) {
+      const systems = lastElementPreview?.systems || [];
+      if (!systems.length) return;
+      elementPreviewIndex = Math.min(Math.max(elementPreviewIndex + delta, 0), systems.length - 1);
+      const holder = $("elementLivePreview");
+      if (holder) holder.outerHTML = renderElementLivePreview(lastElementPreview);
+      saveElementWorkspaceState();
+    }
     function renderElementLivePreview(preview, message = "") {
       if (!preview) {
         return `<div class="live-preview" id="elementLivePreview">
@@ -1150,8 +1171,14 @@ def render_building_elements_home() -> str:
         </div>`;
       }
       const quality = preview.quality || {};
+      const systems = preview.systems || [];
+      if (elementPreviewIndex >= systems.length) elementPreviewIndex = Math.max(0, systems.length - 1);
+      const system = systems[elementPreviewIndex] || null;
+      const currentLabel = systems.length
+        ? `Element ${elementPreviewIndex + 1} / ${systems.length}`
+        : "Element 0 / 0";
       const rows = [];
-      for (const system of preview.systems || []) {
+      if (system) {
         for (const variant of system.variants || []) {
           for (const layer of variant.layers || []) {
             for (const product of layer.products || []) {
@@ -1190,7 +1217,10 @@ def render_building_elements_home() -> str:
             <h3>Podgląd na żywo mapowania</h3>
             <p>Pokazuje, jak aktualne mapowanie zostanie odczytane przed wygenerowaniem building_elements.json.</p>
           </div>
-          <div>
+          <div class="live-preview-nav">
+            <button type="button" class="secondary" onclick="setElementPreviewIndex(-1)"${elementPreviewIndex <= 0 ? " disabled" : ""}>Poprzedni element</button>
+            <span class="pill">${escapeHtml(currentLabel)}</span>
+            <button type="button" class="secondary" onclick="setElementPreviewIndex(1)"${elementPreviewIndex >= systems.length - 1 ? " disabled" : ""}>Następny element</button>
             <span class="pill">systemy: ${escapeHtml(quality.systems || 0)}</span>
             <span class="pill">nierozpoznane produkty: ${escapeHtml(quality.unresolved_products_count || 0)}</span>
             <span class="pill">referencja produktów: ${quality.product_reference_loaded ? "wczytana" : "brak"}</span>
@@ -1223,6 +1253,7 @@ def render_building_elements_home() -> str:
         const preview = await postForm("/api/building-elements/preview", form);
         if (requestId !== elementPreviewRequestId) return;
         lastElementPreview = preview;
+        if (elementPreviewIndex >= (preview.systems || []).length) elementPreviewIndex = 0;
         const currentHolder = $("elementLivePreview");
         if (currentHolder) currentHolder.outerHTML = renderElementLivePreview(preview);
       } catch (error) {
