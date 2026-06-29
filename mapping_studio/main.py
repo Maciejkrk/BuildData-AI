@@ -128,6 +128,8 @@ async def building_elements_preview(
     file: UploadFile = File(...),
     products_reference: UploadFile | None = File(None),
     mapping_json: str = Form("{}"),
+    preview_offset: int = Form(0),
+    preview_limit: int = Form(1),
 ) -> dict[str, Any]:
     import json
 
@@ -140,7 +142,13 @@ async def building_elements_preview(
             if reference_content:
                 product_index = build_product_reference_index(reference_content)
         mapping = json.loads(mapping_json or "{}")
-        return preview_building_elements_from_tables(tables, mapping, product_index)
+        return preview_building_elements_from_tables(
+            tables,
+            mapping,
+            product_index,
+            preview_offset=preview_offset,
+            preview_limit=preview_limit,
+        )
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -17,17 +17,35 @@ BUILDING_ELEMENT_ID_START = 910000
 BUILDING_ELEMENT_TYPE_ID = 1
 
 
-def preview_building_elements(rows: list[dict[str, Any]], mapping: dict[str, str], product_index: ProductReferenceIndex | None) -> dict[str, Any]:
+def preview_building_elements(
+    rows: list[dict[str, Any]],
+    mapping: dict[str, str],
+    product_index: ProductReferenceIndex | None,
+    *,
+    preview_offset: int = 0,
+    preview_limit: int | None = None,
+) -> dict[str, Any]:
     systems: dict[str, dict[str, Any]] = {}
     unresolved_products: list[dict[str, Any]] = []
+    system_order: list[str] = []
+    preview_offset = max(preview_offset, 0)
+    preview_limit = max(preview_limit, 1) if preview_limit is not None else None
     for source_index, row in enumerate(rows, start=1):
         mapped = apply_simple_mapping(row, mapping)
         system_name = mapped.get("building_element.name.value") or mapped.get("system.name") or row.get("Nazwa systemu") or row.get("System") or "System bez nazwy"
         variant_name = mapped.get("building_element.variant_name.value") or row.get("Wariant") or "Wariant domyślny"
         layer_name = mapped.get("building_element.layer_name.value") or row.get("Nazwa warstwy") or row.get("Warstwa") or "Warstwa bez nazwy"
         product_key = first_product_value(mapped) or first_product_value(row)
+        system_key = str(system_name)
+        if system_key not in system_order:
+            system_order.append(system_key)
+        system_index = system_order.index(system_key)
+        if system_index < preview_offset:
+            continue
+        if preview_limit is not None and system_index >= preview_offset + preview_limit:
+            continue
 
-        system = systems.setdefault(str(system_name), {"name": system_name, "variants": {}})
+        system = systems.setdefault(system_key, {"name": system_name, "variants": {}})
         variant = system["variants"].setdefault(str(variant_name), {"name": variant_name, "layers": {}})
         layer = variant["layers"].setdefault(str(layer_name), {"name": layer_name, "source_rows": [], "products": []})
         layer["source_rows"].append(source_index)
@@ -52,7 +70,12 @@ def preview_building_elements(rows: list[dict[str, Any]], mapping: dict[str, str
     return {
         "systems": normalize_tree(systems),
         "quality": {
-            "systems": len(systems),
+            "systems": len(system_order),
+            "preview_offset": preview_offset,
+            "preview_limit": preview_limit,
+            "preview_systems_count": len(systems),
+            "has_previous": preview_offset > 0,
+            "has_next": preview_limit is not None and len(system_order) > preview_offset + len(systems),
             "unresolved_products": unresolved_products,
             "unresolved_products_count": len(unresolved_products),
             "product_reference_loaded": product_index is not None and product_index.products_count > 0,
@@ -86,14 +109,17 @@ def preview_building_elements_from_tables(
     tables: list[SourceTable],
     mapping_profile: dict[str, Any],
     product_index: ProductReferenceIndex | None,
+    *,
+    preview_offset: int = 0,
+    preview_limit: int | None = None,
 ) -> dict[str, Any]:
     if not mapping_profile:
-        return preview_building_elements(tables[0].rows if tables else [], {}, product_index)
+        return preview_building_elements(tables[0].rows if tables else [], {}, product_index, preview_offset=preview_offset, preview_limit=preview_limit)
     if is_legacy_mapping(mapping_profile):
-        return preview_building_elements(tables[0].rows if tables else [], mapping_profile, product_index)
+        return preview_building_elements(tables[0].rows if tables else [], mapping_profile, product_index, preview_offset=preview_offset, preview_limit=preview_limit)
 
     rows = mapped_rows_from_profile(tables, mapping_profile)
-    return preview_building_elements(rows, {}, product_index)
+    return preview_building_elements(rows, {}, product_index, preview_offset=preview_offset, preview_limit=preview_limit)
 
 
 def is_legacy_mapping(mapping_profile: dict[str, Any]) -> bool:

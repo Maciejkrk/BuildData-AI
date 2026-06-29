@@ -1281,11 +1281,11 @@ def render_building_elements_home() -> str:
       elementPreviewTimer = setTimeout(updateElementLivePreview, delay);
     }
     function setElementPreviewIndex(delta) {
-      const systems = lastElementPreview?.systems || [];
-      if (!systems.length) return;
-      elementPreviewIndex = Math.min(Math.max(elementPreviewIndex + delta, 0), systems.length - 1);
-      const holder = $("elementLivePreview");
-      if (holder) holder.outerHTML = renderElementLivePreview(lastElementPreview);
+      const quality = lastElementPreview?.quality || {};
+      const total = Number(quality.systems || 0);
+      if (!total) return;
+      elementPreviewIndex = Math.min(Math.max(elementPreviewIndex + delta, 0), Math.max(total - 1, 0));
+      scheduleElementLivePreview(0);
       saveElementWorkspaceState();
     }
     function renderElementVisualPreview(system, currentLabel) {
@@ -1357,10 +1357,12 @@ def render_building_elements_home() -> str:
       }
       const quality = preview.quality || {};
       const systems = preview.systems || [];
-      if (elementPreviewIndex >= systems.length) elementPreviewIndex = Math.max(0, systems.length - 1);
-      const system = systems[elementPreviewIndex] || null;
-      const currentLabel = systems.length
-        ? `Element ${elementPreviewIndex + 1} / ${systems.length}`
+      const system = systems[0] || null;
+      const currentOffset = Number(quality.preview_offset ?? elementPreviewIndex ?? 0);
+      const totalSystems = Number(quality.systems || systems.length || 0);
+      elementPreviewIndex = currentOffset;
+      const currentLabel = totalSystems
+        ? `Element ${currentOffset + 1} / ${totalSystems}`
         : "Element 0 / 0";
       const rows = [];
       if (system) {
@@ -1403,9 +1405,9 @@ def render_building_elements_home() -> str:
             <p>Pokazuje, jak aktualne mapowanie zostanie odczytane przed wygenerowaniem building_elements.json.</p>
           </div>
           <div class="live-preview-nav">
-            <button type="button" class="secondary" onclick="setElementPreviewIndex(-1)"${elementPreviewIndex <= 0 ? " disabled" : ""}>Poprzedni element</button>
+            <button type="button" class="secondary" onclick="setElementPreviewIndex(-1)"${quality.has_previous ? "" : " disabled"}>Poprzedni element</button>
             <span class="pill">${escapeHtml(currentLabel)}</span>
-            <button type="button" class="secondary" onclick="setElementPreviewIndex(1)"${elementPreviewIndex >= systems.length - 1 ? " disabled" : ""}>Następny element</button>
+            <button type="button" class="secondary" onclick="setElementPreviewIndex(1)"${quality.has_next ? "" : " disabled"}>Następny element</button>
             <span class="pill">systemy: ${escapeHtml(quality.systems || 0)}</span>
             <span class="pill">nierozpoznane produkty: ${escapeHtml(quality.unresolved_products_count || 0)}</span>
             <span class="pill">referencja produktów: ${quality.product_reference_loaded ? "wczytana" : "brak"}</span>
@@ -1437,10 +1439,12 @@ def render_building_elements_home() -> str:
         form.append("file", sourceFile);
         addOptionalProjectFile(form, "products_reference", $("productReferenceFile"), loadedElementProjectFiles.productsReferenceFile);
         form.append("mapping_json", JSON.stringify(builderMode ? modelBuilderMappingProfile() : (currentElementMapping || {})));
+        form.append("preview_offset", String(elementPreviewIndex || 0));
+        form.append("preview_limit", "1");
         const preview = await postForm("/api/building-elements/preview", form);
         if (requestId !== elementPreviewRequestId) return;
         lastElementPreview = preview;
-        if (elementPreviewIndex >= (preview.systems || []).length) elementPreviewIndex = 0;
+        if (elementPreviewIndex >= Number(preview.quality?.systems || 0)) elementPreviewIndex = 0;
         const currentHolder = $("elementLivePreview");
         if (currentHolder) currentHolder.outerHTML = renderElementLivePreview(preview);
       } catch (error) {

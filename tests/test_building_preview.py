@@ -60,6 +60,22 @@ def test_building_preview_can_start_without_product_reference() -> None:
     assert preview["systems"][0]["variants"][0]["layers"][0]["products"][0]["resolved"] is False
 
 
+def test_building_preview_can_page_parent_systems() -> None:
+    rows = [
+        {"Nazwa systemu": "System 1", "Wariant": "A", "Warstwa": "L1", "Produkt": "P1"},
+        {"Nazwa systemu": "System 2", "Wariant": "A", "Warstwa": "L1", "Produkt": "P2"},
+        {"Nazwa systemu": "System 3", "Wariant": "A", "Warstwa": "L1", "Produkt": "P3"},
+    ]
+
+    preview = preview_building_elements(rows, {}, None, preview_offset=1, preview_limit=1)
+
+    assert preview["quality"]["systems"] == 3
+    assert preview["quality"]["preview_systems_count"] == 1
+    assert preview["quality"]["has_previous"] is True
+    assert preview["quality"]["has_next"] is True
+    assert [system["name"] for system in preview["systems"]] == ["System 2"]
+
+
 def test_building_preview_reads_profile_table_column_and_cleanup() -> None:
     tables = [
         SourceTable(
