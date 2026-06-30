@@ -486,30 +486,24 @@ def render_building_elements_home() -> str:
       </div>
       <div class="panel">
         <h3 data-i18n="elements.files">Model, produkty i dane</h3>
-        <label><span data-i18n="elements.modelsFile">buildingElementsModels.json</span>
-          <input id="elementModelsFile" type="file" accept=".json">
+        <label><span data-i18n="elements.modelFiles">Pliki modelu: buildingElementsModels.json i buildingElementsAttributes.json</span>
+          <input id="elementModelFiles" type="file" accept=".json" multiple>
         </label>
-        <label><span data-i18n="elements.attributesFile">buildingElementsAttributes.json</span>
-          <input id="elementAttributesFile" type="file" accept=".json">
-        </label>
-        <button type="button" class="secondary" onclick="loadElementModelHierarchy()" data-i18n="elements.loadModel">Wczytaj hierarchię modelu</button>
         <label><span data-i18n="elements.activeModel">Edytowany model elementu</span>
           <select id="elementRootModelSelect" disabled></select>
         </label>
+        <button type="button" class="secondary" onclick="loadElementModelHierarchy()" data-i18n="elements.loadModel">Wczytaj hierarchię modelu</button>
         <label><span data-i18n="elements.productsReference">Referencyjne products.json</span>
           <input id="productReferenceFile" type="file" accept=".json">
         </label>
         <div class="notice" data-i18n="productIdentity.notice">Model produktu jest opcjonalny, ale zalecany. Pozwala wskazać, który atrybut produktu jest stabilnym identyfikatorem używanym przy warstwach.</div>
-        <label><span data-i18n="productIdentity.modelsFile">productsModels.json</span>
-          <input id="elementProductModelsFile" type="file" accept=".json">
+        <label><span data-i18n="productIdentity.modelFiles">Pliki modelu produktu: productsModels.json i productsAttributes.json</span>
+          <input id="elementProductModelFiles" type="file" accept=".json" multiple>
         </label>
-        <label><span data-i18n="productIdentity.attributesFile">productsAttributes.json</span>
-          <input id="elementProductAttributesFile" type="file" accept=".json">
-        </label>
-        <button type="button" class="secondary" onclick="loadElementProductModel()" data-i18n="productIdentity.loadModel">Wczytaj model produktu</button>
         <label><span data-i18n="productIdentity.activeModel">Model produktu dla dopasowania</span>
           <select id="elementProductRootModelSelect" disabled></select>
         </label>
+        <button type="button" class="secondary" onclick="loadElementProductModel()" data-i18n="productIdentity.loadModel">Wczytaj model produktu</button>
         <label><span data-i18n="productIdentity.field">Atrybut identyfikujący produkt</span>
           <select id="elementProductIdentityFieldSelect" disabled></select>
         </label>
@@ -574,12 +568,14 @@ def render_building_elements_home() -> str:
         "modelBuilder.help": "Najpierw wczytaj model elementów budowlanych. Edytor ręczny musi powstać z hierarchii modelu, więc nie używa pliku importowanego ani stałych pól.",
         "modelBuilder.load": "Wczytaj / odśwież model",
         "elements.files": "Model, produkty i dane",
+        "elements.modelFiles": "Pliki modelu: buildingElementsModels.json i buildingElementsAttributes.json",
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
         "elements.loadModel": "Wczytaj hierarchię modelu",
         "elements.activeModel": "Edytowany model elementu",
         "elements.productsReference": "Referencyjne products.json (opcjonalne, do kontroli dopasowania produktów)",
         "productIdentity.notice": "Model produktu jest opcjonalny, ale zalecany. Pozwala wskazać, który atrybut produktu jest stabilnym identyfikatorem używanym przy warstwach.",
+        "productIdentity.modelFiles": "Pliki modelu produktu: productsModels.json i productsAttributes.json",
         "productIdentity.modelsFile": "productsModels.json",
         "productIdentity.attributesFile": "productsAttributes.json",
         "productIdentity.loadModel": "Wczytaj model produktu",
@@ -629,12 +625,14 @@ def render_building_elements_home() -> str:
         "modelBuilder.help": "Load the building-element model first. The manual editor must be generated from the model hierarchy, so it does not use an imported file or fixed fields.",
         "modelBuilder.load": "Load / refresh model",
         "elements.files": "Model, products and data",
+        "elements.modelFiles": "Model files: buildingElementsModels.json and buildingElementsAttributes.json",
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
         "elements.loadModel": "Load model hierarchy",
         "elements.activeModel": "Edited element model",
         "elements.productsReference": "Reference products.json (optional, for product-match verification)",
         "productIdentity.notice": "The product model is optional but recommended. It lets you choose which product attribute is the stable identifier used in layers.",
+        "productIdentity.modelFiles": "Product model files: productsModels.json and productsAttributes.json",
         "productIdentity.modelsFile": "productsModels.json",
         "productIdentity.attributesFile": "productsAttributes.json",
         "productIdentity.loadModel": "Load product model",
@@ -960,16 +958,10 @@ def render_building_elements_home() -> str:
       saveElementWorkspaceState();
     }
     function selectedElementModelFiles() {
-      return [
-        $("elementModelsFile")?.files?.[0] || null,
-        $("elementAttributesFile")?.files?.[0] || null,
-      ].filter(Boolean);
+      return Array.from($("elementModelFiles")?.files || []);
     }
     function selectedElementProductModelFiles() {
-      return [
-        $("elementProductModelsFile")?.files?.[0] || null,
-        $("elementProductAttributesFile")?.files?.[0] || null,
-      ].filter(Boolean);
+      return Array.from($("elementProductModelFiles")?.files || []);
     }
     function elementModelFileFromCache(kind) {
       const pattern = kind === "models" ? /models[.]json$/i : /attributes[.]json$/i;
@@ -983,8 +975,8 @@ def render_building_elements_home() -> str:
       const selected = selectedElementModelFiles();
       if (selected.length) {
         return [
-          $("elementModelsFile")?.files?.[0] || elementModelFileFromCache("models"),
-          $("elementAttributesFile")?.files?.[0] || elementModelFileFromCache("attributes"),
+          selected.find((file) => /models[.]json$/i.test(file?.name || "")) || elementModelFileFromCache("models"),
+          selected.find((file) => /attributes[.]json$/i.test(file?.name || "")) || elementModelFileFromCache("attributes"),
         ].filter(Boolean);
       }
       return loadedElementProjectFiles.modelFiles || [];
@@ -993,8 +985,8 @@ def render_building_elements_home() -> str:
       const selected = selectedElementProductModelFiles();
       if (selected.length) {
         return [
-          $("elementProductModelsFile")?.files?.[0] || elementProductModelFileFromCache("models"),
-          $("elementProductAttributesFile")?.files?.[0] || elementProductModelFileFromCache("attributes"),
+          selected.find((file) => /models[.]json$/i.test(file?.name || "")) || elementProductModelFileFromCache("models"),
+          selected.find((file) => /attributes[.]json$/i.test(file?.name || "")) || elementProductModelFileFromCache("attributes"),
         ].filter(Boolean);
       }
       return loadedElementProjectFiles.productModelFiles || [];
@@ -2084,9 +2076,9 @@ def render_building_elements_home() -> str:
       const file = $("elementProjectFile").files[0];
       if (file) loadElementProjectFromFile(file);
     });
-    for (const inputId of ["elementModelsFile", "elementAttributesFile", "elementProductModelsFile", "elementProductAttributesFile", "productReferenceFile", "elementSourceFile"]) {
+    for (const inputId of ["elementModelFiles", "elementProductModelFiles", "productReferenceFile", "elementSourceFile"]) {
       $(inputId).addEventListener("change", async () => {
-        if (inputId === "elementProductModelsFile" || inputId === "elementProductAttributesFile") {
+        if (inputId === "elementProductModelFiles") {
           elementProductRootModels = [];
           activeElementProductRootModelId = "";
           elementProductIdentityFields = [];

@@ -984,17 +984,14 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         <div class="muted" data-i18n="model.help">Najpierw wczytaj dwa pliki z PIM: productsModels.json i productsAttributes.json. One tworzą obowiązujący model produktu dla całego procesu.</div>
         <input id="productModelId" type="hidden" name="product_model_id" value="__PRODUCT_MODEL_ID_VALUE__">
         <div class="model-file-grid">
-          <label><span data-i18n="model.modelsFile">productsModels.json</span>
-            <input id="productModelsFile" name="products_models_file" type="file" accept=".json" required onchange="window.productModelFileChanged && window.productModelFileChanged()">
+          <label><span data-i18n="model.files">Pliki modelu: productsModels.json i productsAttributes.json</span>
+            <input id="productModelFiles" name="product_model_files" type="file" accept=".json" multiple required onchange="window.productModelFileChanged && window.productModelFileChanged()">
           </label>
-          <label><span data-i18n="model.attributesFile">productsAttributes.json</span>
-            <input id="productAttributesFile" name="products_attributes_file" type="file" accept=".json" required onchange="window.productModelFileChanged && window.productModelFileChanged()">
+          <label><span data-i18n="model.activeModel">Edytowany model produktu</span>
+            <select id="productRootModelSelect" disabled></select>
           </label>
         </div>
         <div class="gate-warning" data-i18n="model.warning">Zmiana tych plików kasuje aktualną strukturę mapowania, podgląd i wygenerowany products.json. Dalsze funkcje są dostępne dopiero po zaakceptowaniu modelu.</div>
-        <label><span data-i18n="model.activeModel">Edytowany model produktu</span>
-          <select id="productRootModelSelect" disabled></select>
-        </label>
         <button type="submit" id="acceptProductModelBtn" data-i18n="model.accept" disabled>Zaakceptuj model produktu</button>
         <div id="productModelStatus" class="status">__INITIAL_PRODUCT_MODEL_STATUS__</div>
       </form>
@@ -1059,15 +1056,23 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
   </div>
   <script>
     window.productModelFileChanged = function() {
+      var filesInput = document.getElementById("productModelFiles");
+      var files = filesInput && filesInput.files ? Array.prototype.slice.call(filesInput.files) : [];
       var fields = [
-        ["productModelsFile", "productsModels.json"],
-        ["productAttributesFile", "productsAttributes.json"]
+        ["productsmodels", "productsModels.json"],
+        ["productsattributes", "productsAttributes.json"]
       ];
       var selected = [];
       var missing = [];
       for (var index = 0; index < fields.length; index += 1) {
-        var input = document.getElementById(fields[index][0]);
-        if (input && input.files && input.files.length) selected.push(fields[index][1] + ": " + input.files[0].name);
+        var key = fields[index][0];
+        var file = files.find(function(item) {
+          var name = String(item && item.name || "").toLowerCase().replace(/[.]json$/i, "").replace(/[^a-z0-9]+/g, "");
+          if (key === "productsmodels") return name.indexOf("productsmodels") >= 0 || name.indexOf("productmodels") >= 0;
+          if (key === "productsattributes") return name.indexOf("productsattributes") >= 0 || name.indexOf("productattributes") >= 0;
+          return false;
+        });
+        if (file) selected.push(fields[index][1] + ": " + file.name);
         else missing.push(fields[index][1]);
       }
       var button = document.getElementById("acceptProductModelBtn");
@@ -1147,6 +1152,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "model.title": "Model produktu PIM",
         "model.help": "Najpierw wczytaj dwa pliki z PIM: productsModels.json i productsAttributes.json. One tworzą obowiązujący model produktu dla całego procesu.",
         "model.file": "Pliki modelu produktu PIM JSON",
+        "model.files": "Pliki modelu: productsModels.json i productsAttributes.json",
         "model.modelsFile": "Plik productsModels.json",
         "model.attributesFile": "Plik productsAttributes.json",
         "model.productsFile": "Plik products.json",
@@ -1462,6 +1468,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "model.title": "Product PIM Model",
         "model.help": "First load two files from PIM: productsModels.json and productsAttributes.json. They define the product model for the whole process.",
         "model.file": "Product PIM model JSON files",
+        "model.files": "Model files: productsModels.json and productsAttributes.json",
         "model.modelsFile": "productsModels.json file",
         "model.attributesFile": "productsAttributes.json file",
         "model.productsFile": "products.json file",
@@ -2179,9 +2186,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     function productModelInputItems() {
+      const selectedFiles = Array.from($("productModelFiles")?.files || []);
+      const modelsFile = selectedFiles.find((file) => modelFileKey(file) === "productsmodels") || null;
+      const attributesFile = selectedFiles.find((file) => modelFileKey(file) === "productsattributes") || null;
       return [
-        { key: "productsmodels", label: "productsModels.json", inputId: "productModelsFile", file: $("productModelsFile")?.files?.[0] || null },
-        { key: "productsattributes", label: "productsAttributes.json", inputId: "productAttributesFile", file: $("productAttributesFile")?.files?.[0] || null }
+        { key: "productsmodels", label: "productsModels.json", inputId: "productModelFiles", file: modelsFile },
+        { key: "productsattributes", label: "productsAttributes.json", inputId: "productModelFiles", file: attributesFile }
       ];
     }
 
@@ -2392,7 +2402,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     async function startNewProductSession() {
       await clearProductWorkspaceStorage();
       resetAfterProductModelChange();
-      for (const id of ["productModelsFile", "productAttributesFile"]) {
+      for (const id of ["productModelFiles"]) {
         if ($(id)) $(id).value = "";
       }
       updateProductModelSelectionStatus();
@@ -6345,7 +6355,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       const file = $("loadProjectFile").files[0];
       if (file) loadProjectFromFile(file);
     });
-    for (const inputId of ["productModelsFile", "productAttributesFile"]) {
+    for (const inputId of ["productModelFiles"]) {
       const modelInput = $(inputId);
       if (!modelInput) continue;
       modelInput.addEventListener("change", async () => {
