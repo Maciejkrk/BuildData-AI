@@ -32,11 +32,22 @@ def render_building_elements_home() -> str:
     }
     .top-nav a.active { border-color:var(--accent); background:#f0fdfa; color:var(--accent); }
     select.language-select { width:auto; min-width:140px; padding:7px 9px; }
-    main { display:grid; grid-template-columns:360px 1fr; gap:16px; padding:16px; }
+    main { display:grid; grid-template-columns:1fr; gap:16px; padding:16px; }
+    aside {
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+      gap:14px;
+      align-items:start;
+      border:1px solid var(--line);
+      border-radius:6px;
+      background:var(--panel);
+      padding:14px;
+    }
     .panel {
       border:1px solid var(--line); border-radius:6px; background:var(--panel);
       padding:14px; margin-bottom:14px;
     }
+    aside .panel { background:var(--soft); margin-bottom:0; }
     label { display:block; margin-top:12px; color:#344054; font-weight:700; font-size:12px; }
     input[type=file], input[type=text], textarea {
       width:100%; margin-top:6px; padding:9px 10px; border:1px solid var(--line);
@@ -48,25 +59,34 @@ def render_building_elements_home() -> str:
       background:var(--accent); color:#fff; font-weight:700; cursor:pointer;
     }
     button.secondary { background:var(--secondary); }
-    body.is-busy button { pointer-events:none; opacity:.62; }
+    body.is-busy button, body.is-busy input, body.is-busy select, body.is-busy textarea, body.is-busy a {
+      pointer-events:none;
+      opacity:.62;
+    }
     .busy-overlay {
       position:fixed;
-      right:18px;
-      bottom:18px;
-      z-index:50;
+      inset:0;
+      z-index:1000;
       display:flex;
       align-items:center;
-      gap:12px;
-      max-width:min(420px, calc(100vw - 36px));
-      padding:14px 16px;
-      border:1px solid #99f6e4;
-      border-radius:8px;
-      background:#f0fdfa;
+      justify-content:center;
+      padding:18px;
+      background:rgba(15, 23, 42, .36);
       color:#115e59;
-      box-shadow:0 16px 38px rgba(15, 23, 42, .18);
       font-weight:700;
     }
     .busy-overlay[hidden] { display:none; }
+    .busy-card {
+      display:flex;
+      align-items:center;
+      gap:12px;
+      max-width:min(460px, calc(100vw - 36px));
+      padding:16px 18px;
+      border:1px solid #99f6e4;
+      border-radius:8px;
+      background:#f0fdfa;
+      box-shadow:0 24px 60px rgba(15, 23, 42, .28);
+    }
     .busy-spinner {
       width:22px;
       height:22px;
@@ -358,6 +378,23 @@ def render_building_elements_home() -> str:
       background:#fbfcfd;
       font-size:12px;
     }
+    .file-status-list {
+      display:grid;
+      gap:8px;
+      margin:10px 0 0;
+    }
+    .file-status {
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      padding:8px 10px;
+      border:1px solid var(--line);
+      border-radius:4px;
+      background:#fff;
+      font-size:13px;
+    }
+    .file-status strong { color:var(--text); }
+    .file-status .ok { color:#047857; font-weight:800; }
     .feature-visual-item strong { color:#344054; overflow-wrap:anywhere; }
     .feature-visual-item span { color:var(--text); overflow-wrap:anywhere; }
     .visual-empty {
@@ -500,6 +537,7 @@ def render_building_elements_home() -> str:
         <label><span data-i18n="project.load">Wczytaj projekt mapowania</span>
           <input id="elementProjectFile" type="file" accept=".json">
         </label>
+        <div id="elementProjectFiles" class="file-status-list"></div>
         <div id="elementProjectStatus" class="status"></div>
       </div>
     </aside>
@@ -513,8 +551,10 @@ def render_building_elements_home() -> str:
     </section>
   </main>
   <div id="busyOverlay" class="busy-overlay" hidden>
-    <div class="busy-spinner" aria-hidden="true"></div>
-    <span id="busyMessage">Przetwarzam dane...</span>
+    <div class="busy-card">
+      <div class="busy-spinner" aria-hidden="true"></div>
+      <span id="busyMessage">Przetwarzam dane...</span>
+    </div>
   </div>
   <script>
     const I18N = {
@@ -670,12 +710,30 @@ def render_building_elements_home() -> str:
       const overlay = $("busyOverlay");
       if (overlay) overlay.hidden = true;
     }
+    function fileStatusHtml(label, file) {
+      return `<div class="file-status"><strong>${esc(label)}</strong><span class="${file ? "ok" : "muted"}">${file ? `Wczytano: ${esc(file.name)}` : "Nie wczytano"}</span></div>`;
+    }
+    function refreshElementProjectFiles() {
+      const target = $("elementProjectFiles");
+      if (!target) return;
+      const modelFiles = effectiveElementModelFiles();
+      const productModelFiles = effectiveElementProductModelFiles();
+      target.innerHTML = `
+        ${fileStatusHtml("buildingElementsModels.json", modelFiles.find(file => /models/i.test(file?.name || "")) || modelFiles[0] || null)}
+        ${fileStatusHtml("buildingElementsAttributes.json", modelFiles.find(file => /attributes/i.test(file?.name || "")) || modelFiles[1] || null)}
+        ${fileStatusHtml("products.json", $("productReferenceFile")?.files?.[0] || loadedElementProjectFiles.productsReferenceFile || null)}
+        ${fileStatusHtml("productsModels.json", productModelFiles.find(file => /models/i.test(file?.name || "")) || productModelFiles[0] || null)}
+        ${fileStatusHtml("productsAttributes.json", productModelFiles.find(file => /attributes/i.test(file?.name || "")) || productModelFiles[1] || null)}
+        ${fileStatusHtml(t("elements.importFile"), $("elementSourceFile")?.files?.[0] || loadedElementProjectFiles.sourceFile || null)}
+      `;
+    }
     function applyLanguage() {
       document.documentElement.lang = currentLang;
       $("languageSelect").value = currentLang;
       for (const element of document.querySelectorAll("[data-i18n]")) {
         element.textContent = t(element.dataset.i18n);
       }
+      refreshElementProjectFiles();
     }
     function saveElementWorkspaceState() {
       try {
@@ -798,6 +856,7 @@ def render_building_elements_home() -> str:
           sourceFile: fileFromProjectFile(payload.sourceFile),
           productsReferenceFile: fileFromProjectFile(payload.productsReferenceFile),
         };
+        refreshElementProjectFiles();
       } catch (error) {
         console.warn("Could not restore building-elements files state", error);
       }
@@ -1139,6 +1198,7 @@ def render_building_elements_home() -> str:
         const payload = await elementProjectPayload();
         const result = await saveJsonFileToDisk(safeProjectFilename(payload.name), payload);
         $("elementProjectStatus").textContent = `${t("project.saved")} ${result.filename}`;
+        refreshElementProjectFiles();
       } catch (error) {
         $("elementProjectStatus").textContent = error?.message || t("project.failed");
       }
@@ -1168,6 +1228,7 @@ def render_building_elements_home() -> str:
         if (activeElementRootModelId) elementMappingsByModel[activeElementRootModelId] = currentElementMapping;
         $("elementProjectName").value = loadedElementProject.name || "mapowanie-elementow-budowlanych";
         $("elementProjectStatus").textContent = `${t("project.loaded")} ${loadedElementProject.name || file.name}`;
+        refreshElementProjectFiles();
         saveElementWorkspaceState();
         await saveElementWorkspaceFilesState();
         renderElementProductIdentityControls();
@@ -2033,6 +2094,7 @@ def render_building_elements_home() -> str:
           renderElementProductIdentityControls();
         }
         await saveElementWorkspaceFilesState();
+        refreshElementProjectFiles();
         saveElementWorkspaceState();
       });
     }

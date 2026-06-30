@@ -178,11 +178,50 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     button:hover { background: var(--accent-dark); }
     button.secondary:hover { background: #1f2937; }
     button:disabled { opacity: .65; cursor: not-allowed; }
+    body.is-busy button, body.is-busy input, body.is-busy select, body.is-busy textarea, body.is-busy a {
+      pointer-events: none;
+      opacity: .62;
+    }
     input:disabled, select:disabled, textarea:disabled {
       opacity: .65;
       cursor: not-allowed;
       background: #eef2f6;
     }
+    .busy-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(15, 23, 42, .36);
+      color: #115e59;
+      font-weight: 700;
+    }
+    .busy-overlay[hidden] { display: none; }
+    .busy-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: min(460px, calc(100vw - 36px));
+      padding: 16px 18px;
+      border: 1px solid #99f6e4;
+      border-radius: 8px;
+      background: #f0fdfa;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, .28);
+    }
+    .busy-spinner {
+      width: 22px;
+      height: 22px;
+      border: 3px solid #99f6e4;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: busy-spin .85s linear infinite;
+      flex: 0 0 auto;
+    }
+    .busy-overlay span { display: block; font-weight: 600; line-height: 1.35; }
+    @keyframes busy-spin { to { transform: rotate(360deg); } }
     .toolbar {
       display: flex;
       justify-content: space-between;
@@ -989,6 +1028,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         <label><span data-i18n="project.load">Otwórz projekt mapowania z dysku</span>
           <input id="loadProjectFile" type="file" accept=".json">
         </label>
+        <div id="productProjectFiles" class="file-status-list"></div>
         <div id="projectStatus" class="status" data-i18n="project.notSaved">Projekt nie jest jeszcze zapisany.</div>
         <div id="projectLinks" class="links"></div>
       </div>
@@ -1011,6 +1051,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       </div>
     </section>
   </main>
+  <div id="busyOverlay" class="busy-overlay" hidden>
+    <div class="busy-card">
+      <div class="busy-spinner" aria-hidden="true"></div>
+      <span id="busyMessage">Przetwarzam dane...</span>
+    </div>
+  </div>
   <script>
     window.productModelFileChanged = function() {
       var fields = [
@@ -1056,6 +1102,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     let lastProductAnalysis = null;
     let loadedProject = null;
     let loadedProjectFiles = { productModelFiles: [], productsFile: null, typicalDataFile: null };
+    let busyOperationCount = 0;
     let enrichmentSession = { manual_entries: [], typical_sources: [], typical_matches: [] };
     let typicalProductsForEnrichment = [];
     let typicalProductsPayloadForEnrichment = [];
@@ -1727,6 +1774,35 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       return I18N[currentLang]?.[key] || I18N.pl[key] || key;
     }
 
+    function setBusy(message) {
+      busyOperationCount += 1;
+      document.body.classList.add("is-busy");
+      const overlay = $("busyOverlay");
+      const messageTarget = $("busyMessage");
+      if (messageTarget) messageTarget.textContent = message || (currentLang === "pl" ? "Przetwarzam dane w tle..." : "Processing data in the background...");
+      if (overlay) overlay.hidden = false;
+    }
+
+    function clearBusy() {
+      busyOperationCount = Math.max(0, busyOperationCount - 1);
+      if (busyOperationCount > 0) return;
+      document.body.classList.remove("is-busy");
+      const overlay = $("busyOverlay");
+      if (overlay) overlay.hidden = true;
+    }
+
+    function refreshProductProjectFiles() {
+      const target = $("productProjectFiles");
+      if (!target) return;
+      const modelFiles = selectedProductModelFiles();
+      target.innerHTML = `
+        ${fileStatusHtml("productsModels.json", modelFiles.find(file => /models/i.test(file?.name || "")) || loadedProjectFiles.productModelFiles.find(file => /models/i.test(file?.name || "")) || modelFiles[0] || loadedProjectFiles.productModelFiles[0] || null)}
+        ${fileStatusHtml("productsAttributes.json", modelFiles.find(file => /attributes/i.test(file?.name || "")) || loadedProjectFiles.productModelFiles.find(file => /attributes/i.test(file?.name || "")) || modelFiles[1] || loadedProjectFiles.productModelFiles[1] || null)}
+        ${fileStatusHtml(t("products.file"), fileForInput("productsFile"))}
+        ${fileStatusHtml(t("typical.file"), loadedProjectFiles.typicalDataFile || fileForInput("typicalFile"))}
+      `;
+    }
+
     function applyLanguage() {
       document.documentElement.lang = currentLang;
       $("languageSelect").value = currentLang;
@@ -1741,6 +1817,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         renderProductModelPreview();
       }
       updateWorkflowGate();
+      refreshProductProjectFiles();
     }
 
     function setLanguage(language) {
@@ -1864,6 +1941,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           productsFile: fileFromProjectFile(payload.productsFile),
           typicalDataFile: fileFromProjectFile(payload.typicalDataFile),
         };
+        refreshProductProjectFiles();
       } catch (error) {
         console.warn("Could not restore product files state", error);
       }
@@ -2383,6 +2461,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       acceptingProductModel = true;
       const acceptButton = $("acceptProductModelBtn");
       if (acceptButton) acceptButton.disabled = true;
+      setBusy(currentLang === "pl" ? "Odczytuję i sprawdzam model produktu..." : "Reading and checking the product model...");
       try {
         $("productModelStatus").textContent = currentLang === "pl" ? "Sprawdzam wybrane pliki modelu..." : "Checking selected model files...";
         const files = selectedProductModelFiles();
@@ -2413,6 +2492,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         if ($("typicalStatus")) $("typicalStatus").textContent = t("typical.optional");
         updateWorkflowGate();
         renderProductModelPreview();
+        refreshProductProjectFiles();
       } catch (error) {
         pimModelAccepted = false;
         acceptedProductModelSignature = "";
@@ -2423,6 +2503,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       } finally {
         acceptingProductModel = false;
         updateProductModelAcceptState();
+        clearBusy();
       }
     }
     window.acceptProductModel = acceptProductModel;
@@ -5989,6 +6070,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         $("projectStatus").textContent = t("mapping.duplicateTargetBlocked");
         return;
       }
+      setBusy(currentLang === "pl" ? "Zapisuję projekt mapowania..." : "Saving the mapping project...");
       try {
         const payload = await projectPayload();
         const filename = safeProjectFilename(payload.name);
@@ -5997,16 +6079,20 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           ? `${t("project.downloaded")} ${result.filename}`
           : `${t("project.saved")} ${result.filename}`;
         $("projectLinks").innerHTML = "";
+        refreshProductProjectFiles();
       } catch (error) {
         if (error?.name === "AbortError") {
           $("projectStatus").textContent = t("project.notSaved");
           return;
         }
         $("projectStatus").textContent = t("project.saveFailed");
+      } finally {
+        clearBusy();
       }
     }
 
     async function loadProjectFromFile(file) {
+      setBusy(currentLang === "pl" ? "Wczytuję projekt i odtwarzam pliki źródłowe..." : "Loading the project and restoring source files...");
       try {
         loadedProject = JSON.parse(await file.text());
         const embedded = loadedProject.embedded_files || {};
@@ -6015,6 +6101,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           productsFile: fileFromProjectFile(embedded.products_file),
           typicalDataFile: fileFromProjectFile(embedded.typical_data_file)
         };
+        refreshProductProjectFiles();
         enrichmentSession = normalizeEnrichmentSession(loadedProject.enrichment_session);
         productRootModels = loadedProject.product_root_models || productRootModels;
         activeProductRootModelId = String(loadedProject.active_product_root_model_id || activeProductRootModelId || "");
@@ -6097,9 +6184,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       } catch (error) {
         loadedProject = null;
         loadedProjectFiles = { productModelFiles: [], productsFile: null, typicalDataFile: null };
+        refreshProductProjectFiles();
         enrichmentSession = { manual_entries: [], typical_sources: [], typical_matches: [] };
         typicalProductsForEnrichment = [];
         $("projectStatus").textContent = t("project.loadFailed");
+      } finally {
+        clearBusy();
       }
     }
 
@@ -6209,6 +6299,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         if (activeProductRootModelId) body.append("product_root_model_id", activeProductRootModelId);
       }
       $(statusId).textContent = t("analysis.running");
+      setBusy(currentLang === "pl" ? "Analizuję plik klienta w tle..." : "Analyzing the customer file in the background...");
       try {
         const response = await fetch("/analyze", { method: "POST", body });
         const data = await response.json();
@@ -6216,10 +6307,13 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         $(statusId).textContent = t("analysis.ready");
         renderAnalysis(data, mode);
         if (mode === "products") saveProductWorkspaceState();
+        refreshProductProjectFiles();
       } catch (error) {
         $(statusId).textContent = error.message;
         $("summary").textContent = t("status.error");
         if (mode === "products") saveProductWorkspaceState();
+      } finally {
+        clearBusy();
       }
     }
 
@@ -6229,6 +6323,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     };
 
     $("languageSelect").addEventListener("change", (event) => setLanguage(event.target.value));
+    if ($("productModelPanel")) $("productModelPanel").addEventListener("submit", window.acceptProductModelSubmit);
     async function persistProductWorkspaceBeforeNavigation(event) {
       const link = event.currentTarget;
       if (!link?.href) return;
@@ -6262,6 +6357,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         resetAfterProductModelChange();
         updateProductModelSelectionStatus();
         await saveProductWorkspaceFilesState();
+        refreshProductProjectFiles();
         if (!missingProductModelFiles().length) {
           try {
             $("productModelStatus").textContent = currentLang === "pl" ? "Odczytuję listę modeli..." : "Reading model list...";
@@ -6270,6 +6366,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             $("productModelStatus").innerHTML = `<span class="ok">${esc(currentLang === "pl" ? "Wybierz model produktu i zaakceptuj." : "Select a product model and accept it.")}</span> ${esc(productModelFileNames())}`;
             updateWorkflowGate();
             saveProductWorkspaceState();
+            refreshProductProjectFiles();
           } catch (error) {
             $("productModelStatus").textContent = `${currentLang === "pl" ? "Nie udało się odczytać modeli: " : "Could not read models: "}${error.message}`;
           }
@@ -6279,6 +6376,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     $("typicalFile").addEventListener("change", async () => {
       const file = $("typicalFile").files[0];
       await saveProductWorkspaceFilesState();
+      refreshProductProjectFiles();
       await loadTypicalDataFile(file);
     });
     $("typicalModelsFile").addEventListener("change", async () => {
@@ -6299,6 +6397,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         return;
       }
       loadedProjectFiles.productsFile = null;
+      refreshProductProjectFiles();
       productMapping = null;
       productMappingProfile = null;
       generatedProductsJobId = null;
@@ -6317,6 +6416,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       updateWorkflowGate();
       if ($("productsFile").files[0]) {
         saveProductWorkspaceFilesState();
+        refreshProductProjectFiles();
         $("productsStatus").textContent = currentLang === "pl"
           ? `Wybrano ${$("productsFile").files[0].name}. Analizuję plik.`
           : `Selected ${$("productsFile").files[0].name}. Analyzing file.`;
@@ -6362,6 +6462,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       $("productsStatus").textContent = currentLang === "pl" ? "Konwersja produktów trwa." : "Product conversion is running.";
       $("productsLinks").innerHTML = "";
       if ($("productsLinksInline")) $("productsLinksInline").innerHTML = "";
+      setBusy(currentLang === "pl" ? "Generuję products.json w tle..." : "Generating products.json in the background...");
       try {
         const response = await fetch("/convert-products", { method: "POST", body });
         const data = await response.json();
@@ -6379,9 +6480,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         if ($("productsLinksInline")) $("productsLinksInline").innerHTML = conversionLinks;
         saveProductWorkspaceState();
         updateWorkflowGate();
+        refreshProductProjectFiles();
       } catch (error) {
         $("productsStatus").textContent = error.message;
         $("summary").textContent = t("status.error");
+      } finally {
+        clearBusy();
       }
       return false;
     }
@@ -6402,6 +6506,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         $("productsStatus").textContent = currentLang === "pl"
           ? "Proszę czekać, trwa analiza pliku klienta."
           : "Please wait, customer file analysis is running.";
+        setBusy(currentLang === "pl" ? "Analizuję plik klienta w tle..." : "Analyzing the customer file in the background...");
         event.target.submit();
         return;
       }
