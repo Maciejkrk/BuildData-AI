@@ -255,6 +255,8 @@ def test_building_elements_convert_writes_json_from_profile(tmp_path: Path) -> N
     assert any(attr["AttributeId"] == 287 and attr["ParentAttributeId"] == 285 for attr in attrs)
     assert any(attr["AttributeId"] == 286 and attr["ParentAttributeId"] == 283 and attr["varcharValue"] is None for attr in attrs)
     assert any(attr["AttributeId"] == 288 and attr["ParentAttributeId"] == 285 and attr["varcharValue"] is None for attr in attrs)
+    assert all(attr["MainAttributeId"] == 75 for attr in attrs if attr["ParentAttributeId"] == 283)
+    assert all(attr["MainAttributeId"] == 76 for attr in attrs if attr["ParentAttributeId"] == 285)
 
 
 def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_path: Path) -> None:
@@ -358,3 +360,4 @@ def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_pat
         (2945, variant_hash),
         (4469, ""),
     ]
+    assert all(attr["MainAttributeId"] == 87 for attr in product_attrs)

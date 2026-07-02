@@ -251,6 +251,8 @@ class ConverterTests(unittest.TestCase):
         self.assertTrue(any(attr["AttributeId"] == 287 and attr["ParentAttributeId"] == 285 for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 286 and attr["ParentAttributeId"] == 283 and attr["varcharValue"] is None for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 288 and attr["ParentAttributeId"] == 285 and attr["varcharValue"] is None for attr in attrs))
+        self.assertTrue(all(attr["MainAttributeId"] == 75 for attr in attrs if attr["ParentAttributeId"] == 283))
+        self.assertTrue(all(attr["MainAttributeId"] == 76 for attr in attrs if attr["ParentAttributeId"] == 285))
 
     def test_building_elements_convert_uses_level_parent_ids_for_nested_hashes(self):
         model = load_building_element_model(

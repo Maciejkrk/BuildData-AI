@@ -752,12 +752,23 @@ def build_element_entry(
                 relation_instance_meta[(relation_key, relation_value)] = {
                     "relation_key": relation_key,
                     "parent_attribute_id": parent_attribute_id,
+                    "main_attribute_id": relation.target_model_id if relation else None,
                     "row_hash": row_hash,
                     "parent_hash": parent_hash,
                     "row_i": row_index,
                 }
                 emitted_by_relation_instance.setdefault((relation_key, relation_value), set()).add(field.attribute_id)
-            add_field_attrs(attrs, field, value, product_index, parent_attribute_id=parent_attribute_id, row_hash=row_hash, parent_hash=parent_hash, row_i=row_index)
+            add_field_attrs(
+                attrs,
+                field,
+                value,
+                product_index,
+                parent_attribute_id=parent_attribute_id,
+                main_attribute_id=relation.target_model_id if relation_key and relation else None,
+                row_hash=row_hash,
+                parent_hash=parent_hash,
+                row_i=row_index,
+            )
     add_missing_nested_model_attrs(attrs, model_fields=model_fields, emitted_by_relation_instance=emitted_by_relation_instance, relation_instance_meta=relation_instance_meta)
     return {
         "Id": BUILDING_ELEMENT_ID_START + index,
@@ -798,6 +809,7 @@ def add_missing_nested_model_attrs(
                 attrs,
                 attribute_id,
                 parent_attribute_id=meta.get("parent_attribute_id") or 0,
+                main_attribute_id=meta.get("main_attribute_id"),
                 row_hash=meta.get("row_hash"),
                 parent_hash=meta.get("parent_hash") or "",
                 row_i=meta.get("row_i") or 0,
@@ -824,6 +836,7 @@ def add_field_attrs(
     product_index: ProductReferenceIndex | None,
     *,
     parent_attribute_id: int = 0,
+    main_attribute_id: int | None = None,
     row_hash: str | None = None,
     parent_hash: str = "",
     row_i: int = 0,
@@ -834,6 +847,7 @@ def add_field_attrs(
             attrs,
             field.attribute_id,
             parent_attribute_id=parent_attribute_id,
+            main_attribute_id=main_attribute_id,
             row_hash=row_hash,
             parent_hash=parent_hash,
             row_i=row_i,
@@ -869,6 +883,7 @@ def add_attr(
     number: float | None = None,
     boolean: bool = False,
     parent_attribute_id: int = 0,
+    main_attribute_id: int | None = None,
     row_hash: str | None = None,
     parent_hash: str = "",
     row_i: int = 0,
@@ -885,7 +900,7 @@ def add_attr(
             "IntValue2": None,
             "NumberValue": number,
             "BooleanValue": boolean,
-            "MainAttributeId": None,
+            "MainAttributeId": main_attribute_id,
             "RowI": row_i,
         }
     )
