@@ -961,7 +961,7 @@ class ConverterTests(unittest.TestCase):
                     "models": [
                         {"Id": 41, "Name": "SG One Tool Product", "modelType": "Product"},
                         {"Id": 45, "Name": "Typoszereg", "modelType": "Attribute"},
-                        {"Id": 49, "Name": "One Tool Database", "modelType": "Product"},
+                        {"Id": 49, "Name": "One Tool Database", "modelType": "Access"},
                     ]
                 }
             ).encode("utf-8"),
@@ -984,6 +984,7 @@ class ConverterTests(unittest.TestCase):
                         {"Id": 155, "ProductModelId": 45, "AttributeName": "SAP ID", "AttributeType": "VarChar"},
                         {"Id": 319, "ProductModelId": 45, "AttributeName": "Nazwa", "AttributeType": "VarChar"},
                         {"Id": 321, "ProductModelId": 45, "AttributeName": "PIM ID", "AttributeType": "VarChar"},
+                        {"Id": 157, "ProductModelId": 49, "AttributeName": "Grupa użytkowników", "AttributeType": "Checkboxes"},
                     ]
                 }
             ).encode("utf-8"),
@@ -1039,7 +1040,7 @@ class ConverterTests(unittest.TestCase):
         self.assertNotIn(233, parent_ids)
         self.assertEqual(missing_by_id[45]["role"], "type_series_definition")
         self.assertIn("ParentAttributeId", missing_by_id[45]["explanation"])
-        self.assertEqual(missing_by_id[49]["role"], "unselected_product_model")
+        self.assertEqual(missing_by_id[49]["role"], "technical_access_model")
 
     def test_category_ids_accept_numeric_lists_and_json_arrays(self):
         self.assertEqual(category_ids([22970, 22815, 0]), [22815, 22970])

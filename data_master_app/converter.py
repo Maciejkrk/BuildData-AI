@@ -2442,6 +2442,12 @@ def product_model_export_coverage_warnings(
                 "wybranego modelu produktu. Jeśli ten model ma tworzyć produkty, wybierz go w sekcji modelu albo "
                 "uruchom osobny import dla tego modelu."
             )
+        elif normalized_type == "access":
+            role = "technical_access_model"
+            explanation = (
+                "Model jest technicznym modelem uprawnień/dostępu z productsModels.json. Nie tworzy rekordów products "
+                "i nie powinien być traktowany jako brakujący produkt."
+            )
         else:
             role = "model_definition"
             explanation = "Model jest w paczce definicji PIM, ale nie występuje jako ModelType wygenerowanego produktu."
