@@ -229,8 +229,10 @@ def test_building_elements_convert_writes_json_from_profile(tmp_path: Path) -> N
                 {"Id": 280, "ProductModelId": 74, "AttributeName": "name", "DispName": "Name", "AttributeType": "VarChar", "deleted": false},
                 {"Id": 283, "ProductModelId": 74, "AttributeName": "variants", "DispName": "Variants", "AttributeType": "Model_Array", "TargetModelId": 75, "deleted": false},
                 {"Id": 284, "ProductModelId": 75, "AttributeName": "variant_name", "DispName": "Variant Name", "AttributeType": "VarChar", "deleted": false},
+                {"Id": 286, "ProductModelId": 75, "AttributeName": "variant_note", "DispName": "Variant note", "AttributeType": "VarChar", "deleted": false},
                 {"Id": 285, "ProductModelId": 75, "AttributeName": "layers", "DispName": "Layers", "AttributeType": "Model_Array", "TargetModelId": 76, "deleted": false},
-                {"Id": 287, "ProductModelId": 76, "AttributeName": "layer_name", "DispName": "Layer name", "AttributeType": "VarChar", "deleted": false}
+                {"Id": 287, "ProductModelId": 76, "AttributeName": "layer_name", "DispName": "Layer name", "AttributeType": "VarChar", "deleted": false},
+                {"Id": 288, "ProductModelId": 76, "AttributeName": "layer_note", "DispName": "Layer note", "AttributeType": "VarChar", "deleted": false}
               ]
             }""",
         }
@@ -251,6 +253,8 @@ def test_building_elements_convert_writes_json_from_profile(tmp_path: Path) -> N
     assert any(attr["AttributeId"] == 280 and attr["varcharValue"] == "S1" for attr in attrs)
     assert any(attr["AttributeId"] == 284 and attr["ParentAttributeId"] == 283 for attr in attrs)
     assert any(attr["AttributeId"] == 287 and attr["ParentAttributeId"] == 285 for attr in attrs)
+    assert any(attr["AttributeId"] == 286 and attr["ParentAttributeId"] == 283 and attr["varcharValue"] is None for attr in attrs)
+    assert any(attr["AttributeId"] == 288 and attr["ParentAttributeId"] == 285 and attr["varcharValue"] is None for attr in attrs)
 
 
 def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_path: Path) -> None:

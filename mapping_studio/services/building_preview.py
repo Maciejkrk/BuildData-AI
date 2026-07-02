@@ -689,7 +689,7 @@ def convert_building_elements_from_tables(
         grouped.setdefault(str(name), []).append(row)
 
     elements = [
-        build_element_entry(name, element_rows, index, field_by_key, relation_by_key, product_index, model.root_model_id)
+        build_element_entry(name, element_rows, index, field_by_key, relation_by_key, product_index, model.root_model_id, list(model.fields))
         for index, (name, element_rows) in enumerate(grouped.items(), start=1)
     ]
     payload = {"buildingElementsCount": len(elements), "buildingElements": elements}
@@ -723,9 +723,12 @@ def build_element_entry(
     relation_by_key: dict[str, Any],
     product_index: ProductReferenceIndex | None,
     model_id: int,
+    model_fields: list[Any],
 ) -> dict[str, Any]:
     attrs: list[dict[str, Any]] = []
     relation_hashes: dict[tuple[str, str], str] = {}
+    emitted_by_relation_instance: dict[tuple[str, str], set[int]] = {}
+    relation_instance_meta: dict[tuple[str, str], dict[str, Any]] = {}
     for row_index, row in enumerate(rows):
         for key, value in row.items():
             if key.startswith("_") or value in (None, ""):
@@ -746,7 +749,16 @@ def build_element_entry(
                 if parent_relation_key:
                     parent_value = level_identity_value(row, relation_key, "parent_id") or relation_identity_value(row, parent_relation_key, field_by_key) or "root"
                     parent_hash = relation_hashes.setdefault((parent_relation_key, parent_value), stable_hash(parent_relation_key, parent_value))
+                relation_instance_meta[(relation_key, relation_value)] = {
+                    "relation_key": relation_key,
+                    "parent_attribute_id": parent_attribute_id,
+                    "row_hash": row_hash,
+                    "parent_hash": parent_hash,
+                    "row_i": row_index,
+                }
+                emitted_by_relation_instance.setdefault((relation_key, relation_value), set()).add(field.attribute_id)
             add_field_attrs(attrs, field, value, product_index, parent_attribute_id=parent_attribute_id, row_hash=row_hash, parent_hash=parent_hash, row_i=row_index)
+    add_missing_nested_model_attrs(attrs, model_fields=model_fields, emitted_by_relation_instance=emitted_by_relation_instance, relation_instance_meta=relation_instance_meta)
     return {
         "Id": BUILDING_ELEMENT_ID_START + index,
         "elementTypeId": BUILDING_ELEMENT_TYPE_ID,
@@ -760,6 +772,36 @@ def build_element_entry(
             }
         ],
     }
+
+
+def add_missing_nested_model_attrs(
+    attrs: list[dict[str, Any]],
+    *,
+    model_fields: list[Any],
+    emitted_by_relation_instance: dict[tuple[str, str], set[int]],
+    relation_instance_meta: dict[tuple[str, str], dict[str, Any]],
+) -> None:
+    fields_by_relation: dict[str, dict[int, Any]] = {}
+    for field in model_fields:
+        relation_key = getattr(field, "parent_relation_key", None)
+        attribute_id = getattr(field, "attribute_id", None)
+        if not relation_key or not isinstance(attribute_id, int):
+            continue
+        fields_by_relation.setdefault(relation_key, {})[attribute_id] = field
+    for instance_key, emitted_ids in emitted_by_relation_instance.items():
+        meta = relation_instance_meta.get(instance_key) or {}
+        relation_key = meta.get("relation_key")
+        for attribute_id in (fields_by_relation.get(relation_key) or {}):
+            if attribute_id in emitted_ids:
+                continue
+            add_attr(
+                attrs,
+                attribute_id,
+                parent_attribute_id=meta.get("parent_attribute_id") or 0,
+                row_hash=meta.get("row_hash"),
+                parent_hash=meta.get("parent_hash") or "",
+                row_i=meta.get("row_i") or 0,
+            )
 
 
 def relation_identity_value(row: dict[str, Any], relation_key: str, field_by_key: dict[str, Any]) -> str:
