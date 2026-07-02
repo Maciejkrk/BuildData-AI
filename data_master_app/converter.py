@@ -2148,6 +2148,7 @@ def add_sot_rows(
         if not row:
             continue
         row_hash = stable_hash("sot", row, str(index))
+        emitted_attribute_ids: set[int] = set()
         for key, value in row.items():
             if value in (None, ""):
                 continue
@@ -2168,6 +2169,7 @@ def add_sot_rows(
                     row_hash=row_hash,
                     row_i=index,
                 )
+                emitted_attribute_ids.add(attr_id)
                 continue
             pim_attr_id = pim_attribute_id_from_field(key)
             if pim_attr_id:
@@ -2180,6 +2182,29 @@ def add_sot_rows(
                     row_hash=row_hash,
                     row_i=index,
                 )
+                emitted_attribute_ids.add(pim_attr_id)
+        add_missing_type_series_model_attributes(attrs, emitted_attribute_ids, export_schema, row_hash, index)
+
+
+def add_missing_type_series_model_attributes(
+    attrs: list[dict[str, Any]],
+    emitted_attribute_ids: set[int],
+    export_schema: PimExportSchema,
+    row_hash: str,
+    row_i: int,
+) -> None:
+    if not export_schema.strict_model or not export_schema.type_series_attribute_ids:
+        return
+    for attribute_id in dict.fromkeys(export_schema.type_series_attribute_ids.values()):
+        if attribute_id in emitted_attribute_ids:
+            continue
+        add_attr(
+            attrs,
+            attribute_id,
+            parent_attribute_id=export_schema.type_series_parent_for_attribute(attribute_id),
+            row_hash=row_hash,
+            row_i=row_i,
+        )
 
 
 def add_documents(attrs: list[dict[str, Any]], documents: list[dict[str, Any]]) -> None:

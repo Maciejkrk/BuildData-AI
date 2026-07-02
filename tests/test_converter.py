@@ -983,6 +983,7 @@ class ConverterTests(unittest.TestCase):
                         {"Id": 138, "ProductModelId": 45, "AttributeName": "λD", "AttributeType": "Number", "Unit": "W/mK"},
                         {"Id": 155, "ProductModelId": 45, "AttributeName": "SAP ID", "AttributeType": "VarChar"},
                         {"Id": 319, "ProductModelId": 45, "AttributeName": "Nazwa", "AttributeType": "VarChar"},
+                        {"Id": 320, "ProductModelId": 45, "AttributeName": "GWP A1-A3 - Produkcja", "AttributeType": "Number", "Unit": "kg CO2e/m2"},
                         {"Id": 321, "ProductModelId": 45, "AttributeName": "PIM ID", "AttributeType": "VarChar"},
                         {"Id": 157, "ProductModelId": 49, "AttributeName": "Grupa użytkowników", "AttributeType": "Checkboxes"},
                     ]
@@ -1036,6 +1037,7 @@ class ConverterTests(unittest.TestCase):
         self.assertTrue(any(attr["AttributeId"] == 319 and attr["ParentAttributeId"] == 135 and attr["varcharValue"] == "11620533" for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 155 and attr["ParentAttributeId"] == 135 and attr["varcharValue"] == "AR00233378" for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 321 and attr["ParentAttributeId"] == 135 and attr["varcharValue"] == "AR00233378" for attr in attrs))
+        self.assertTrue(any(attr["AttributeId"] == 320 and attr["ParentAttributeId"] == 135 and attr["RowI"] == 0 and attr["NumberValue"] is None for attr in attrs))
         self.assertFalse({225, 226, 228, 229, 246, 303} & attr_ids)
         self.assertNotIn(233, parent_ids)
         self.assertEqual(missing_by_id[45]["role"], "type_series_definition")
