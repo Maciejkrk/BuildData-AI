@@ -184,6 +184,7 @@ class PimExportSchema:
     attribute_value_kinds: dict[int, str] | None = None
     known_attribute_ids: frozenset[int] = frozenset()
     type_series_parent_id: int | None = None
+    type_series_main_attribute_id: int | None = None
     type_series_attribute_ids: dict[str, int] | None = None
     type_series_parent_by_attribute_id: dict[int, int] | None = None
 
@@ -2112,6 +2113,7 @@ def add_sot(attrs: list[dict[str, Any]], sot: dict[str, Any], export_schema: Pim
                 attr_id,
                 number=number,
                 parent_attribute_id=export_schema.type_series_parent_for_attribute(attr_id),
+                main_attribute_id=export_schema.type_series_main_attribute_id,
                 row_hash=row_hash,
             )
 
@@ -2123,20 +2125,45 @@ def add_typed_attr_value(
     *,
     value_kind: str,
     parent_attribute_id: int = 0,
+    main_attribute_id: int | None = None,
     row_hash: str | None = None,
     row_i: int = 0,
 ) -> None:
     if value_kind == "number":
         number = parse_number(value)
         if number is not None:
-            add_attr(attrs, attribute_id, number=number, parent_attribute_id=parent_attribute_id, row_hash=row_hash, row_i=row_i)
+            add_attr(
+                attrs,
+                attribute_id,
+                number=number,
+                parent_attribute_id=parent_attribute_id,
+                main_attribute_id=main_attribute_id,
+                row_hash=row_hash,
+                row_i=row_i,
+            )
         return
     if isinstance(value, bool):
-        add_attr(attrs, attribute_id, boolean=value, parent_attribute_id=parent_attribute_id, row_hash=row_hash, row_i=row_i)
+        add_attr(
+            attrs,
+            attribute_id,
+            boolean=value,
+            parent_attribute_id=parent_attribute_id,
+            main_attribute_id=main_attribute_id,
+            row_hash=row_hash,
+            row_i=row_i,
+        )
         return
     text = str(value)
     kwargs = {"varchar": text} if len(text) <= 255 else {"text": text}
-    add_attr(attrs, attribute_id, parent_attribute_id=parent_attribute_id, row_hash=row_hash, row_i=row_i, **kwargs)
+    add_attr(
+        attrs,
+        attribute_id,
+        parent_attribute_id=parent_attribute_id,
+        main_attribute_id=main_attribute_id,
+        row_hash=row_hash,
+        row_i=row_i,
+        **kwargs,
+    )
 
 
 def add_sot_rows(
@@ -2166,6 +2193,7 @@ def add_sot_rows(
                     value,
                     value_kind=export_schema.attribute_value_kind(attr_id, "number"),
                     parent_attribute_id=export_schema.type_series_parent_for_attribute(attr_id),
+                    main_attribute_id=export_schema.type_series_main_attribute_id,
                     row_hash=row_hash,
                     row_i=index,
                 )
@@ -2179,6 +2207,7 @@ def add_sot_rows(
                     value,
                     value_kind=export_schema.attribute_value_kind(pim_attr_id),
                     parent_attribute_id=export_schema.type_series_parent_for_attribute(pim_attr_id),
+                    main_attribute_id=export_schema.type_series_main_attribute_id,
                     row_hash=row_hash,
                     row_i=index,
                 )
@@ -2202,6 +2231,7 @@ def add_missing_type_series_model_attributes(
             attrs,
             attribute_id,
             parent_attribute_id=export_schema.type_series_parent_for_attribute(attribute_id),
+            main_attribute_id=export_schema.type_series_main_attribute_id,
             row_hash=row_hash,
             row_i=row_i,
         )
@@ -2293,6 +2323,7 @@ def add_attr(
     parent_attribute_id: int = 0,
     row_hash: str | None = None,
     parent_hash: str | None = "",
+    main_attribute_id: int | None = None,
     row_i: int = 0,
 ) -> None:
     attrs.append(
@@ -2307,7 +2338,7 @@ def add_attr(
             "IntValue2": int_value2,
             "NumberValue": number,
             "BooleanValue": boolean,
-            "MainAttributeId": None,
+            "MainAttributeId": main_attribute_id,
             "RowI": row_i,
         }
     )
@@ -2594,6 +2625,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
         if (attribute_id := int_value(attribute.get("Id"))) is not None
     }
     parent_id: int | None = None
+    main_attribute_id: int | None = None
     attribute_ids: dict[str, int] = {}
     parent_by_attribute_id: dict[int, int] = {}
     for model_id in sorted(product_model_ids):
@@ -2632,6 +2664,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
                     product_parent_by_attribute_id[child_id] = current_parent_id
                 continue
             parent_id = current_parent_id
+            main_attribute_id = target_model_id
             for child in child_attributes:
                 child_id = int_value(child.get("Id"))
                 if child_id is None:
@@ -2655,6 +2688,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
         attribute_value_kinds=attribute_value_kinds,
         known_attribute_ids=known_attribute_ids,
         type_series_parent_id=parent_id,
+        type_series_main_attribute_id=main_attribute_id,
         type_series_attribute_ids=attribute_ids,
         type_series_parent_by_attribute_id=parent_by_attribute_id,
     )

@@ -1042,6 +1042,9 @@ class ConverterTests(unittest.TestCase):
         self.assertTrue(any(attr["AttributeId"] == 155 and attr["ParentAttributeId"] == 135 and attr["varcharValue"] == "AR00233378" for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 321 and attr["ParentAttributeId"] == 135 and attr["varcharValue"] == "AR00233378" for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 320 and attr["ParentAttributeId"] == 135 and attr["RowI"] == 0 and attr["NumberValue"] is None for attr in attrs))
+        self.assertTrue(
+            all(attr["MainAttributeId"] == 45 for attr in attrs if attr["ParentAttributeId"] == 135)
+        )
         self.assertFalse({225, 226, 228, 229, 246, 303} & attr_ids)
         self.assertNotIn(233, parent_ids)
         self.assertEqual(missing_by_id[45]["role"], "type_series_definition")
