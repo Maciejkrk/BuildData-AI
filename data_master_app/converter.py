@@ -18,6 +18,7 @@ from .mapping import (
     apply_mapping_profile_to_rows,
     attribute_order,
     field_definitions_payload,
+    first_present,
     int_value,
     is_deleted,
     is_nested_attribute,
@@ -30,6 +31,7 @@ from .mapping import (
     product_model_choices_from_pim_bundle,
     semantic_pim_field_key,
     skip_pim_attribute,
+    text_value,
     value_kind_from_attribute,
 )
 from .report_export import mapping_report_xlsx_bytes, product_acceptance_xlsx_bytes
@@ -1302,6 +1304,11 @@ def convert_products_file(
         product_mapping=product_mapping,
         product_mapping_profile=product_mapping_profile,
     )
+    report["warnings"]["model_export_coverage"] = product_model_export_coverage_warnings(
+        product_model_files,
+        products,
+        selected_root_model_id=export_schema.product_model_id,
+    )
     if enrichment_report:
         report["enrichment"] = enrichment_report
     if typical_enrichment_report:
@@ -2359,6 +2366,100 @@ def build_mapping_report(
             "Review unmatched categories and add dictionary mappings where needed.",
             "Review unmatched_products before using building_elements.json in the local PIM agent.",
         ],
+    }
+
+
+def product_model_export_coverage_warnings(
+    product_model_files: dict[str, bytes | str] | None,
+    products: list[dict[str, Any]],
+    *,
+    selected_root_model_id: int | None = None,
+) -> dict[str, Any]:
+    if not product_model_files:
+        return {}
+    keyed_files = {pim_bundle_file_key(filename): content for filename, content in product_model_files.items()}
+    models_content = keyed_files.get("productsmodels")
+    attributes_content = keyed_files.get("productsattributes")
+    if models_content is None or attributes_content is None:
+        return {}
+    try:
+        models_payload = load_json_content(models_content)
+        attributes_payload = load_json_content(attributes_content)
+    except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
+        return {}
+
+    models = pim_items(models_payload, "models")
+    attributes = [attribute for attribute in pim_items(attributes_payload, "attributes") if not is_deleted(attribute)]
+    if not models:
+        return {}
+
+    exported_model_ids = {
+        model_id
+        for product in products
+        if (model_id := int_value(product.get("ModelType"))) is not None
+    }
+    nested_target_ids = {
+        target_model_id
+        for attribute in attributes
+        if is_nested_attribute(attribute) and (target_model_id := int_value(attribute.get("TargetModelId"))) is not None
+    }
+    type_series_target_ids = {
+        target_model_id
+        for attribute in attributes
+        if is_nested_attribute(attribute)
+        and (target_model_id := int_value(attribute.get("TargetModelId"))) is not None
+        and is_type_series_parent(
+            attribute,
+            next((model for model in models if int_value(model.get("Id")) == target_model_id), None),
+            [child for child in attributes if int_value(child.get("ProductModelId")) == target_model_id and not is_nested_attribute(child)],
+        )
+    }
+
+    missing: list[dict[str, Any]] = []
+    for model in models:
+        model_id = int_value(model.get("Id"))
+        if model_id is None or model_id in exported_model_ids:
+            continue
+        name = text_value(first_present(model, "Name", "DispName", "AttributeName") or model_id)
+        model_type = text_value(first_present(model, "modelType", "ModelType", "type") or "")
+        normalized_type = normalize_lookup(model_type)
+        if model_id in type_series_target_ids:
+            role = "type_series_definition"
+            explanation = (
+                "Model jest definicją typoszeregu/tabeli. Wiersze tego modelu są eksportowane jako "
+                "productAttributes z ParentAttributeId i RowHash wewnątrz produktu, a nie jako osobne rekordy products."
+            )
+        elif model_id in nested_target_ids:
+            role = "nested_definition"
+            explanation = (
+                "Model jest definicją podrzędnej struktury modelu PIM. Dane są eksportowane jako atrybuty podrzędne, "
+                "a nie jako osobne rekordy products."
+            )
+        elif normalized_type == "product":
+            role = "unselected_product_model"
+            explanation = (
+                "Model jest osobnym modelem Product w productsModels.json, ale eksport zawiera rekordy tylko dla "
+                "wybranego modelu produktu. Jeśli ten model ma tworzyć produkty, wybierz go w sekcji modelu albo "
+                "uruchom osobny import dla tego modelu."
+            )
+        else:
+            role = "model_definition"
+            explanation = "Model jest w paczce definicji PIM, ale nie występuje jako ModelType wygenerowanego produktu."
+        missing.append(
+            {
+                "id": model_id,
+                "name": name,
+                "modelType": model_type,
+                "role": role,
+                "selected_root_model": model_id == int_value(selected_root_model_id),
+                "explanation": explanation,
+            }
+        )
+
+    return {
+        "selected_product_model_id": int_value(selected_root_model_id),
+        "exported_product_model_ids": sorted(exported_model_ids),
+        "models_without_product_records": missing,
     }
 
 

@@ -961,6 +961,7 @@ class ConverterTests(unittest.TestCase):
                     "models": [
                         {"Id": 41, "Name": "SG One Tool Product", "modelType": "Product"},
                         {"Id": 45, "Name": "Typoszereg", "modelType": "Attribute"},
+                        {"Id": 49, "Name": "One Tool Database", "modelType": "Product"},
                     ]
                 }
             ).encode("utf-8"),
@@ -1015,11 +1016,15 @@ class ConverterTests(unittest.TestCase):
             )
             products_path = Path(tmp) / result["job_id"] / "products.json"
             data = json.loads(products_path.read_text(encoding="utf-8"))
+            report_path = Path(tmp) / result["job_id"] / "mapping_report.json"
+            report = json.loads(report_path.read_text(encoding="utf-8"))
 
         product = data["products"][0]
         attrs = product["dataVersions"][0]["productAttributes"]
         attr_ids = {attr["AttributeId"] for attr in attrs}
         parent_ids = {attr["ParentAttributeId"] for attr in attrs}
+        coverage = report["warnings"]["model_export_coverage"]
+        missing_by_id = {item["id"]: item for item in coverage["models_without_product_records"]}
 
         self.assertEqual(product["ModelType"], 41)
         self.assertTrue(any(attr["AttributeId"] == 116 and attr["varcharValue"] == "Produkt A" for attr in attrs))
@@ -1032,6 +1037,9 @@ class ConverterTests(unittest.TestCase):
         self.assertTrue(any(attr["AttributeId"] == 321 and attr["ParentAttributeId"] == 135 and attr["varcharValue"] == "AR00233378" for attr in attrs))
         self.assertFalse({225, 226, 228, 229, 246, 303} & attr_ids)
         self.assertNotIn(233, parent_ids)
+        self.assertEqual(missing_by_id[45]["role"], "type_series_definition")
+        self.assertIn("ParentAttributeId", missing_by_id[45]["explanation"])
+        self.assertEqual(missing_by_id[49]["role"], "unselected_product_model")
 
     def test_category_ids_accept_numeric_lists_and_json_arrays(self):
         self.assertEqual(category_ids([22970, 22815, 0]), [22815, 22970])
