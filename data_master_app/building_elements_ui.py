@@ -1133,10 +1133,13 @@ def render_building_elements_home() -> str:
       const response = await fetch(url);
       if (!response.ok) throw new Error(currentLang === "pl" ? "Nie udało się pobrać pliku wynikowego." : "Could not download generated file.");
       const blob = await response.blob();
+      const isXlsx = String(suggestedName || "").toLowerCase().endsWith(".xlsx");
       if (window.showSaveFilePicker) {
         const handle = await window.showSaveFilePicker({
           suggestedName,
-          types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+          types: [isXlsx
+            ? { description: "Excel workbook", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }
+            : { description: "JSON", accept: { "application/json": [".json"] } }],
         });
         const writable = await handle.createWritable();
         await writable.write(blob);
@@ -1336,10 +1339,13 @@ def render_building_elements_home() -> str:
         if (activeElementRootModelId) form.append("root_model_id", activeElementRootModelId);
         form.append("mapping_json", JSON.stringify(builderMode ? modelBuilderMappingProfile() : (currentElementMapping || {})));
         const payload = await postForm("/api/building-elements/convert", form);
-        const saved = await saveGeneratedElementFile(payload.files.building_elements_json, "building_elements.json");
+        const saved = [await saveGeneratedElementFile(payload.files.building_elements_json, "building_elements.json")];
+        if (payload.files.building_elements_acceptance_xlsx) {
+          saved.push(await saveGeneratedElementFile(payload.files.building_elements_acceptance_xlsx, "building_elements_acceptance.xlsx"));
+        }
         $("elementStatus").textContent = currentLang === "pl"
-          ? `Gotowe. Zapisano ${saved}.`
-          : `Done. Saved ${saved}.`;
+          ? `Gotowe. Zapisano ${saved.join(", ")}.`
+          : `Done. Saved ${saved.join(", ")}.`;
         saveElementWorkspaceState();
       } catch (error) {
         $("elementStatus").textContent = error.message;

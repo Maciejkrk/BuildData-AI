@@ -71,7 +71,7 @@ def product_acceptance_xlsx_bytes(
             ["", ""],
             ["Jak używać", "Arkusz 'Produkty' pokazuje produkty jeden po drugim. Uzupełnij status akceptacji i uwagi klienta."],
             ["Poprawki", "W arkuszu 'Cechy produktów' można wpisać poprawioną wartość przy konkretnej cesze produktu."],
-            ["Import zwrotny", "Nie zmieniaj kolumn technicznych product_id, attribute_id, parent_attribute_id i row_i."],
+            ["Import zwrotny", "Nie zmieniaj kolumn technicznych product_id, attribute_id, parent_attribute_id, main_attribute_id, hash, parent_hash i row_i."],
         ],
     )
     instruction["A1"].font = Font(bold=True, size=14)
@@ -84,6 +84,47 @@ def product_acceptance_xlsx_bytes(
         _format_sheet(sheet)
         for cell in sheet[1]:
             if cell.value in {"status_akceptacji", "uwagi_klienta", "poprawiona_wartość"}:
+                cell.fill = ACCEPT_FILL
+
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def building_elements_acceptance_xlsx_bytes(
+    elements_payload: dict[str, Any],
+    *,
+    source_file: str = "",
+    attribute_labels: dict[int, str] | None = None,
+) -> bytes:
+    """Create a workbook for reviewing building elements and importing corrections later."""
+    attribute_labels = attribute_labels or {}
+    elements = elements_payload.get("buildingElements") or []
+    workbook = Workbook()
+    instruction = workbook.active
+    instruction.title = "Instrukcja"
+    _write_rows(
+        instruction,
+        [
+            ["BuildData AI - akceptacja systemow", ""],
+            ["Plik zrodlowy", source_file],
+            ["Liczba systemow", len(elements)],
+            ["", ""],
+            ["Jak uzywac", "Arkusz 'Systemy' pokazuje elementy budowlane jeden po drugim. Uzupelnij status akceptacji i uwagi klienta."],
+            ["Poprawki", "W arkuszu 'Cechy systemow' mozna wpisac poprawiona wartosc przy konkretnej cesze systemu, wariantu, warstwy albo produktu w warstwie."],
+            ["Import zwrotny", "Nie zmieniaj kolumn technicznych element_id, attribute_id, parent_attribute_id, main_attribute_id, hash, parent_hash i row_i."],
+        ],
+    )
+    instruction["A1"].font = Font(bold=True, size=14)
+
+    _building_elements_overview_sheet(workbook, elements, attribute_labels)
+    _building_elements_details_sheet(workbook, elements, attribute_labels)
+    _building_elements_json_sheet(workbook, elements_payload)
+
+    for sheet in workbook.worksheets:
+        _format_sheet(sheet)
+        for cell in sheet[1]:
+            if cell.value in {"status_akceptacji", "uwagi_klienta", "poprawiona_wartosc"}:
                 cell.fill = ACCEPT_FILL
 
     output = BytesIO()
@@ -122,6 +163,9 @@ def _product_acceptance_details_sheet(workbook: Workbook, products: list[dict[st
         "nazwa_produktu",
         "attribute_id",
         "parent_attribute_id",
+        "main_attribute_id",
+        "hash",
+        "parent_hash",
         "row_i",
         "cecha",
         "wartość",
@@ -144,6 +188,9 @@ def _product_acceptance_details_sheet(workbook: Workbook, products: list[dict[st
                 product_name,
                 attribute_id,
                 attr.get("ParentAttributeId") or 0,
+                attr.get("MainAttributeId") or "",
+                attr.get("hash") or "",
+                attr.get("parentHash") or "",
                 attr.get("RowI") or 0,
                 attribute_labels.get(attribute_id, f"Atrybut {attribute_id}"),
                 value,
@@ -165,6 +212,107 @@ def _product_acceptance_json_sheet(workbook: Workbook, products_payload: dict[st
             ["products_json", json.dumps(products_payload, ensure_ascii=False, indent=2)],
         ],
     )
+
+
+def _building_elements_overview_sheet(workbook: Workbook, elements: list[dict[str, Any]], attribute_labels: dict[int, str]) -> None:
+    rows = [[
+        "lp",
+        "element_id",
+        "model_type",
+        "nazwa_systemu",
+        "liczba_cech",
+        "status_akceptacji",
+        "uwagi_klienta",
+    ]]
+    for index, element in enumerate(elements, start=1):
+        attrs = _product_attrs(element)
+        rows.append([
+            index,
+            element.get("Id", ""),
+            element.get("ModelType", ""),
+            _building_element_name(attrs, attribute_labels),
+            len([attr for attr in attrs if _attribute_display_value(attr) not in ("", None)]),
+            "",
+            "",
+        ])
+    _write_rows(workbook.create_sheet("Systemy"), rows)
+
+
+def _building_elements_details_sheet(workbook: Workbook, elements: list[dict[str, Any]], attribute_labels: dict[int, str]) -> None:
+    rows = [[
+        "lp",
+        "element_id",
+        "nazwa_systemu",
+        "attribute_id",
+        "parent_attribute_id",
+        "main_attribute_id",
+        "hash",
+        "parent_hash",
+        "row_i",
+        "cecha",
+        "wartosc",
+        "typ_wartosci",
+        "status_akceptacji",
+        "poprawiona_wartosc",
+        "uwagi_klienta",
+    ]]
+    for element_index, element in enumerate(elements, start=1):
+        attrs = _product_attrs(element)
+        element_name = _building_element_name(attrs, attribute_labels)
+        for attr in attrs:
+            value = _attribute_display_value(attr)
+            if value in ("", None):
+                continue
+            attribute_id = _int_or_text(attr.get("AttributeId"))
+            rows.append([
+                element_index,
+                element.get("Id", ""),
+                element_name,
+                attribute_id,
+                attr.get("ParentAttributeId") or 0,
+                attr.get("MainAttributeId") or "",
+                attr.get("hash") or "",
+                attr.get("parentHash") or "",
+                attr.get("RowI") or 0,
+                attribute_labels.get(attribute_id, f"Atrybut {attribute_id}"),
+                value,
+                _attribute_value_type(attr),
+                "",
+                "",
+                "",
+            ])
+    _write_rows(workbook.create_sheet("Cechy systemow"), rows)
+
+
+def _building_elements_json_sheet(workbook: Workbook, elements_payload: dict[str, Any]) -> None:
+    sheet = workbook.create_sheet("__building_elements_json")
+    sheet.sheet_state = "hidden"
+    _write_rows(
+        sheet,
+        [
+            ["schema", "builddata.building_elements_acceptance.xlsx.v1"],
+            ["building_elements_json", json.dumps(elements_payload, ensure_ascii=False, indent=2)],
+        ],
+    )
+
+
+def _building_element_name(attrs: list[dict[str, Any]], attribute_labels: dict[int, str]) -> str:
+    for attr in attrs:
+        if (attr.get("ParentAttributeId") or 0) != 0:
+            continue
+        value = _attribute_display_value(attr)
+        if not value:
+            continue
+        attribute_id = _int_or_text(attr.get("AttributeId"))
+        label = str(attribute_labels.get(attribute_id, "")).lower()
+        if any(word in label for word in ("nazwa", "name", "system")):
+            return str(value)
+    for attr in attrs:
+        if (attr.get("ParentAttributeId") or 0) == 0:
+            value = _attribute_display_value(attr)
+            if value:
+                return str(value)
+    return ""
 
 
 def _product_attrs(product: dict[str, Any]) -> list[dict[str, Any]]:

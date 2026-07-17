@@ -8,6 +8,7 @@ from collections.abc import Iterable, Iterator
 from typing import Any
 
 from data_master_app.mapping import apply_cleanup
+from data_master_app.report_export import building_elements_acceptance_xlsx_bytes
 from mapping_studio.models import PimModelBundle, ProductReferenceIndex
 from mapping_studio.services.source_reader import SourceTable
 from mapping_studio.services.normalization import lookup_key
@@ -697,6 +698,13 @@ def convert_building_elements_from_tables(
     output_dir = output_root / job_id
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "building_elements.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "building_elements_acceptance.xlsx").write_bytes(
+        building_elements_acceptance_xlsx_bytes(
+            payload,
+            source_file=filename,
+            attribute_labels=building_element_attribute_labels(model),
+        )
+    )
     report = {
         "source_filename": filename,
         "building_elements_count": len(elements),
@@ -709,10 +717,20 @@ def convert_building_elements_from_tables(
         "building_elements_count": len(elements),
         "files": {
             "building_elements_json": f"/outputs/{job_id}/building_elements.json",
+            "building_elements_acceptance_xlsx": f"/outputs/{job_id}/building_elements_acceptance.xlsx",
             "mapping_report_json": f"/outputs/{job_id}/building_elements_mapping_report.json",
         },
         "report": report,
     }
+
+
+def building_element_attribute_labels(model: PimModelBundle) -> dict[int, str]:
+    labels: dict[int, str] = {}
+    for field in model.fields:
+        labels[field.attribute_id] = field.label
+    for relation in model.relations:
+        labels[relation.attribute_id] = relation.label
+    return labels
 
 
 def build_element_entry(

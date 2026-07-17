@@ -243,8 +243,22 @@ class ConverterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = convert_building_elements_from_tables("systems.json", b"{}", tables, profile, model, None, Path(tmp))
             payload = json.loads((Path(tmp) / result["job_id"] / "building_elements.json").read_text(encoding="utf-8"))
+            acceptance_path = Path(tmp) / result["job_id"] / "building_elements_acceptance.xlsx"
+            acceptance_workbook = load_workbook(acceptance_path)
 
         self.assertEqual(result["building_elements_count"], 1)
+        self.assertIn("building_elements_acceptance_xlsx", result["files"])
+        self.assertIn("Systemy", acceptance_workbook.sheetnames)
+        self.assertIn("Cechy systemow", acceptance_workbook.sheetnames)
+        self.assertIn("__building_elements_json", acceptance_workbook.sheetnames)
+        system_rows = list(acceptance_workbook["Systemy"].iter_rows(values_only=True))
+        self.assertIn("status_akceptacji", system_rows[0])
+        self.assertTrue(any(row[3] == "S1" for row in system_rows[1:]))
+        detail_rows = list(acceptance_workbook["Cechy systemow"].iter_rows(values_only=True))
+        self.assertIn("element_id", detail_rows[0])
+        self.assertIn("main_attribute_id", detail_rows[0])
+        self.assertIn("hash", detail_rows[0])
+        self.assertIn("poprawiona_wartosc", detail_rows[0])
         attrs = payload["buildingElements"][0]["dataVersions"][0]["productAttributes"]
         self.assertTrue(any(attr["AttributeId"] == 280 and attr["varcharValue"] == "S1" for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 284 and attr["ParentAttributeId"] == 283 for attr in attrs))
@@ -899,6 +913,9 @@ class ConverterTests(unittest.TestCase):
         self.assertIn("uwagi_klienta", product_rows[0])
         self.assertTrue(any(row[2] == "FAST A" for row in product_rows[1:]))
         detail_rows = list(acceptance_workbook["Cechy produktów"].iter_rows(values_only=True))
+        self.assertIn("main_attribute_id", detail_rows[0])
+        self.assertIn("hash", detail_rows[0])
+        self.assertIn("parent_hash", detail_rows[0])
         self.assertIn("poprawiona_wartość", detail_rows[0])
 
     def test_product_export_uses_dynamic_type_series_ids_from_pim_model(self):
