@@ -35,7 +35,7 @@ from data_master_app.mapping import (
     product_fields_from_pim_bundle,
     suggest_mapping,
 )
-from data_master_app.main import analyze_products_page, app, home, product_model_accept, product_model_files
+from data_master_app.main import analyze_products_page, app, home, output_media_type, product_model_accept, product_model_files
 from data_master_app.building_elements_ui import render_building_elements_home
 from data_master_app.colors_ui import render_colors_home
 from data_master_app.web_ui import render_home, render_main_menu
@@ -54,6 +54,13 @@ class ConverterTests(unittest.TestCase):
         self.assertIn('href="/products"', html)
         self.assertIn("Mapowanie Building Elementów", html)
         self.assertIn('href="/building-elements"', html)
+
+    def test_output_media_type_supports_excel_exports(self):
+        self.assertEqual(
+            output_media_type("building_elements_acceptance.xlsx"),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        self.assertEqual(output_media_type("products.json"), "application/json")
 
     def test_web_ui_has_product_variant_row_rules_and_hidden_rule_rows(self):
         html = render_home()

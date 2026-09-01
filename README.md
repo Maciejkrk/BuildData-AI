@@ -44,6 +44,14 @@ driven principles.
 
 ### Docker
 
+On Windows, from the repository directory:
+
+```powershell
+.\Start-BuildDataDocker.ps1
+```
+
+Or run Docker Compose directly:
+
 ```powershell
 docker compose up --build -d
 ```
@@ -54,7 +62,17 @@ Open:
 http://localhost:8020
 ```
 
+Generated files and saved mapping projects are stored in the local `outputs/`
+folder, mounted into the container as `/app/outputs`, so they survive container
+restarts and rebuilds.
+
 Stop:
+
+```powershell
+.\Stop-BuildDataDocker.ps1
+```
+
+or:
 
 ```powershell
 docker compose down

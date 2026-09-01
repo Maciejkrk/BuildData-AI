@@ -5,6 +5,7 @@ from typing import Any
 import base64
 import hashlib
 import json
+import os
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -19,7 +20,7 @@ from mapping_studio.services.source_reader import read_source_tables
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = BASE_DIR / "outputs"
+OUTPUT_DIR = Path(os.getenv("BUILDDATA_OUTPUT_DIR", BASE_DIR / "outputs"))
 PROJECTS_DIR = OUTPUT_DIR / "mapping-projects"
 MODEL_SESSIONS_DIR = OUTPUT_DIR / "model-sessions"
 SOURCE_SESSIONS_DIR = OUTPUT_DIR / "source-sessions"
@@ -587,7 +588,18 @@ def output_file(job_id: str, filename: str) -> FileResponse:
     path = OUTPUT_DIR / safe_job / safe_file
     if not path.exists():
         raise HTTPException(status_code=404, detail="Output file not found.")
-    return FileResponse(path, media_type="application/json", filename=safe_file)
+    return FileResponse(path, media_type=output_media_type(safe_file), filename=safe_file)
+
+
+def output_media_type(filename: str) -> str:
+    suffix = Path(filename).suffix.lower()
+    if suffix == ".xlsx":
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    if suffix == ".csv":
+        return "text/csv"
+    if suffix == ".html":
+        return "text/html"
+    return "application/json"
 
 
 def safe_project_name(value: str) -> str:
