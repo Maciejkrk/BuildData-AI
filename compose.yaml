@@ -1,0 +1,20 @@
+name: builddata-ai
+
+services:
+  builddata-ai:
+    image: builddata-ai:latest
+    container_name: builddata-ai
+    build: .
+    environment:
+      BUILDDATA_OUTPUT_DIR: /app/outputs
+    ports:
+      - "${BUILDDATA_AI_PORT:-8020}:8010"
+    volumes:
+      - ./outputs:/app/outputs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
