@@ -35,6 +35,7 @@ from .mapping import (
     value_kind_from_attribute,
 )
 from .report_export import mapping_report_xlsx_bytes, product_acceptance_xlsx_bytes
+from mapping_studio.services.connection_registry import build_connection_registry
 
 
 PRODUCT_MODEL_TYPE = 66
@@ -1305,6 +1306,13 @@ def convert_products_file(
         product_mapping=product_mapping,
         product_mapping_profile=product_mapping_profile,
     )
+    if product_mapping_profile:
+        report["connection_registry"] = build_connection_registry(
+            scope="products",
+            mapping_profile=product_mapping_profile,
+            source_file=filename,
+            root_model_id=export_schema.product_model_id,
+        )
     report["warnings"]["model_export_coverage"] = product_model_export_coverage_warnings(
         product_model_files,
         products,

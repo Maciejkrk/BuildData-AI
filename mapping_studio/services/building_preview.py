@@ -10,6 +10,7 @@ from typing import Any
 from data_master_app.mapping import apply_cleanup
 from data_master_app.report_export import building_elements_acceptance_xlsx_bytes
 from mapping_studio.models import PimModelBundle, ProductReferenceIndex
+from mapping_studio.services.connection_registry import build_connection_registry
 from mapping_studio.services.source_reader import SourceTable
 from mapping_studio.services.normalization import lookup_key
 from mapping_studio.services.product_reference import product_identity
@@ -709,6 +710,12 @@ def convert_building_elements_from_tables(
         "source_filename": filename,
         "building_elements_count": len(elements),
         "product_identity": mapping_profile.get("_product_identity") or {},
+        "connection_registry": build_connection_registry(
+            scope="building_elements",
+            mapping_profile=mapping_profile,
+            source_file=filename,
+            root_model_id=model.root_model_id,
+        ),
     }
     (output_dir / "building_elements_mapping_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return {

@@ -1155,6 +1155,63 @@ def render_building_elements_home() -> str:
       URL.revokeObjectURL(link.href);
       return suggestedName;
     }
+    function buildElementConnectionRegistry(profile, options = {}) {
+      const safeProfile = profile && typeof profile === "object" ? profile : {};
+      const levels = Object.entries(safeProfile._levels || {})
+        .filter(([, config]) => config && typeof config === "object")
+        .map(([levelKey, config]) => ({
+          level_key: String(levelKey),
+          table: String(config.table || ""),
+          id_column: String(config.id_column || ""),
+          parent_id_column: String(config.parent_id_column || ""),
+          level_name_field: String(config.level_name_field || "")
+        }));
+      const connections = Object.entries(safeProfile)
+        .filter(([key, rule]) => !String(key).startsWith("_") && rule && typeof rule === "object")
+        .map(([key, rule]) => {
+          const targetPath = String(rule.target_path || key || "");
+          const sourceColumn = String(rule.source_column || rule.column || String(key).split("::extract::", 1)[0] || "");
+          return {
+            id: ["building_elements", rule.table || "", sourceColumn, targetPath, rule.level || ""].filter(Boolean).join("::").toLowerCase(),
+            scope: "building_elements",
+            status: targetPath === "ignore" ? "ignored" : "active",
+            source: { table: String(rule.table || ""), column: sourceColumn },
+            target: {
+              path: targetPath === "ignore" ? "" : targetPath,
+              label: String(rule.target_label || rule.field_label || ""),
+              group: String(rule.target_group || rule.field_group || rule.group || ""),
+              value_kind: String(rule.target_value_kind || rule.field_kind || rule.value_kind || ""),
+              unit: String(rule.target_unit || rule.unit || "")
+            },
+            level: String(rule.level || ""),
+            cleanup: rule.cleanup || {},
+            choice_map: rule.choice_map || rule.value_map || {}
+          };
+        });
+      return {
+        schema: "builddata.connection_registry.v1",
+        scope: "building_elements",
+        source: { type: "table", file: options.sourceFile || "" },
+        target: { type: "pim", root_model_id: options.rootModelId || "" },
+        summary: {
+          connections: connections.length,
+          active_connections: connections.filter(item => item.status === "active").length,
+          ignored_connections: connections.filter(item => item.status === "ignored").length,
+          levels: levels.length
+        },
+        levels,
+        connections
+      };
+    }
+    function elementConnectionSummaryText(registry) {
+      const summary = registry?.summary || {};
+      const count = Number(summary.active_connections || 0);
+      const levels = Number(summary.levels || 0);
+      if (!count && !levels) return "";
+      return currentLang === "pl"
+        ? ` Połączenia danych: ${count}, poziomy: ${levels}.`
+        : ` Data connections: ${count}, levels: ${levels}.`;
+    }
     async function elementProjectPayload() {
       syncElementMappingState();
       storeElementMappingForActiveModel();
@@ -1163,9 +1220,14 @@ def render_building_elements_home() -> str:
       const sourceFile = $("elementSourceFile").files[0] || loadedElementProjectFiles.sourceFile;
       const productsReferenceFile = $("productReferenceFile").files[0] || loadedElementProjectFiles.productsReferenceFile;
       if (!effectiveModelFiles.length) throw new Error(t("project.missing"));
+      const connectionRegistry = buildElementConnectionRegistry(currentElementMapping || {}, {
+        sourceFile: sourceFile?.name || "",
+        rootModelId: activeElementRootModelId || ""
+      });
       return {
         name: $("elementProjectName").value || "mapowanie-elementow-budowlanych",
         model_version: "building-elements-mapping-project.v1",
+        connection_registry: connectionRegistry,
         active_element_root_model_id: activeElementRootModelId || "",
         workflow_mode: elementWorkflowMode || "import",
         element_root_models: elementRootModels || [],
@@ -1192,7 +1254,7 @@ def render_building_elements_home() -> str:
       try {
         const payload = await elementProjectPayload();
         const result = await saveJsonFileToDisk(safeProjectFilename(payload.name), payload);
-        $("elementProjectStatus").textContent = `${t("project.saved")} ${result.filename}`;
+        $("elementProjectStatus").textContent = `${t("project.saved")} ${result.filename}${elementConnectionSummaryText(payload.connection_registry)}`;
         refreshElementProjectFiles();
       } catch (error) {
         $("elementProjectStatus").textContent = error?.message || t("project.failed");
@@ -1343,9 +1405,10 @@ def render_building_elements_home() -> str:
         if (payload.files.building_elements_acceptance_xlsx) {
           saved.push(await saveGeneratedElementFile(payload.files.building_elements_acceptance_xlsx, "building_elements_acceptance.xlsx"));
         }
+        const connectionSummary = elementConnectionSummaryText(payload.report?.connection_registry);
         $("elementStatus").textContent = currentLang === "pl"
-          ? `Gotowe. Zapisano ${saved.join(", ")}.`
-          : `Done. Saved ${saved.join(", ")}.`;
+          ? `Gotowe. Zapisano ${saved.join(", ")}.${connectionSummary}`
+          : `Done. Saved ${saved.join(", ")}.${connectionSummary}`;
         saveElementWorkspaceState();
       } catch (error) {
         $("elementStatus").textContent = error.message;

@@ -6041,15 +6041,79 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (mode === "products") saveProductWorkspaceState();
     }
 
+    function buildConnectionRegistry(scope, profile, options = {}) {
+      const safeProfile = profile && typeof profile === "object" ? profile : {};
+      const levels = Object.entries(safeProfile._levels || {})
+        .filter(([, config]) => config && typeof config === "object")
+        .map(([levelKey, config]) => ({
+          level_key: String(levelKey),
+          table: String(config.table || ""),
+          id_column: String(config.id_column || ""),
+          parent_id_column: String(config.parent_id_column || ""),
+          level_name_field: String(config.level_name_field || "")
+        }));
+      const connections = Object.entries(safeProfile)
+        .filter(([key, rule]) => !String(key).startsWith("_") && rule && typeof rule === "object")
+        .map(([key, rule]) => {
+          const targetPath = String(rule.target_path || key || "");
+          const sourceColumn = String(rule.source_column || rule.column || String(key).split("::extract::", 1)[0] || "");
+          return {
+            id: [scope, rule.table || "", sourceColumn, targetPath, rule.level || ""].filter(Boolean).join("::").toLowerCase(),
+            scope,
+            status: targetPath === "ignore" ? "ignored" : "active",
+            source: { table: String(rule.table || ""), column: sourceColumn },
+            target: {
+              path: targetPath === "ignore" ? "" : targetPath,
+              label: String(rule.target_label || rule.field_label || ""),
+              group: String(rule.target_group || rule.field_group || rule.group || ""),
+              value_kind: String(rule.target_value_kind || rule.field_kind || rule.value_kind || ""),
+              unit: String(rule.target_unit || rule.unit || "")
+            },
+            level: String(rule.level || ""),
+            cleanup: rule.cleanup || {},
+            choice_map: rule.choice_map || rule.value_map || {}
+          };
+        });
+      return {
+        schema: "builddata.connection_registry.v1",
+        scope,
+        source: { type: "table", file: options.sourceFile || "" },
+        target: { type: "pim", root_model_id: options.rootModelId || "" },
+        summary: {
+          connections: connections.length,
+          active_connections: connections.filter(item => item.status === "active").length,
+          ignored_connections: connections.filter(item => item.status === "ignored").length,
+          levels: levels.length
+        },
+        levels,
+        connections
+      };
+    }
+
+    function connectionSummaryText(registry) {
+      const summary = registry?.summary || {};
+      const count = Number(summary.active_connections || 0);
+      const levels = Number(summary.levels || 0);
+      if (!count && !levels) return "";
+      return currentLang === "pl"
+        ? ` Połączenia danych: ${count}, poziomy: ${levels}.`
+        : ` Data connections: ${count}, levels: ${levels}.`;
+    }
+
     async function projectPayload() {
       const productsFile = fileForInput("productsFile");
       const typicalFile = loadedProjectFiles.typicalDataFile || fileForInput("typicalFile");
       const modelFiles = await productModelFilesForProject();
       if (activeMode === "products" && activeTable) collectMapping("products");
       storeProductMappingForActiveModel();
+      const connectionRegistry = buildConnectionRegistry("products", productMappingProfile || {}, {
+        sourceFile: productsFile?.name || loadedProjectFiles.productsFile?.name || "",
+        rootModelId: activeProductRootModelId || ""
+      });
       return {
         name: $("projectName").value || "import-produktow",
         model_version: "mapping-project.v1",
+        connection_registry: connectionRegistry,
         source_table: activeTable?.name || null,
         active_product_root_model_id: activeProductRootModelId || "",
         product_root_models: productRootModels || [],
@@ -6085,9 +6149,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         const payload = await projectPayload();
         const filename = safeProjectFilename(payload.name);
         const result = await saveJsonFileToDisk(filename, payload);
+        const connectionSummary = connectionSummaryText(payload.connection_registry);
         $("projectStatus").textContent = result.mode === "download"
-          ? `${t("project.downloaded")} ${result.filename}`
-          : `${t("project.saved")} ${result.filename}`;
+          ? `${t("project.downloaded")} ${result.filename}${connectionSummary}`
+          : `${t("project.saved")} ${result.filename}${connectionSummary}`;
         $("projectLinks").innerHTML = "";
         refreshProductProjectFiles();
       } catch (error) {
@@ -6262,6 +6327,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (data.files.enrichment_session_json) links.push(`<a href="${esc(data.files.enrichment_session_json)}" download="enrichment_session.json">Pobierz sesję uzupełniania</a>`);
       if (!showPanel) return links.join("");
       const warnings = data.report?.warnings || {};
+      const connectionSummary = data.report?.connection_registry?.summary || {};
       const html = `
         <div class="panel">
           <h2>${esc(currentLang === "pl" ? "Wynik" : "Result")}</h2>
@@ -6269,6 +6335,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
             <tr><th>job_id</th><td>${esc(data.job_id)}</td></tr>
             <tr><th>status</th><td>${esc(data.status)}</td></tr>
             <tr><th>${esc(currentLang === "pl" ? "produkty" : "products")}</th><td>${esc(data.products_count ?? 0)}</td></tr>
+            <tr><th>${esc(currentLang === "pl" ? "połączenia danych" : "data connections")}</th><td>${esc(connectionSummary.active_connections ?? 0)} / ${esc(currentLang === "pl" ? "poziomy" : "levels")}: ${esc(connectionSummary.levels ?? 0)}</td></tr>
             <tr><th>${esc(currentLang === "pl" ? "katalog" : "directory")}</th><td>${esc(data.output_dir)}</td></tr>
           </tbody></table>
           <div class="links">${links.join("")}</div>

@@ -254,6 +254,9 @@ class ConverterTests(unittest.TestCase):
             acceptance_workbook = load_workbook(acceptance_path)
 
         self.assertEqual(result["building_elements_count"], 1)
+        self.assertEqual(result["report"]["connection_registry"]["scope"], "building_elements")
+        self.assertEqual(result["report"]["connection_registry"]["summary"]["active_connections"], 3)
+        self.assertEqual(result["report"]["connection_registry"]["summary"]["levels"], 1)
         self.assertIn("building_elements_acceptance_xlsx", result["files"])
         self.assertIn("Systemy", acceptance_workbook.sheetnames)
         self.assertIn("Cechy systemow", acceptance_workbook.sheetnames)
@@ -906,6 +909,8 @@ class ConverterTests(unittest.TestCase):
 
         self.assertIn("mapping_report_xlsx", result["files"])
         self.assertIn("products_acceptance_xlsx", result["files"])
+        self.assertEqual(result["report"]["connection_registry"]["scope"], "products")
+        self.assertEqual(result["report"]["connection_registry"]["summary"]["active_connections"], 2)
         self.assertIn("Mapowanie", workbook.sheetnames)
         self.assertIn("Mapy opcji", workbook.sheetnames)
         rows = list(workbook["Mapowanie"].iter_rows(values_only=True))

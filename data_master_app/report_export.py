@@ -505,6 +505,7 @@ def _json_sheet(workbook: Workbook, report: dict[str, Any]) -> None:
             ["schema", "builddata.mapping_report.xlsx.v1"],
             ["product_mapping_profile", json.dumps(report.get("product_mapping_profile") or {}, ensure_ascii=False, indent=2)],
             ["product_mapping", json.dumps(report.get("product_mapping") or {}, ensure_ascii=False, indent=2)],
+            ["connection_registry", json.dumps(report.get("connection_registry") or {}, ensure_ascii=False, indent=2)],
             ["full_report", json.dumps(report, ensure_ascii=False, indent=2)],
         ],
     )
