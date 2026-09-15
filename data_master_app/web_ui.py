@@ -3,6 +3,7 @@
 from .building_elements_ui import render_building_elements_home
 from .colors_ui import render_colors_home
 from .products_ui import render_home
+from .version import app_version_label
 
 def render_main_menu() -> str:
     return """<!doctype html>
@@ -26,15 +27,19 @@ def render_main_menu() -> str:
     .choice strong { display:block; margin-bottom:8px; font-size:20px; color:var(--text); }
     .choice span { display:block; color:var(--muted); line-height:1.45; }
     .choice .badge { display:inline-block; margin-top:18px; padding:6px 9px; border-radius:999px; background:#f0fdfa; color:var(--accent); font-weight:700; font-size:12px; }
+    .version-badge { display:inline-flex; align-items:center; min-height:28px; padding:5px 9px; border:1px solid var(--line); border-radius:4px; background:#f8fafc; color:var(--muted); font-size:12px; font-weight:700; white-space:nowrap; }
   </style>
 </head>
 <body>
   <header>
     <h1>BuildData AI</h1>
-    <select id="languageSelect" aria-label="Language">
-      <option value="pl">Polski</option>
-      <option value="en">English</option>
-    </select>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span class="version-badge" title="BuildData AI version">__APP_VERSION_LABEL__</span>
+      <select id="languageSelect" aria-label="Language">
+        <option value="pl">Polski</option>
+        <option value="en">English</option>
+      </select>
+    </div>
   </header>
   <main>
     <p class="intro" data-i18n="intro">Wybierz niezależną sekcję pracy. Projekty produktów, elementów budowlanych i kolorów są prowadzone osobno.</p>
@@ -94,4 +99,4 @@ def render_main_menu() -> str:
     applyLanguage();
   </script>
 </body>
-</html>"""
+</html>""".replace("__APP_VERSION_LABEL__", app_version_label())

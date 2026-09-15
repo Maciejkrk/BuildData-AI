@@ -3,6 +3,8 @@ from __future__ import annotations
 import html
 import json
 
+from .version import app_version_label
+
 
 def render_home(initial_product_model: dict | None = None, initial_analysis: dict | None = None) -> str:
     initial_model = initial_product_model or {}
@@ -99,6 +101,19 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       min-width: 140px;
       margin-top: 0;
       padding: 7px 9px;
+    }
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #f8fafc;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
     }
     h1 { margin: 0; font-size: 20px; }
     h2, .title {
@@ -931,6 +946,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       <a href="/colors" data-i18n="nav.colors">Kolory</a>
     </nav>
     <div class="header-actions">
+      <span class="version-badge" title="BuildData AI version">__APP_VERSION_LABEL__</span>
       <span class="muted" data-i18n="app.subtitle">Import, mapowanie, czyszczenie i eksport PIM JSON</span>
       <select id="languageSelect" class="language-select" aria-label="Language">
         <option value="pl">Polski</option>
@@ -6485,7 +6501,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     initializeProductPage();
   </script>
 </body>
-</html>""".replace("__INITIAL_PRODUCT_MODEL_JSON__", initial_model_json).replace("__INITIAL_ANALYSIS_JSON__", initial_analysis_json).replace("__INITIAL_PRODUCT_MODEL_STATUS__", initial_status).replace("__INITIAL_REPORT_HTML__", initial_report_html).replace("__REPORT_EMPTY_HIDDEN__", report_empty_hidden).replace("__INITIAL_SUMMARY__", initial_summary).replace("__MODEL_READY_DISABLED__", model_ready_disabled).replace("__PRODUCT_MODEL_ID_VALUE__", product_model_id_value).replace("__PRODUCTS_STATUS__", products_status).replace("__PRODUCTS_SOURCE_ID__", html.escape(str((initial_analysis or {}).get("source_id") or "")))
+</html>""".replace("__INITIAL_PRODUCT_MODEL_JSON__", initial_model_json).replace("__INITIAL_ANALYSIS_JSON__", initial_analysis_json).replace("__INITIAL_PRODUCT_MODEL_STATUS__", initial_status).replace("__INITIAL_REPORT_HTML__", initial_report_html).replace("__REPORT_EMPTY_HIDDEN__", report_empty_hidden).replace("__INITIAL_SUMMARY__", initial_summary).replace("__MODEL_READY_DISABLED__", model_ready_disabled).replace("__PRODUCT_MODEL_ID_VALUE__", product_model_id_value).replace("__PRODUCTS_STATUS__", products_status).replace("__PRODUCTS_SOURCE_ID__", html.escape(str((initial_analysis or {}).get("source_id") or ""))).replace("__APP_VERSION_LABEL__", html.escape(app_version_label()))
 
 
 def render_initial_model_report(initial_model: dict) -> str:

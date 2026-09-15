@@ -15,8 +15,9 @@ from mapping_studio.services.pim_model_loader import load_building_element_model
 from mapping_studio.services.product_reference import build_product_reference_index
 from mapping_studio.services.source_reader import read_source_tables
 from data_master_app.web_ui import render_home
+from data_master_app.version import APP_NAME, APP_VERSION, APP_BUILD
 
-app = FastAPI(title="BuildData AI", version="0.1.0")
+app = FastAPI(title=APP_NAME, version=APP_VERSION)
 OUTPUT_DIR = Path(__file__).resolve().parents[1] / "outputs"
 
 
@@ -27,7 +28,12 @@ def home() -> HTMLResponse:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "app": "BuildData AI"}
+    return {"status": "ok", "app": APP_NAME, "version": APP_VERSION, "build": APP_BUILD}
+
+
+@app.get("/version")
+def version() -> dict[str, str]:
+    return {"app": APP_NAME, "version": APP_VERSION, "build": APP_BUILD}
 
 
 @app.post("/api/products/model")

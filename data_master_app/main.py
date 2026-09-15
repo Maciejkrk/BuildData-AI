@@ -10,6 +10,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from .converter import analyze_colors_file, analyze_product_model_files, analyze_uploaded_file, convert_colors_file, convert_products_file
+from .version import APP_NAME, APP_VERSION, APP_BUILD
 from .web_ui import render_building_elements_home, render_colors_home, render_home, render_main_menu
 from mapping_studio.services.building_preview import convert_building_elements_from_tables, preview_building_elements_from_tables
 from mapping_studio.services.mapping_analyzer import analyze_source_tables, bundle_payload
@@ -24,7 +25,7 @@ PROJECTS_DIR = OUTPUT_DIR / "mapping-projects"
 MODEL_SESSIONS_DIR = OUTPUT_DIR / "model-sessions"
 SOURCE_SESSIONS_DIR = OUTPUT_DIR / "source-sessions"
 
-app = FastAPI(title="BuildData AI", version="0.1.0")
+app = FastAPI(title=APP_NAME, version=APP_VERSION)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -50,7 +51,12 @@ def products_home(product_model_id: str | None = None) -> HTMLResponse:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"status": "ok"}
+    return {"status": "ok", "app": APP_NAME, "version": APP_VERSION, "build": APP_BUILD}
+
+
+@app.get("/version")
+def version() -> dict[str, str]:
+    return {"app": APP_NAME, "version": APP_VERSION, "build": APP_BUILD}
 
 
 @app.get("/building-elements", response_class=HTMLResponse)
