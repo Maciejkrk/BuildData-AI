@@ -927,7 +927,63 @@ class ConverterTests(unittest.TestCase):
 
         self.assertTrue(any(attr["AttributeId"] == 501 and attr["ParentAttributeId"] == 135 for attr in attrs))
         self.assertTrue(any(attr["AttributeId"] == 502 and attr["ParentAttributeId"] == 135 for attr in attrs))
+        self.assertTrue(any(attr["AttributeId"] == 501 and attr["MainAttributeId"] == 900 for attr in attrs))
+        self.assertTrue(any(attr["AttributeId"] == 502 and attr["MainAttributeId"] == 900 for attr in attrs))
         self.assertFalse(any(attr["ParentAttributeId"] == 276 and attr["AttributeId"] in {277, 278} for attr in attrs))
+
+    def test_product_export_sets_main_model_id_for_nested_information_model(self):
+        model_files = {
+            "productsModels.json": json.dumps(
+                {
+                    "models": [
+                        {"Id": 146, "Name": "Main Product", "modelType": "Product"},
+                        {"Id": 148, "Name": "Product Information", "modelType": "Attribute"},
+                    ]
+                }
+            ).encode("utf-8"),
+            "productsAttributes.json": json.dumps(
+                {
+                    "attributes": [
+                        {"Id": 660, "ProductModelId": 146, "AttributeName": "Nazwa", "AttributeType": "Text"},
+                        {
+                            "Id": 668,
+                            "ProductModelId": 146,
+                            "AttributeName": "Informacje opisowe",
+                            "AttributeType": "Model",
+                            "TargetModelId": 148,
+                        },
+                        {"Id": 669, "ProductModelId": 148, "AttributeName": "Właściwości", "AttributeType": "Longtext"},
+                    ]
+                }
+            ).encode("utf-8"),
+        }
+        payload = json.dumps([{"Name": "ARCHITECT 100", "Properties": "Opis właściwości"}]).encode("utf-8")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = convert_products_file(
+                "products.json",
+                payload,
+                Path(tmp),
+                product_mapping_profile={
+                    "Name": {"target_path": "product.name.value"},
+                    "Properties": {"target_path": "product.properties.value"},
+                },
+                product_model_files=model_files,
+            )
+            products_path = Path(tmp) / result["job_id"] / "products.json"
+            data = json.loads(products_path.read_text(encoding="utf-8"))
+
+        attrs = data["products"][0]["dataVersions"][0]["productAttributes"]
+
+        self.assertTrue(
+            any(
+                attr["AttributeId"] == 669
+                and attr["ParentAttributeId"] == 668
+                and attr["MainAttributeId"] == 148
+                and attr["TextValue"] == "Opis właściwości"
+                for attr in attrs
+            )
+        )
 
     def test_product_export_uses_dynamic_product_attribute_ids_from_pim_model(self):
         model_files = {

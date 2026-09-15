@@ -124,8 +124,8 @@ def test_building_elements_convert_writes_json_from_profile(tmp_path: Path) -> N
     assert result["building_elements_count"] == 1
     attrs = payload["buildingElements"][0]["dataVersions"][0]["productAttributes"]
     assert any(attr["AttributeId"] == 280 and attr["varcharValue"] == "S1" for attr in attrs)
-    assert any(attr["AttributeId"] == 284 and attr["ParentAttributeId"] == 283 for attr in attrs)
-    assert any(attr["AttributeId"] == 287 and attr["ParentAttributeId"] == 285 for attr in attrs)
+    assert any(attr["AttributeId"] == 284 and attr["ParentAttributeId"] == 283 and attr["MainAttributeId"] == 75 for attr in attrs)
+    assert any(attr["AttributeId"] == 287 and attr["ParentAttributeId"] == 285 and attr["MainAttributeId"] == 76 for attr in attrs)
 
 
 def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_path: Path) -> None:
@@ -213,3 +213,4 @@ def test_building_elements_product_ref_can_point_to_product_variant_hash(tmp_pat
         (2945, variant_hash),
         (4469, ""),
     ]
+    assert all(attr["ParentAttributeId"] == 143 and attr["MainAttributeId"] == 87 for attr in product_attrs)

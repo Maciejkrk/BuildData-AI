@@ -63,6 +63,15 @@ PIM_ATTR = {
     "sot_table": 276,
 }
 
+PRODUCT_NESTED_MODEL_IDS = {
+    "product_information": 68,
+    "packages": 69,
+    "palettes": 70,
+    "variants": 71,
+    "documents": 72,
+    "sot_table": 73,
+}
+
 PRODUCT_INFO_ATTR = {
     "short_name": 243,
     "full_name": 244,
@@ -144,6 +153,12 @@ BUILDING_ELEMENT_ATTR = {
     "bim_building_element_type": 299,
 }
 
+BUILDING_ELEMENT_NESTED_MODEL_IDS = {
+    "variants": 75,
+    "layers": 76,
+    "available_products": 77,
+}
+
 DEFAULT_COLOR_PARAMETERS = [
     {"Name": "name", "DispName": "Name", "type": "VarChar", "options": None, "unit": None},
     {"Name": "type", "DispName": "Type", "type": "Select", "options": [{"name": "Color", "value": "simple"}, {"name": "Texture", "value": "advanced"}], "unit": None},
@@ -179,6 +194,7 @@ class PimExportSchema:
     strict_model: bool = False
     product_attribute_ids: dict[str, int] | None = None
     product_parent_by_attribute_id: dict[int, int] | None = None
+    product_main_model_by_attribute_id: dict[int, int] | None = None
     attribute_value_kinds: dict[int, str] | None = None
     known_attribute_ids: frozenset[int] = frozenset()
     type_series_parent_id: int | None = None
@@ -210,6 +226,11 @@ class PimExportSchema:
         if self.strict_model:
             return 0
         return fallback
+
+    def product_main_model_for_attribute(self, attribute_id: int | None = None) -> int | None:
+        if attribute_id is None:
+            return None
+        return (self.product_main_model_by_attribute_id or {}).get(attribute_id)
 
     def type_series_attribute_id(self, target_path: str) -> int | None:
         return (self.type_series_attribute_ids or {}).get(target_path)
@@ -245,6 +266,37 @@ DEFAULT_EXPORT_SCHEMA = PimExportSchema(
         PRODUCT_INFO_ATTR["norms"]: PIM_ATTR["product_information"],
         PRODUCT_INFO_ATTR["manufacturer"]: PIM_ATTR["product_information"],
         PRODUCT_INFO_ATTR["url"]: PIM_ATTR["product_information"],
+    },
+    product_main_model_by_attribute_id={
+        PRODUCT_INFO_ATTR["short_name"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["full_name"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["technical_name"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["description"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["properties"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["prosperation"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["surface_preparation"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["usage_method"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["comments"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["warnings"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["norms"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["storage"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["manufacturer"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["url"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PRODUCT_INFO_ATTR["package_text"]: PRODUCT_NESTED_MODEL_IDS["product_information"],
+        PACKAGE_ATTR["name"]: PRODUCT_NESTED_MODEL_IDS["packages"],
+        PACKAGE_ATTR["weight"]: PRODUCT_NESTED_MODEL_IDS["packages"],
+        PACKAGE_ATTR["capacity"]: PRODUCT_NESTED_MODEL_IDS["packages"],
+        PACKAGE_ATTR["unit_name"]: PRODUCT_NESTED_MODEL_IDS["packages"],
+        DOCUMENT_ATTR["name"]: PRODUCT_NESTED_MODEL_IDS["documents"],
+        DOCUMENT_ATTR["display_web"]: PRODUCT_NESTED_MODEL_IDS["documents"],
+        DOCUMENT_ATTR["category"]: PRODUCT_NESTED_MODEL_IDS["documents"],
+        DOCUMENT_ATTR["url"]: PRODUCT_NESTED_MODEL_IDS["documents"],
+        DOCUMENT_ATTR["extension"]: PRODUCT_NESTED_MODEL_IDS["documents"],
+        DOCUMENT_ATTR["safe_name"]: PRODUCT_NESTED_MODEL_IDS["documents"],
+        SOT_ATTR["thickness"]: PRODUCT_NESTED_MODEL_IDS["sot_table"],
+        SOT_ATTR["lambda"]: PRODUCT_NESTED_MODEL_IDS["sot_table"],
+        SOT_ATTR["density"]: PRODUCT_NESTED_MODEL_IDS["sot_table"],
+        SOT_ATTR["vapor_permeability"]: PRODUCT_NESTED_MODEL_IDS["sot_table"],
     },
     attribute_value_kinds={
         PIM_ATTR["product_name"]: "free_text",
@@ -1976,6 +2028,7 @@ def build_building_element(
             BUILDING_ELEMENT_ATTR["variant_name"],
             varchar=variant_name,
             parent_attribute_id=BUILDING_ELEMENT_ATTR["variants"],
+            main_attribute_id=BUILDING_ELEMENT_NESTED_MODEL_IDS["variants"],
             row_hash=variant_hash,
             parent_hash=None,
             row_i=variant_i,
@@ -1993,6 +2046,7 @@ def build_building_element(
                 BUILDING_ELEMENT_ATTR["layer_position"],
                 int_value=LAYER_POSITION_OPTIONS.get(position, LAYER_POSITION_OPTIONS[1]),
                 parent_attribute_id=BUILDING_ELEMENT_ATTR["layers"],
+                main_attribute_id=BUILDING_ELEMENT_NESTED_MODEL_IDS["layers"],
                 row_hash=layer_hash,
                 parent_hash=variant_hash,
                 row_i=layer_i,
@@ -2002,6 +2056,7 @@ def build_building_element(
                 BUILDING_ELEMENT_ATTR["layer_name"],
                 varchar=layer_name,
                 parent_attribute_id=BUILDING_ELEMENT_ATTR["layers"],
+                main_attribute_id=BUILDING_ELEMENT_NESTED_MODEL_IDS["layers"],
                 row_hash=layer_hash,
                 parent_hash=variant_hash,
                 row_i=layer_i,
@@ -2026,6 +2081,7 @@ def build_building_element(
                     int_value=product_id,
                     int_value2=parse_int(row["product"].get("quantity")),
                     parent_attribute_id=BUILDING_ELEMENT_ATTR["available_products"],
+                    main_attribute_id=BUILDING_ELEMENT_NESTED_MODEL_IDS["available_products"],
                     row_hash=available_hash,
                     parent_hash=layer_hash,
                     row_i=product_i,
@@ -2035,6 +2091,7 @@ def build_building_element(
                     BUILDING_ELEMENT_ATTR["default"],
                     boolean=parse_bool(row["product"].get("default")),
                     parent_attribute_id=BUILDING_ELEMENT_ATTR["available_products"],
+                    main_attribute_id=BUILDING_ELEMENT_NESTED_MODEL_IDS["available_products"],
                     row_hash=available_hash,
                     parent_hash=layer_hash,
                     row_i=product_i,
@@ -2075,6 +2132,7 @@ def add_product_information(
                     attr_id,
                     fallback=PIM_ATTR["product_information"],
                 ),
+                main_attribute_id=export_schema.product_main_model_for_attribute(attr_id),
                 row_hash=row_hash if export_schema.product_parent_for_attribute(attr_id, fallback=PIM_ATTR["product_information"]) else None,
             )
 
@@ -2088,7 +2146,14 @@ def add_package(attrs: list[dict[str, Any]], package: dict[str, Any]) -> None:
         if not attr_id:
             continue
         kwargs = {"number": parse_number(value)} if field in {"weight", "capacity"} else {"varchar": str(value)}
-        add_attr(attrs, attr_id, parent_attribute_id=PIM_ATTR["packages"], row_hash=row_hash, **kwargs)
+        add_attr(
+            attrs,
+            attr_id,
+            parent_attribute_id=PIM_ATTR["packages"],
+            main_attribute_id=PRODUCT_NESTED_MODEL_IDS["packages"],
+            row_hash=row_hash,
+            **kwargs,
+        )
 
 
 def add_sot(attrs: list[dict[str, Any]], sot: dict[str, Any], export_schema: PimExportSchema = DEFAULT_EXPORT_SCHEMA) -> None:
@@ -2105,6 +2170,7 @@ def add_sot(attrs: list[dict[str, Any]], sot: dict[str, Any], export_schema: Pim
                 attr_id,
                 number=number,
                 parent_attribute_id=export_schema.type_series_parent_for_attribute(attr_id),
+                main_attribute_id=export_schema.product_main_model_for_attribute(attr_id),
                 row_hash=row_hash,
             )
 
@@ -2118,18 +2184,43 @@ def add_typed_attr_value(
     parent_attribute_id: int = 0,
     row_hash: str | None = None,
     row_i: int = 0,
+    main_attribute_id: int | None = None,
 ) -> None:
     if value_kind == "number":
         number = parse_number(value)
         if number is not None:
-            add_attr(attrs, attribute_id, number=number, parent_attribute_id=parent_attribute_id, row_hash=row_hash, row_i=row_i)
+            add_attr(
+                attrs,
+                attribute_id,
+                number=number,
+                parent_attribute_id=parent_attribute_id,
+                row_hash=row_hash,
+                row_i=row_i,
+                main_attribute_id=main_attribute_id,
+            )
         return
     if isinstance(value, bool):
-        add_attr(attrs, attribute_id, boolean=value, parent_attribute_id=parent_attribute_id, row_hash=row_hash, row_i=row_i)
+        add_attr(
+            attrs,
+            attribute_id,
+            boolean=value,
+            parent_attribute_id=parent_attribute_id,
+            row_hash=row_hash,
+            row_i=row_i,
+            main_attribute_id=main_attribute_id,
+        )
         return
     text = str(value)
     kwargs = {"varchar": text} if len(text) <= 255 else {"text": text}
-    add_attr(attrs, attribute_id, parent_attribute_id=parent_attribute_id, row_hash=row_hash, row_i=row_i, **kwargs)
+    add_attr(
+        attrs,
+        attribute_id,
+        parent_attribute_id=parent_attribute_id,
+        row_hash=row_hash,
+        row_i=row_i,
+        main_attribute_id=main_attribute_id,
+        **kwargs,
+    )
 
 
 def add_sot_rows(
@@ -2158,6 +2249,7 @@ def add_sot_rows(
                     value,
                     value_kind=export_schema.attribute_value_kind(attr_id, "number"),
                     parent_attribute_id=export_schema.type_series_parent_for_attribute(attr_id),
+                    main_attribute_id=export_schema.product_main_model_for_attribute(attr_id),
                     row_hash=row_hash,
                     row_i=index,
                 )
@@ -2170,6 +2262,7 @@ def add_sot_rows(
                     value,
                     value_kind=export_schema.attribute_value_kind(pim_attr_id),
                     parent_attribute_id=export_schema.type_series_parent_for_attribute(pim_attr_id),
+                    main_attribute_id=export_schema.product_main_model_for_attribute(pim_attr_id),
                     row_hash=row_hash,
                     row_i=index,
                 )
@@ -2183,15 +2276,16 @@ def add_documents(attrs: list[dict[str, Any]], documents: list[dict[str, Any]]) 
             continue
         seen_urls.add(url)
         row_hash = stable_hash("document", document, str(index))
-        add_attr(attrs, DOCUMENT_ATTR["name"], varchar=str(document.get("name") or "file"), parent_attribute_id=PIM_ATTR["documents"], row_hash=row_hash, row_i=index)
-        add_attr(attrs, DOCUMENT_ATTR["url"], varchar=url, parent_attribute_id=PIM_ATTR["documents"], row_hash=row_hash, row_i=index)
+        main_attribute_id = PRODUCT_NESTED_MODEL_IDS["documents"]
+        add_attr(attrs, DOCUMENT_ATTR["name"], varchar=str(document.get("name") or "file"), parent_attribute_id=PIM_ATTR["documents"], main_attribute_id=main_attribute_id, row_hash=row_hash, row_i=index)
+        add_attr(attrs, DOCUMENT_ATTR["url"], varchar=url, parent_attribute_id=PIM_ATTR["documents"], main_attribute_id=main_attribute_id, row_hash=row_hash, row_i=index)
         if document.get("category"):
-            add_attr(attrs, DOCUMENT_ATTR["category"], varchar=str(document["category"]), parent_attribute_id=PIM_ATTR["documents"], row_hash=row_hash, row_i=index)
+            add_attr(attrs, DOCUMENT_ATTR["category"], varchar=str(document["category"]), parent_attribute_id=PIM_ATTR["documents"], main_attribute_id=main_attribute_id, row_hash=row_hash, row_i=index)
         if document.get("extension"):
-            add_attr(attrs, DOCUMENT_ATTR["extension"], varchar=str(document["extension"]), parent_attribute_id=PIM_ATTR["documents"], row_hash=row_hash, row_i=index)
+            add_attr(attrs, DOCUMENT_ATTR["extension"], varchar=str(document["extension"]), parent_attribute_id=PIM_ATTR["documents"], main_attribute_id=main_attribute_id, row_hash=row_hash, row_i=index)
         if document.get("safe_name"):
-            add_attr(attrs, DOCUMENT_ATTR["safe_name"], varchar=str(document["safe_name"]), parent_attribute_id=PIM_ATTR["documents"], row_hash=row_hash, row_i=index)
-        add_attr(attrs, DOCUMENT_ATTR["display_web"], boolean=bool(document.get("display_web", True)), parent_attribute_id=PIM_ATTR["documents"], row_hash=row_hash, row_i=index)
+            add_attr(attrs, DOCUMENT_ATTR["safe_name"], varchar=str(document["safe_name"]), parent_attribute_id=PIM_ATTR["documents"], main_attribute_id=main_attribute_id, row_hash=row_hash, row_i=index)
+        add_attr(attrs, DOCUMENT_ATTR["display_web"], boolean=bool(document.get("display_web", True)), parent_attribute_id=PIM_ATTR["documents"], main_attribute_id=main_attribute_id, row_hash=row_hash, row_i=index)
 
 
 def add_generic_pim_attributes(
@@ -2207,13 +2301,28 @@ def add_generic_pim_attributes(
         if not export_schema.has_attribute(attribute_id):
             continue
         parent_attribute_id = export_schema.product_parent_for_attribute(attribute_id, fallback=GENERIC_PIM_PARENT_IDS.get(attribute_id, 0))
+        main_attribute_id = export_schema.product_main_model_for_attribute(attribute_id)
         row_hash = stable_hash("pim", parent_attribute_id) if parent_attribute_id else None
         if isinstance(value, list):
             for option in value:
-                add_pim_option_or_value(attrs, attribute_id, option, parent_attribute_id=parent_attribute_id, row_hash=row_hash)
+                add_pim_option_or_value(
+                    attrs,
+                    attribute_id,
+                    option,
+                    parent_attribute_id=parent_attribute_id,
+                    row_hash=row_hash,
+                    main_attribute_id=main_attribute_id,
+                )
             continue
         if isinstance(value, dict):
-            add_pim_option_or_value(attrs, attribute_id, value, parent_attribute_id=parent_attribute_id, row_hash=row_hash)
+            add_pim_option_or_value(
+                attrs,
+                attribute_id,
+                value,
+                parent_attribute_id=parent_attribute_id,
+                row_hash=row_hash,
+                main_attribute_id=main_attribute_id,
+            )
             continue
         kwargs: dict[str, Any]
         if isinstance(value, bool):
@@ -2221,7 +2330,14 @@ def add_generic_pim_attributes(
         else:
             text = str(value)
             kwargs = {"varchar": text} if len(text) <= 255 else {"text": text}
-        add_attr(attrs, attribute_id, parent_attribute_id=parent_attribute_id, row_hash=row_hash, **kwargs)
+        add_attr(
+            attrs,
+            attribute_id,
+            parent_attribute_id=parent_attribute_id,
+            row_hash=row_hash,
+            main_attribute_id=main_attribute_id,
+            **kwargs,
+        )
 
 
 def add_pim_option_or_value(
@@ -2231,13 +2347,22 @@ def add_pim_option_or_value(
     *,
     parent_attribute_id: int = 0,
     row_hash: str | None = None,
+    main_attribute_id: int | None = None,
 ) -> None:
     if isinstance(option, dict):
         if option.get("unmatched"):
             return
         option_id = parse_int(option.get("id"))
         if option_id is not None:
-            add_attr(attrs, attribute_id, int_value=option_id, boolean=True, parent_attribute_id=parent_attribute_id, row_hash=row_hash)
+            add_attr(
+                attrs,
+                attribute_id,
+                int_value=option_id,
+                boolean=True,
+                parent_attribute_id=parent_attribute_id,
+                row_hash=row_hash,
+                main_attribute_id=main_attribute_id,
+            )
             return
         value = option.get("raw") or option.get("label") or option.get("value")
     else:
@@ -2245,7 +2370,14 @@ def add_pim_option_or_value(
     if value not in (None, ""):
         text = str(value)
         kwargs = {"varchar": text} if len(text) <= 255 else {"text": text}
-        add_attr(attrs, attribute_id, parent_attribute_id=parent_attribute_id, row_hash=row_hash, **kwargs)
+        add_attr(
+            attrs,
+            attribute_id,
+            parent_attribute_id=parent_attribute_id,
+            row_hash=row_hash,
+            main_attribute_id=main_attribute_id,
+            **kwargs,
+        )
 
 
 def add_attr(
@@ -2262,6 +2394,7 @@ def add_attr(
     row_hash: str | None = None,
     parent_hash: str | None = "",
     row_i: int = 0,
+    main_attribute_id: int | None = None,
 ) -> None:
     attrs.append(
         {
@@ -2275,7 +2408,7 @@ def add_attr(
             "IntValue2": int_value2,
             "NumberValue": number,
             "BooleanValue": boolean,
-            "MainAttributeId": None,
+            "MainAttributeId": main_attribute_id,
             "RowI": row_i,
         }
     )
@@ -2451,6 +2584,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
 
     product_attribute_ids: dict[str, int] = {}
     product_parent_by_attribute_id: dict[int, int] = {}
+    product_main_model_by_attribute_id: dict[int, int] = {}
     known_attribute_ids = frozenset(
         attribute_id
         for attribute in attributes
@@ -2498,6 +2632,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
                     ) or f"pim.attribute.{child_id}.value"
                     product_attribute_ids[target_path] = child_id
                     product_parent_by_attribute_id[child_id] = current_parent_id
+                    product_main_model_by_attribute_id[child_id] = target_model_id
                 continue
             parent_id = current_parent_id
             for child in child_attributes:
@@ -2512,6 +2647,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
                 ) or f"pim.attribute.{child_id}.value"
                 attribute_ids[target_path] = child_id
                 parent_by_attribute_id[child_id] = current_parent_id
+                product_main_model_by_attribute_id[child_id] = target_model_id
 
     if not product_attribute_ids and (parent_id is None or not attribute_ids):
         return DEFAULT_EXPORT_SCHEMA
@@ -2520,6 +2656,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
         strict_model=True,
         product_attribute_ids=product_attribute_ids,
         product_parent_by_attribute_id=product_parent_by_attribute_id,
+        product_main_model_by_attribute_id=product_main_model_by_attribute_id,
         attribute_value_kinds=attribute_value_kinds,
         known_attribute_ids=known_attribute_ids,
         type_series_parent_id=parent_id,

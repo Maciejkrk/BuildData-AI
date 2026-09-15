@@ -272,7 +272,7 @@ def aliases_from_pim_attribute(attribute: dict[str, Any], label: str) -> set[str
 
 
 def is_nested_attribute(attribute: dict[str, Any]) -> bool:
-    return str(attribute.get("AttributeType") or "") in {"Model_Array", "Table_Model"}
+    return str(attribute.get("AttributeType") or "") in {"Model", "Model_Array", "Table_Model"}
 
 
 def value_kind_from_attribute(attribute: dict[str, Any]) -> str:
@@ -349,6 +349,8 @@ def semantic_pim_field_key(
         return "product.product_url.value"
     if has_any(attribute_label, ("opis", "description")):
         return "product.description.value"
+    if has_any(attribute_label, ("wlasciwosci", "properties", "cechy")):
+        return "product.properties.value"
     return None
 
 
