@@ -8,10 +8,12 @@ import json
 import os
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 
 from .converter import analyze_colors_file, analyze_product_model_files, analyze_uploaded_file, convert_colors_file, convert_products_file
+from .version import APP_NAME, APP_VERSION, APP_BUILD
 from .web_ui import render_building_elements_home, render_colors_home, render_home, render_main_menu
+from .ui_theme import apply_workspace_theme
 from mapping_studio.services.building_preview import convert_building_elements_from_tables, preview_building_elements_from_tables
 from mapping_studio.services.mapping_analyzer import analyze_source_tables, bundle_payload
 from mapping_studio.services.pim_model_loader import load_building_element_model, load_product_model
@@ -25,7 +27,110 @@ PROJECTS_DIR = OUTPUT_DIR / "mapping-projects"
 MODEL_SESSIONS_DIR = OUTPUT_DIR / "model-sessions"
 SOURCE_SESSIONS_DIR = OUTPUT_DIR / "source-sessions"
 
-app = FastAPI(title="BuildData AI", version="0.1.0")
+app = FastAPI(title=APP_NAME, version=APP_VERSION)
+
+
+@app.get('/transfer', response_class=HTMLResponse)
+def transfer_page():
+    from .transfer import TRANSFER_HTML
+    return HTMLResponse(TRANSFER_HTML)
+
+
+@app.get('/transfer/example')
+def transfer_example():
+    return [{'file': 'karta-techniczna.pdf', 'module': 'products', 'owner_id': 101,
+             'version_id': 1, 'attribute_id': 17, 'order': 0, 'display_name': 'Karta techniczna'}]
+
+
+@app.get('/transfer/folders', response_class=HTMLResponse)
+def folder_mapping_page():
+    from .folder_ui import HTML
+    return HTMLResponse(HTML)
+
+
+@app.post('/document-source')
+def document_source(payload: dict = Body(...)):
+    from .document_source import directory_table
+    try:
+        return {'table': directory_table(payload.get('paths'))}
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post('/transfer/folders')
+async def transfer_folders(data_files: list[UploadFile] = File(...), paths: str = Form('[]'),
+                           key: str = Form(''), version_id: int = Form(0), attribute_id: int = Form(0),
+                           module: str = Form('products'), owner_depth: int = Form(1), rules: str = Form('[]')):
+    from .folder_links import folder_options, scan_folders
+    from .pim_bundle import DATA_FILES, MAX_BYTES
+    try:
+        documents, total = {}, 0
+        for file in data_files:
+            if file.filename not in DATA_FILES or file.filename in documents:
+                raise ValueError('Nieprawidlowa lub powtorzona nazwa pliku danych')
+            content = await file.read(MAX_BYTES - total + 1)
+            total += len(content)
+            if total > MAX_BYTES:
+                raise ValueError('Przekroczony limit danych')
+            documents[file.filename] = json.loads(content.decode('utf-8-sig'))
+        options = folder_options(documents, module)
+        names = json.loads(paths)
+        if not isinstance(names, list) or any(not isinstance(n, str) for n in names):
+            raise ValueError('Nieprawidlowa lista sciezek')
+        return {**options, **(scan_folders(documents, names, key, version_id, attribute_id,
+                                          module, owner_depth, json.loads(rules)) if key else {})}
+    except (ValueError, KeyError, TypeError, UnicodeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post('/transfer/package')
+async def transfer_package(data_files: list[UploadFile] = File(...), links_file: UploadFile = File(...),
+                           attachments: list[UploadFile] | None = File(None)):
+    from .pim_bundle import MAX_BYTES, build_bundle, read_bundle
+    try:
+        total = 0
+
+        async def read_files(files):
+            nonlocal total
+            result = {}
+            for file in files:
+                name = file.filename or ''
+                if name in result:
+                    raise ValueError('Duplicate filenames; use CLI for attachments in subfolders')
+                content = await file.read(MAX_BYTES - total + 1)
+                total += len(content)
+                if total > MAX_BYTES:
+                    raise ValueError('Package exceeds size limit')
+                result[name] = content
+            return result
+
+        data = await read_files(data_files)
+        link_bytes = await read_files([links_file])
+        links = json.loads(next(iter(link_bytes.values())).decode('utf-8-sig'))
+        assets = await read_files(attachments or [])
+        content = build_bundle(data, assets, links)
+        read_bundle(content)
+        return Response(content, media_type='application/zip', headers={'Content-Disposition': 'attachment; filename="pim-transfer.zip"'})
+    except (ValueError, KeyError, TypeError, UnicodeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post('/transfer/folder-package')
+async def transfer_folder_package(data_path: str = Form(...), files_path: str = Form(...), output_path: str = Form(...)):
+    from .pim_bundle import DATA_FILES, build_transfer_folder
+    try:
+        data_dir = Path(data_path).expanduser()
+        files_dir = Path(files_path).expanduser()
+        output_dir = Path(output_path).expanduser()
+        files = {name: (data_dir / name).read_bytes() for name in DATA_FILES if (data_dir / name).is_file()}
+        info = build_transfer_folder(files, files_dir, output_dir)
+        return {
+            'message': 'Transfer folder created',
+            'output_path': str(output_dir),
+            **info,
+        }
+    except (ValueError, KeyError, TypeError, UnicodeError, OSError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -51,7 +156,12 @@ def products_home(product_model_id: str | None = None) -> HTMLResponse:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    return {"status": "ok"}
+    return {"status": "ok", "app": APP_NAME, "version": APP_VERSION, "build": APP_BUILD}
+
+
+@app.get("/version")
+def version() -> dict[str, str]:
+    return {"app": APP_NAME, "version": APP_VERSION, "build": APP_BUILD}
 
 
 @app.get("/building-elements", response_class=HTMLResponse)
@@ -560,7 +670,7 @@ def load_source_file_session(source_id: str) -> tuple[str, bytes]:
 
 def html_response(content: str, status_code: int = 200) -> HTMLResponse:
     return HTMLResponse(
-        content,
+        apply_workspace_theme(content),
         status_code=status_code,
         media_type="text/html; charset=utf-8",
         headers={
