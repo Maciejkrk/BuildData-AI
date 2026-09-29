@@ -2411,19 +2411,14 @@ def add_generic_pim_attributes(
                 row_hash=row_hash,
             )
             continue
-        kwargs: dict[str, Any]
-        if isinstance(value, bool):
-            kwargs = {"boolean": value}
-        else:
-            text = str(value)
-            kwargs = {"text": text} if value_kind == "long_text" or len(text) > 255 else {"varchar": text}
-        add_attr(
+        add_typed_attr_value(
             attrs,
             attribute_id,
+            value,
+            value_kind=value_kind,
             parent_attribute_id=parent_attribute_id,
             main_attribute_id=main_attribute_id,
             row_hash=row_hash,
-            **kwargs,
         )
 
 

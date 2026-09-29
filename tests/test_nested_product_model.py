@@ -42,6 +42,7 @@ def test_nested_product_fields_are_mappable_and_export_with_parent(relation_type
     attrs = payload['products'][0]['dataVersions'][0]['productAttributes']
     assert any(a['AttributeId'] == 734 and a['ParentAttributeId'] == 733 and a['MainAttributeId'] == 150 for a in attrs)
     assert any(a['AttributeId'] == 739 and a['ParentAttributeId'] == 733 and a['MainAttributeId'] == 150 for a in attrs)
+    assert next(a for a in attrs if a['AttributeId'] == 739)['NumberValue'] == 12
     nested = [a for a in attrs if a['ParentAttributeId'] == 733]
     assert len({a['hash'] for a in nested}) == 1
 
