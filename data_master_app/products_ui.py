@@ -5541,7 +5541,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         if (!options.length) return profileItem.source_column;
         const known = new Set(options.flatMap(option => [option.id, option.label, option.value]).map(normalizeChoice).filter(Boolean));
         const values = (table.sample_rows || []).map(row => row[profileItem.source_column]).filter(value => value != null && String(value).trim());
-        const matched = values.some(value => String(value).split(/[;|\n]+/).some(part => known.has(normalizeChoice(part))));
+        const matched = values.some(value => String(value).split(/[;|\\n]+/).some(part => known.has(normalizeChoice(part))));
         if (!values.length || matched) return profileItem.source_column;
       }
       for (const [column, target] of Object.entries(mappingData.mapping || {})) {
