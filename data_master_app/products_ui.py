@@ -3,6 +3,8 @@ from __future__ import annotations
 import html
 import json
 
+from .version import app_version_label
+
 
 def render_home(initial_product_model: dict | None = None, initial_analysis: dict | None = None) -> str:
     initial_model = initial_product_model or {}
@@ -99,6 +101,19 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       min-width: 140px;
       margin-top: 0;
       padding: 7px 9px;
+    }
+    .version-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f5f6f8;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
     }
     h1 { margin: 0; font-size: 20px; }
     h2, .title {
@@ -968,8 +983,10 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       <a class="active" href="/products" data-i18n="nav.products">Produkty</a>
       <a href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
       <a href="/colors" data-i18n="nav.colors">Kolory</a>
+      <a href="/transfer">Paczka PIM</a>
     </nav>
     <div class="header-actions">
+      <span class="version-badge" title="BuildData AI version">__APP_VERSION_LABEL__</span>
       <span class="muted" data-i18n="app.subtitle">Import, mapowanie, czyszczenie i eksport PIM JSON</span>
       <select id="languageSelect" class="language-select" aria-label="Language">
         <option value="pl">Polski</option>
@@ -997,16 +1014,13 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       </form>
 
       <div id="productsPanel" class="panel">
-        <h2 data-i18n="products.title">1. Produkty</h2>
-        <div class="muted" data-i18n="products.help">Analizuj plik, przypisz kolumny do modelu produktu i typoszeregu, ustaw czyszczenie wartości, potem generuj products.json.</div>
+        <h2 data-i18n="products.title">Eksport</h2>
         <form id="productsForm" action="/analyze-products-page" method="post" enctype="multipart/form-data">
           <input id="productsProductModelId" type="hidden" name="product_model_id" value="__PRODUCT_MODEL_ID_VALUE__">
           <input id="productsRootModelId" type="hidden" name="product_root_model_id" value="">
           <input id="productsSourceId" type="hidden" name="products_source_id" value="__PRODUCTS_SOURCE_ID__">
-          <label><span data-i18n="products.file">Plik produktów</span>
-            <input id="productsFile" name="file" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv"__MODEL_READY_DISABLED__>
-          </label>
-          <button type="submit" class="secondary" id="analyzeProductsBtn" name="_action" value="analyze" data-i18n="products.analyze"__MODEL_READY_DISABLED__>Analizuj i mapuj produkty</button>
+          <input id="productsFile" name="file" type="file" hidden accept=".xlsx,.xlsm,.json,.csv,.tsv"__MODEL_READY_DISABLED__>
+          <button type="submit" hidden id="analyzeProductsBtn" name="_action" value="analyze"__MODEL_READY_DISABLED__>Analizuj</button>
           <button type="button" id="generateProductsBtn" name="_action" value="convert" data-i18n="products.generate" onclick="window.generateAndSaveProductsAs && window.generateAndSaveProductsAs(); return false;"__MODEL_READY_DISABLED__>Generuj products.json z mapowania</button>
         </form>
         <div id="productsStatus" class="status" data-i18n="products.ready">__PRODUCTS_STATUS__</div>
@@ -1122,6 +1136,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     const INITIAL_ANALYSIS = __INITIAL_ANALYSIS_JSON__;
     const INITIAL_PRODUCT_MODEL_ACCEPTED = Boolean(INITIAL_PRODUCT_MODEL.model_id && (INITIAL_PRODUCT_MODEL.target_fields || []).length);
     let activeProductModelFields = INITIAL_PRODUCT_MODEL_ACCEPTED ? (INITIAL_PRODUCT_MODEL.target_fields || []) : [];
+    let activeProductNestedModels = INITIAL_PRODUCT_MODEL.nested_models || null;
     let activeProductModelId = INITIAL_PRODUCT_MODEL_ACCEPTED ? INITIAL_PRODUCT_MODEL.model_id : "";
     let productRootModels = INITIAL_PRODUCT_MODEL.product_models || [];
     let activeProductRootModelId = String(INITIAL_PRODUCT_MODEL.selected_root_model_id || productRootModels[0]?.id || "");
@@ -1170,7 +1185,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "model.missingFiles": "Brakuje wymaganych plików: ",
         "model.changed": "Pliki modelu zostały zmienione. Dotychczasowe mapowanie i wygenerowane dane zostały wyczyszczone. Zaakceptuj model ponownie.",
         "gate.locked": "Najpierw zaakceptuj model produktu PIM.",
-        "products.title": "1. Produkty",
+        "products.title": "Eksport",
         "products.help": "Analizuj plik, przypisz kolumny do modelu produktu i typoszeregu, ustaw czyszczenie wartości, potem generuj products.json.",
         "products.file": "Plik produktów",
         "products.analyze": "Analizuj i mapuj produkty",
@@ -1394,9 +1409,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "productType.column": "Kolumna/cecha z typem produktu",
         "productType.ownValues": "Wartości oznaczające produkt firmowy",
         "productType.otherValues": "Wartości oznaczające produkt obcy",
-        "productType.ownTypeId": "prodctTypeId dla firmowych",
-        "productType.otherTypeId": "prodctTypeId dla obcych",
-        "productType.defaultTypeId": "Domyślny prodctTypeId",
+        "productType.ownTypeId": "ID typu w eksporcie",
+        "productType.otherTypeId": "ID typu w eksporcie",
+        "productType.defaultTypeId": "Domyślne ID typu",
         "productType.valueHelp": "Możesz wpisać kilka wartości po przecinku, średniku, kresce pionowej albo w nowych liniach.",
         "mapping.check": "Sprawdź aktualne mapowanie",
         "mapping.checkTitle": "Wynik aktualnego mapowania",
@@ -1486,7 +1501,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "model.missingFiles": "Missing required files: ",
         "model.changed": "Model files were changed. Existing mapping and generated data were cleared. Accept the model again.",
         "gate.locked": "Accept the product PIM model first.",
-        "products.title": "1. Products",
+        "products.title": "Export",
         "products.help": "Analyze a file, map columns to the product model and type series, configure cleanup, then generate products.json.",
         "products.file": "Products file",
         "products.analyze": "Analyze and map products",
@@ -1710,9 +1725,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         "productType.column": "Product type column/feature",
         "productType.ownValues": "Values meaning own/company product",
         "productType.otherValues": "Values meaning other product",
-        "productType.ownTypeId": "prodctTypeId for own products",
-        "productType.otherTypeId": "prodctTypeId for other products",
-        "productType.defaultTypeId": "Default prodctTypeId",
+        "productType.ownTypeId": "Export type ID",
+        "productType.otherTypeId": "Export type ID",
+        "productType.defaultTypeId": "Default type ID",
         "productType.valueHelp": "You can enter multiple values separated by commas, semicolons, pipes or new lines.",
         "mapping.check": "Check current mapping",
         "mapping.checkTitle": "Current Mapping Result",
@@ -1983,6 +1998,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         generatedMappingReportXlsxUrl = payload.generatedMappingReportXlsxUrl || "";
         productMapping = payload.mapping || productMapping;
         productMappingProfile = payload.mappingProfile || productMappingProfile;
+        storeProductMappingForActiveModel();
         restoreProductMappingForActiveModel();
         renderProductRootModelSelect();
         if (payload.mappingProfile) {
@@ -2174,11 +2190,11 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       showReport(`
         <div class="panel">
           <h2>${esc(t("model.previewTitle"))}</h2>
-          <div class="muted">${esc(t("model.previewHelp"))}</div>
           <div class="mapping-check-meta">
             <span class="pill">${esc(t("model.fieldsLoaded"))}: ${esc(fields.length)}</span>
             <span class="pill">${esc(productModelFileNames())}</span>
           </div>
+          ${renderNestedRelations(mainProductTable || {name: '', columns: [], sample_rows: []})}
           <div class="target-structure" id="targetStructure">${renderTargetStructure(fields)}</div>
         </div>`,
         t("model.previewSummary")
@@ -2365,6 +2381,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       activeTable = null;
       activeMode = null;
       activeProductModelFields = [];
+      activeProductNestedModels = null;
       activeProductModelId = "";
       productRootModels = [];
       activeProductRootModelId = "";
@@ -2453,6 +2470,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || (currentLang === "pl" ? "Nie udało się odczytać modelu produktu." : "Could not read the product model."));
       activeProductModelFields = data.target_fields || [];
+      activeProductNestedModels = data.nested_models || [];
       activeProductModelId = data.model_id || "";
       productRootModels = data.product_models || [];
       activeProductRootModelId = String(data.selected_root_model_id || rootModelId || productRootModels[0]?.id || "");
@@ -2479,6 +2497,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           pimModelAccepted = false;
           acceptedProductModelSignature = "";
           activeProductModelFields = [];
+          activeProductNestedModels = [];
           activeProductModelId = "";
           $("productModelStatus").textContent = t("model.required");
           updateWorkflowGate();
@@ -2489,6 +2508,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           pimModelAccepted = false;
           acceptedProductModelSignature = "";
           activeProductModelFields = [];
+          activeProductNestedModels = [];
           activeProductModelId = "";
           $("productModelStatus").textContent = `${t("model.missingFiles")}${missing.join(", ")}`;
           updateWorkflowGate();
@@ -2507,6 +2527,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         pimModelAccepted = false;
         acceptedProductModelSignature = "";
         activeProductModelFields = [];
+        activeProductNestedModels = [];
         activeProductModelId = "";
         $("productModelStatus").textContent = `${currentLang === "pl" ? "Nie udało się zaakceptować modelu: " : "Could not accept model: "}${error.message}`;
         updateWorkflowGate();
@@ -2534,9 +2555,20 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     function renderTargetStructure(targetFields, usage = {}) {
+      usage = {...usage};
+      const nestedPaths = new Set();
+      for (const def of productNestedModels()) {
+        const config = productMappingProfile?._nested_relations?.[String(def.parent_attribute_id)];
+        if (!config?.enabled) continue;
+        for (const field of def.fields) {
+          const column = config.fields?.[String(field.attribute_id)];
+          nestedPaths.add(field.path);
+          if (column && config.table) usage[field.path] = {sources: [{kind: 'column', label: `${config.table} / ${column}`}], values: []};
+        }
+      }
       const groups = fieldGroups(targetFields);
       return Object.entries(groups).map(([group, fields]) => {
-        if (fields.some(fieldIsTypeSeries)) {
+        if (fields.some(fieldIsTypeSeries) && !fields.some(field => nestedPaths.has(field.key))) {
           return renderTypeSeriesStructure(group, fields, usage);
         }
         const rows = fields.map(field => {
@@ -4589,8 +4621,16 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     function collectMapping(mode) {
+      if (mode === 'products' && !document.querySelector('select[data-map-mode="products"]')) {
+        productMappingProfile = {...(productMappingProfile || {}), _nested_relations: collectNestedRelations()};
+        storeProductMappingForActiveModel();
+        saveProductWorkspaceState();
+        return;
+      }
       const result = {};
       const profile = {};
+      const nested = mode === 'products' ? collectNestedRelations() : {};
+      const nestedPaths = new Set(productNestedModels().filter(d => nested[String(d.parent_attribute_id)]?.enabled).flatMap(d => d.fields.map(f => f.path)));
       const rowRules = mode === "products" ? collectRowRules() : { rules: [] };
       const productTypeRule = mode === "products" ? collectProductTypeRule() : {};
       const ruleOwnedColumns = mode === "products" ? columnsHandledByRowRules(rowRules.rules || []) : new Set();
@@ -4600,6 +4640,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         const sourceSelect = row?.querySelector("[data-source-column-select]");
         const sourceColumn = sourceSelect ? sourceSelect.value : select.dataset.sourceColumn;
         const targetPath = select.dataset.fixedTargetPath || select.value;
+        if (row) row.classList.toggle('nested-owned-row', nestedPaths.has(targetPath));
+        if (nestedPaths.has(targetPath)) continue;
         if (row) row.dataset.sourceColumn = sourceColumn || "";
         if (ruleOwnedColumns.has(sourceColumn)) continue;
         if (ruleOwnedTargets.has(targetPath)) {
@@ -4653,6 +4695,9 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       if (mode === "products") {
         profile._row_rules = rowRules;
         profile._product_type_rule = productTypeRule;
+        profile._nested_relations = nested;
+        profile._product_table = mainProductTable?.name || activeTable?.name || '';
+        profile._product_key = document.querySelector('[data-main-product-key]')?.value || productMappingProfile?._product_key || '';
         productMapping = result;
         productMappingProfile = profile;
         storeProductMappingForActiveModel();
@@ -5328,6 +5373,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
               ${renderTypeSeriesPreviewTable([previewEntry], typeSeriesFields, 3, productKey)}
             </div>
           </div>
+          ${renderNestedPreview(previewRow)}
         </div>`;
       for (const button of panel.querySelectorAll("[data-preview-product]")) {
         button.onclick = () => {
@@ -5728,32 +5774,384 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
       }
     }
 
+    function productNestedModels() {
+      return activeProductNestedModels || lastProductAnalysis?.nested_models || [];
+    }
+
+    function nestedSourceTables(config) {
+      return config.source_mode === 'external' ? config.source?.tables || [] : lastProductAnalysis?.tables || [];
+    }
+
+    function sectionSourceOptions(config, parent) {
+      return `<option value="main"${config.source_mode !== 'external' ? ' selected' : ''}>${esc(currentLang === 'pl' ? 'Ten sam wiersz produktu' : 'Same product row')}</option>
+        <option value="external"${config.source_mode === 'external' && config.source?.kind !== 'documents' ? ' selected' : ''}>${esc(currentLang === 'pl' ? 'Inny plik' : 'Another file')}</option>
+        <option value="documents"${config.source_mode === 'external' && config.source?.kind === 'documents' ? ' selected' : ''}>${esc(currentLang === 'pl' ? 'Mapper dokumentów zewnętrznych' : 'External document mapper')}</option>`;
+    }
+
+    function documentColumnOptions(source, selected, foldersOnly=false) {
+      const labels = currentLang === 'pl'
+        ? {'Sciezka pliku': 'Ścieżka względna pliku', 'Nazwa pliku': 'Nazwa pliku', 'Nazwa bez rozszerzenia': 'Nazwa bez rozszerzenia', 'Rozszerzenie': 'Rozszerzenie'}
+        : {'Sciezka pliku': 'Relative file path', 'Nazwa pliku': 'File name', 'Nazwa bez rozszerzenia': 'Name without extension', 'Rozszerzenie': 'Extension'};
+      return `<option value="">${esc(currentLang === 'pl' ? (foldersOnly ? 'Wybierz poziom katalogu' : 'Nie mapuj') : (foldersOnly ? 'Choose directory level' : 'Do not map'))}</option>` + (source?.columns || []).filter(column => !foldersOnly || column.startsWith('Katalog ')).map(column => {
+        const example = (source.sample_rows || []).find(row => row[column])?.[column];
+        const label = labels[column] || (currentLang === 'pl' ? column.replace('Katalog ', 'Poziom katalogu ') : column.replace('Katalog ', 'Directory level '));
+        return `<option value="${esc(column)}"${selected === column ? ' selected' : ''}>${esc(label)}${example ? ` (${esc(String(example).slice(0, 65))})` : ''}</option>`;
+      }).join('');
+    }
+
+    function documentJoinCandidates(source, table) {
+      const clean = value => value == null ? '' : String(value).trim();
+      const levels = (source?.columns || []).filter(c => c.startsWith('Katalog '));
+      const candidates = [];
+      for (const column of table?.columns || []) {
+        const counts = new Map();
+        for (const row of table.sample_rows || []) {
+          const value = clean(row[column]);
+          if (value) counts.set(value, (counts.get(value) || 0) + 1);
+        }
+        for (const level of levels) {
+          let matched = 0, ambiguous = false;
+          for (const row of source.sample_rows || []) {
+            const count = counts.get(clean(row[level])) || 0;
+            if (count > 1) ambiguous = true;
+            if (count === 1) matched++;
+          }
+          if (matched && !ambiguous) candidates.push({product_key: column, child_key: level, matched});
+        }
+      }
+      return candidates.sort((a,b) => b.matched - a.matched);
+    }
+
+    function documentChoiceEditor(def, config, source) {
+      return def.fields.filter(field => field.options?.length && config.fields?.[String(field.attribute_id)]).map(field => {
+        const column = config.fields[String(field.attribute_id)];
+        const values = [...new Set((source?.sample_rows || []).map(row => row[column]).filter(v => v != null && String(v).trim()).map(String))];
+        return `<div style="grid-column:1 / -1"><h4>${esc(field.label)} — ${esc(currentLang === 'pl' ? 'wartości ze słownika modelu' : 'model dictionary values')}</h4>${values.map(value => {
+          const saved = config.choice_maps?.[String(field.attribute_id)]?.[value];
+          const matches = field.options.filter(o => [o.id,o.label,o.value].some(v => normalizeChoice(v) === normalizeChoice(value)));
+          const selected = saved !== undefined ? String(saved) : matches.length === 1 ? String(matches[0].id ?? matches[0].value ?? matches[0].label) : '';
+          return `<label>${esc(value)}<select data-document-choice="${esc(field.attribute_id)}" data-source-value="${esc(value)}"><option value="">${esc(currentLang === 'pl' ? 'Nie rozpoznano — wybierz wartość' : 'Unrecognized — choose a value')}</option>${field.options.map(option => {
+            const id = String(option.id ?? option.value ?? option.label);
+            return `<option value="${esc(id)}"${id === selected ? ' selected' : ''}>${esc(option.label ?? option.value ?? id)}</option>`;
+          }).join('')}</select></label>`;
+        }).join('')}</div>`;
+      }).join('');
+    }
+
+    function sectionJoinStatus(config, table) {
+      const text = (pl, en) => currentLang === 'pl' ? pl : en;
+      if (config.source_mode !== 'external') return text('Dane z wiersza produktu. Bez dodatkowego łączenia.', 'Product row data. No additional join.');
+      config = {...config, product_key: config.source?.kind === 'documents' ? config.product_key : productMappingProfile?._product_key || ''};
+      if (!config.product_key) return text('Wybierz główny identyfikator produktu w danych ogólnych.', 'Choose the primary product identifier in general data.');
+      const source = nestedSourceTables(config).find(item => item.name === config.table);
+      if (!source) return text('Wybierz plik i arkusz sekcji.', 'Choose the section file and worksheet.');
+      if (!table?.columns?.length) return text('Arkusz wczytany. Do sprawdzenia powiązań potrzebne są dane ogólne produktu.', 'Worksheet loaded. General product data is needed to check relationships.');
+      if (!config.product_key || !config.child_key) return text('Arkusz wczytany. Wskaż obie kolumny łączące.', 'Worksheet loaded. Choose both join columns.');
+      if (!table.columns.includes(config.product_key) || !source.columns.includes(config.child_key)) return text('Wybrana kolumna łącząca nie istnieje w tym arkuszu.', 'A selected join column does not exist in this worksheet.');
+      const key = value => value == null ? '' : String(value).trim();
+      const parents = new Map();
+      const primary = productMappingProfile?._product_key;
+      for (const row of table.sample_rows || []) {
+        const value = key(row[config.product_key]);
+        if (!value) continue;
+        if (!parents.has(value)) parents.set(value, new Set());
+        parents.get(value).add(primary ? key(row[primary]) : value);
+      }
+      let matched = 0, unmatched = 0, blank = 0;
+      for (const row of source.sample_rows || []) {
+        const value = key(row[config.child_key]);
+        if (!value) blank++;
+        else if (parents.has(value)) matched++;
+        else unmatched++;
+      }
+      const ambiguous = [...parents.values()].filter(values => values.size > 1).length;
+      return text(`Powiązane wiersze: ${matched}. Bez produktu: ${unmatched}. Puste klucze: ${blank}. Niejednoznaczne klucze: ${ambiguous}.`, `Linked rows: ${matched}. No product: ${unmatched}. Empty keys: ${blank}. Ambiguous keys: ${ambiguous}.`);
+    }
+
+    function collectNestedRelations() {
+      const previous = productMappingProfile?._nested_relations || loadedProject?.product_mapping_profile?._nested_relations || {};
+      const editor = document.getElementById('nestedRelationsEditor');
+      if (!editor) return previous;
+      const result = JSON.parse(JSON.stringify(previous));
+      for (const group of editor.querySelectorAll('[data-nested-parent]')) {
+        const parent = group.dataset.nestedParent;
+        if (!group.querySelector('[data-nested-source-mode]')) continue;
+        const prior = previous[parent] || {};
+        result[parent] = {
+          ...(previous[parent] || {}),
+          enabled: ['external', 'documents'].includes(group.querySelector('[data-nested-source-mode]')?.value),
+          use_primary_key: group.querySelector('[data-nested-source-mode]')?.value !== 'documents',
+          source_mode: group.querySelector('[data-nested-source-mode]')?.value === 'documents' ? 'external' : group.querySelector('[data-nested-source-mode]')?.value || 'main',
+          source: {...(previous[parent]?.source || {}), kind: group.querySelector('[data-nested-source-mode]')?.value === 'documents' ? 'documents' : 'table'},
+          table: group.querySelector('[data-nested-table]')?.value ?? prior.table ?? '',
+          product_key: group.querySelector('[data-document-join]') ? JSON.parse(group.querySelector('[data-document-join]').value || '["",""]')[0] : document.querySelector('[data-main-product-key]')?.value || productMappingProfile?._product_key || '',
+          child_key: group.querySelector('[data-document-join]') ? JSON.parse(group.querySelector('[data-document-join]').value || '["",""]')[1] : group.querySelector('[data-nested-child-key]')?.value || '',
+          choice_maps: [...group.querySelectorAll('[data-document-choice]')].reduce((maps, el) => {
+            (maps[el.dataset.documentChoice] ||= {})[el.dataset.sourceValue] = el.value;
+            return maps;
+          }, {...(previous[parent]?.choice_maps || {})}),
+          record_key: group.querySelector('[data-nested-record-key]')?.value ?? prior.record_key ?? '',
+          fields: {...(prior.fields || {}), ...Object.fromEntries([...group.querySelectorAll('[data-nested-field]')].map(el => [el.dataset.nestedField, el.value]))}
+        };
+      }
+      return result;
+    }
+
+    function renderNestedRelations(table) {
+      const definitions = productNestedModels();
+      const configs = productMappingProfile?._nested_relations || loadedProject?.product_mapping_profile?._nested_relations || {};
+      const tables = lastProductAnalysis?.tables || [];
+      const text = (pl, en) => esc(currentLang === 'pl' ? pl : en);
+      return `<div id="nestedRelationsEditor" class="mapping-card configuration-section">
+        <h2 class="mapping-section-title">${text('Źródła i powiązania', 'Sources and relationships')}</h2>
+        <h3>${text('Dane ogólne produktu', 'General product data')}</h3>
+        <div class="status">${esc($('productsFile')?.files?.[0]?.name || loadedProjectFiles.productsFile?.name || '')}</div>
+        <div class="nested-config-grid">
+          <label>${text('Plik danych ogólnych', 'General data file')}<input type="file" data-general-upload accept=".xlsx,.xlsm,.csv,.tsv,.json"></label>
+          <label>${text('Arkusz produktów', 'Product worksheet')}<select data-nested-main-table>${columnOptions(tables.map(t => t.name), table.name)}</select></label>
+          <label>${text('Główny klucz produktu', 'Primary product key')}<select data-main-product-key>${columnOptions(table.columns, productMappingProfile?._product_key || '')}</select></label>
+        </div>
+        ${definitions.map(def => {
+          const key = String(def.parent_attribute_id), config = configs[key] || {};
+          if (config.enabled && config.source_mode !== 'external' && !config.use_primary_key && tables.length) {
+            config.source_mode = 'external';
+            config.source = {filename: fileForInput('productsFile')?.name || 'Previous source', tables};
+          }
+          const sources = nestedSourceTables(config);
+          const source = sources.find(t => t.name === config.table);
+          const joins = config.source?.kind === 'documents' ? documentJoinCandidates(source, table) : [];
+          const savedJoinMissing = config.source?.kind === 'documents' && config.product_key && config.child_key && !joins.some(j => j.product_key === config.product_key && j.child_key === config.child_key);
+          if (config.source?.kind === 'documents' && !config.product_key) {
+            const mappedColumns = Object.entries(productMappingProfile || {}).filter(([key, rule]) => rule && ['product.name.value', 'product.code.value'].includes(rule.target_path)).map(([key, rule]) => rule.source_column || key.split('::extract::')[0]);
+            const preferred = joins.filter(j => mappedColumns.includes(j.product_key));
+            const available = preferred.length ? preferred : joins;
+            if (available.length === 1) {
+              Object.assign(config, available[0], {use_primary_key: false});
+              configs[key] = config;
+            }
+          }
+          if (config.source?.kind === 'documents' && source) {
+            config.fields ||= {};
+            for (const field of def.fields.filter(f => f.options?.length && !Object.prototype.hasOwnProperty.call(config.fields, String(f.attribute_id)))) {
+              const known = new Set(field.options.flatMap(o => [o.id,o.value,o.label]).filter(v => v != null).map(normalizeChoice));
+              const scores = source.columns.filter(c => c.startsWith('Katalog ')).map(column => ({column,
+                count: source.sample_rows.filter(row => row[column] && known.has(normalizeChoice(row[column]))).length
+              })).filter(s => s.count > 0).sort((a,b) => b.count-a.count);
+              if (scores.length && (scores.length === 1 || scores[0].count > scores[1].count)) config.fields[String(field.attribute_id)] = scores[0].column;
+            }
+          }
+          return `<details data-nested-parent="${esc(key)}" class="nested-relation">
+            <summary>${esc(def.label)} <span class="muted">${def.type_series ? text('Typoszereg', 'Series of types') : def.multiple ? text('Wiele obiektów na produkt', 'Multiple objects per product') : text('Jeden obiekt na produkt', 'One object per product')}</span><span class="section-source-status">${esc([config.source_mode === 'external' ? config.source?.filename : ($('productsFile')?.files?.[0]?.name || loadedProjectFiles.productsFile?.name), config.table].filter(Boolean).join(' / ') || (currentLang === 'pl' ? 'Nie wybrano źródła' : 'No source selected'))}</span></summary>
+            ${!def.available ? `<p class="notice">${text('Brak kompletnej definicji modelu', 'Incomplete model definition')}: ${esc(def.model_id)}</p>` : `
+            <div class="nested-config-grid">
+              <label>${text('Rodzaj źródła', 'Source type')}<select data-nested-source-mode>${sectionSourceOptions(config, key)}</select></label>
+              ${config.source_mode === 'external' ? `
+              ${config.source?.kind === 'documents' ? `<h3 style="grid-column:1 / -1;margin:16px 0 0">${text('Mapper dokumentów zewnętrznych', 'External document mapper')}</h3><div><button type="button" class="secondary" data-choose-document-directory>${text('Wskaż katalog na dysku', 'Select a local directory')}</button><input type="file" data-nested-directory webkitdirectory multiple hidden aria-label="${text('Katalog do odczytu nazw i ścieżek', 'Directory for name and path scanning')}"></div>` : `<label>${text('Wczytaj plik rekordów', 'Load record file')}<input type="file" data-nested-upload accept=".xlsx,.xlsm,.csv,.tsv,.json"></label>`}
+              <div class="status">${esc(config.source?.filename || '')}<span class="nested-import-status" aria-live="polite"></span></div>` : ''}
+            </div>
+            ${config.source_mode === 'external' ? `
+            <div class="nested-config-grid">
+              ${config.source?.kind === 'documents' ? `<div style="grid-column:1 / -1;padding:12px 0"><strong>${text('Nazwy i ścieżki', 'Names and paths')}: ${source?.sample_rows?.length || 0}</strong> · ${text('Przesłana zawartość dokumentów: 0 B', 'Document content transferred: 0 B')}<input type="hidden" data-nested-table value="${esc(config.table || '')}"></div><h3 style="grid-column:1 / -1;margin:12px 0 0">${text('Powiązanie katalogu z produktem', 'Directory-to-product matching')}</h3>` : `<label>${text('Arkusz sekcji', 'Section worksheet')}<select data-nested-table>${columnOptions(sources.map(t => t.name), config.table || '')}</select></label>`}
+              ${config.source?.kind === 'documents' ? `<label style="grid-column:1 / -1">${text('Dopasowane połączenia: kolumna produktu → katalog', 'Matching links: product column → directory')}<select data-document-join><option value="">${joins.length ? text('Wybierz połączenie', 'Choose a link') : text('Brak jednoznacznych dopasowań w danych', 'No unambiguous matches in the data')}</option>${savedJoinMissing ? `<option selected disabled value="${esc(JSON.stringify([config.product_key, config.child_key]))}">${esc(config.product_key)} → ${esc(config.child_key)} (${text('zapisane; wymaga sprawdzenia', 'saved; needs validation')})</option>` : ''}${joins.map(join => `<option value="${esc(JSON.stringify([join.product_key, join.child_key]))}"${config.product_key === join.product_key && config.child_key === join.child_key ? ' selected' : ''}>${esc(join.product_key)} → ${esc(join.child_key)} (${join.matched} ${text('plików', 'files')})</option>`).join('')}</select></label>` : `<div class="status">${text('Identyfikator produktu', 'Product identifier')}: <strong>${esc(productMappingProfile?._product_key || text('Nie wybrano', 'Not selected'))}</strong></div><label>${text('Ten sam identyfikator w nowym pliku', 'Matching identifier in the new file')}<select data-nested-child-key>${columnOptions(source?.columns || [], config.child_key || '')}</select></label>`}
+              ${config.source?.kind === 'documents' ? `<input type="hidden" data-nested-record-key value="Sciezka pliku">` : def.multiple ? `<label>${def.type_series ? text('Klucz wariantu (opcjonalny)', 'Variant key (optional)') : text('Klucz obiektu (opcjonalny)', 'Record key (optional)')}<select data-nested-record-key>${columnOptions(source?.columns || [], config.record_key || '')}</select></label>` : ''}
+            </div>
+            ${config.source?.kind === 'documents' ? `<h3 style="margin:24px 0 16px">${text('Cechy dokumentu z nazw i podkatalogów', 'Document attributes from names and subdirectories')}</h3>` : ''}
+            <div class="nested-field-grid">${def.fields.map(field => config.source?.kind === 'documents' && field.attribute_type === 'Files' && def.fields.filter(f => f.attribute_type === 'Files').length === 1
+              ? `<div class="status"><strong>${esc(field.label)}</strong>: ${text('Plik przypisany automatycznie ze ścieżki', 'File assigned automatically from its path')}<input type="hidden" data-nested-field="${esc(field.attribute_id)}" value="Sciezka pliku"></div>`
+              : `<label>${esc(field.label)}<select data-nested-field="${esc(field.attribute_id)}">${config.source?.kind === 'documents' ? documentColumnOptions(source, config.fields?.[String(field.attribute_id)]) : columnOptions(source?.columns || [], config.fields?.[String(field.attribute_id)] || '')}</select></label>`).join('')}${config.source?.kind === 'documents' ? documentChoiceEditor(def, config, source) : ''}</div>` : ''}`}
+            <div class="section-join-status" role="status" data-join-status>${esc(sectionJoinStatus(config, table))}</div>
+          </details>`;
+        }).join('')}
+      </div>`;
+    }
+
+    const nestedPreviewIndexes = new WeakMap();
+    function renderNestedPreview(productRow) {
+      const definitions = productNestedModels();
+      const configs = productMappingProfile?._nested_relations || {};
+      const key = value => value == null ? '' : String(value).trim();
+      return definitions.map(def => {
+        const config = configs[String(def.parent_attribute_id)] || {};
+        const source = nestedSourceTables(config).find(t => t.name === config.table);
+        const fields = def.fields.filter(f => config.fields?.[String(f.attribute_id)]);
+        const value = key(productRow[config.product_key]);
+        const ready = config.enabled && source && config.product_key && config.child_key && fields.length;
+        let index = new Map();
+        if (ready) {
+          const signature = JSON.stringify([config.child_key, config.fields, config.record_key, def.multiple]);
+          let cached = nestedPreviewIndexes.get(source);
+          if (!cached || cached.signature !== signature) {
+            const compiled = new Map();
+            for (const row of source.sample_rows || []) {
+              const owner = key(row[config.child_key]);
+              if (!owner || !fields.some(f => key(row[config.fields[String(f.attribute_id)]]))) continue;
+              if (!compiled.has(owner)) compiled.set(owner, []);
+              const existing = compiled.get(owner);
+              const sameValues = other => fields.every(f => key(other[config.fields[String(f.attribute_id)]]) === key(row[config.fields[String(f.attribute_id)]]));
+              if (existing.some(other => (config.record_key ? key(other[config.record_key]) === key(row[config.record_key]) : !def.multiple) && sameValues(other))) continue;
+              compiled.get(owner).push(row);
+            }
+            cached = {signature, index: compiled};
+            nestedPreviewIndexes.set(source, cached);
+          }
+          index = cached.index;
+        }
+        const records = ready && value ? index.get(value) || [] : [];
+        return `<div class="nested-preview"><div class="nested-preview-heading"><h3>${esc(def.label)} <span class="muted">${records.length}</span></h3>
+          <button type="button" class="secondary" data-configure-nested="${esc(def.parent_attribute_id)}">${esc(currentLang === 'pl' ? 'Import z arkusza' : 'Import from worksheet')}</button></div>
+          ${!def.available ? `<p class="notice">${esc(currentLang === 'pl' ? 'Brak kompletnej definicji modelu' : 'Incomplete model definition')}: ${esc(def.model_id)}</p>` : ''}
+          ${!config.enabled ? '' : !ready ? `<p class="notice">${esc(currentLang === 'pl' ? 'Uzupełnij tabelę, klucze i mapowanie pól.' : 'Complete the table, join keys and field mapping.')}</p>` :
+          `<div class="nested-table-scroll"><table><thead><tr><th>#</th>${fields.map(f => `<th>${esc(f.label)}</th>`).join('')}</tr></thead><tbody>${records.slice(0,100).map((row,i) => `<tr><td>${i+1}</td>${fields.map(f => `<td>${esc(displayCellValue(row[config.fields[String(f.attribute_id)]]))}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${fields.length+1}">${esc(currentLang === 'pl' ? 'Brak przypisanych rekordów' : 'No linked records')}</td></tr>`}</tbody></table></div>${records.length > 100 ? `<p>100 / ${records.length}</p>` : ''}`}
+        </div>`;
+      }).join('');
+    }
+
+    document.addEventListener('click', event => {
+      const directoryButton = event.target.closest('[data-choose-document-directory]');
+      if (directoryButton) {
+        directoryButton.closest('[data-nested-parent]').querySelector('[data-nested-directory]').click();
+        return;
+      }
+      const button = event.target.closest('[data-configure-nested]');
+      if (!button) return;
+      setWorkspaceTab('mapping');
+      const group = document.querySelector(`[data-nested-parent="${CSS.escape(button.dataset.configureNested)}"]`);
+      if (group) { group.open = true; group.scrollIntoView({block: 'center'}); group.querySelector('select')?.focus(); }
+    });
+
+    document.addEventListener('change', async event => {
+      const editor = event.target.closest('#nestedRelationsEditor');
+      if (!editor) return;
+      const configs = collectNestedRelations();
+      const group = event.target.closest('[data-nested-parent]');
+      if (event.target.matches('[data-general-upload]')) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        setBusy(currentLang === 'pl' ? 'Wczytuję dane ogólne...' : 'Loading general data...');
+        try {
+          const body = new FormData();
+          body.append('file', file);
+          if (activeProductModelId) body.append('product_model_id', activeProductModelId);
+          else productModelDefinitionFiles().forEach(modelFile => body.append('product_model_files', modelFile));
+          if (activeProductRootModelId) body.append('product_root_model_id', activeProductRootModelId);
+          const response = await fetch('/analyze', {method: 'POST', body});
+          const payload = await response.json();
+          if (!response.ok || !payload.tables?.length) throw new Error(payload.detail || 'No tables in file');
+          if (activeMode === 'products' && activeTable) collectMapping('products');
+          // Keep relations to the old general file attached to their original data.
+          const oldFile = fileForInput('productsFile');
+          for (const config of Object.values(configs)) {
+            if (config.source_mode !== 'external' && config.table && lastProductAnalysis?.tables?.length) {
+              config.source_mode = 'external';
+              config.source = {filename: oldFile?.name || 'Previous source', tables: lastProductAnalysis.tables};
+            }
+          }
+          productMappingProfile = {...(productMappingProfile || {}), _nested_relations: configs, _product_table: '', _product_key: ''};
+          $('productsFile').value = '';
+          loadedProjectFiles.productsFile = file;
+          renderAnalysis(payload, 'products');
+          refreshProductProjectFiles();
+          await saveProductWorkspaceFilesState();
+        } catch (error) { $('productsStatus').textContent = error.message; }
+        finally { clearBusy(); }
+        return;
+      }
+      if (event.target.matches('[data-nested-directory]') && group) {
+        const files = Array.from(event.target.files || []);
+        if (!files.length) return;
+        setBusy(currentLang === 'pl' ? 'Skanuję nazwy katalogów i plików...' : 'Scanning directory metadata...');
+        try {
+          const paths = files.map(file => file.webkitRelativePath.split('/').slice(1).join('/'));
+          const response = await fetch('/document-source', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({paths})});
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.detail || 'Directory scan failed');
+          const previousDirectory = configs[group.dataset.nestedParent];
+          const directoryFields = previousDirectory.source?.tables?.length ? previousDirectory.fields : Object.fromEntries(Object.entries(previousDirectory.fields || {}).filter(([, value]) => value));
+          configs[group.dataset.nestedParent] = {...configs[group.dataset.nestedParent], source_mode: 'external', enabled: true,
+            source: {kind: 'documents', filename: files[0].webkitRelativePath.split('/')[0], tables: [payload.table]},
+            table: payload.table.name, fields: directoryFields, child_key: '', product_key: '', record_key: 'Sciezka pliku'};
+        } catch (error) { group.querySelector('.nested-import-status').textContent = error.message; return; }
+        finally { clearBusy(); }
+      }
+      if (event.target.matches('[data-nested-upload]') && group) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        setBusy(currentLang === 'pl' ? 'Wczytuję rekordy podmodelu...' : 'Loading nested records...');
+        try {
+          const body = new FormData();
+          body.append('file', file);
+          const response = await fetch('/analyze', {method: 'POST', body});
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.detail || 'Import failed');
+          const tables = (payload.tables || []).map(t => ({name: t.name, columns: t.columns, sample_rows: t.sample_rows, rows: t.rows}));
+          if (!tables.length) throw new Error(currentLang === 'pl' ? 'Brak tabel w pliku.' : 'No tables in file.');
+          configs[group.dataset.nestedParent] = {...configs[group.dataset.nestedParent], source_mode: 'external', enabled: true, source: {filename: file.name, tables}, table: tables[0].name, child_key: '', record_key: '', fields: {}};
+        } catch (error) {
+          group.querySelector('.nested-import-status').textContent = error.message;
+          return;
+        } finally { clearBusy(); }
+      }
+      if (event.target.matches('[data-nested-table], [data-nested-source-mode]') && group) {
+        configs[group.dataset.nestedParent].fields = {};
+        configs[group.dataset.nestedParent].child_key = '';
+        configs[group.dataset.nestedParent].record_key = '';
+        if (event.target.matches('[data-nested-source-mode]')) configs[group.dataset.nestedParent].table = '';
+      }
+      productMappingProfile = {...(productMappingProfile || {}), _nested_relations: configs};
+      if (event.target.matches('[data-main-product-key]')) productMappingProfile._product_key = event.target.value;
+      if (event.target.matches('[data-nested-main-table]')) {
+        const selected = lastProductAnalysis.tables.find(t => t.name === event.target.value);
+        if (!selected) return;
+        productMappingProfile._product_table = selected.name;
+        productMappingProfile._product_key = '';
+        mainProductTable = activeTable = selected;
+        showReport(renderMappingEditor(selected, 'products'), 'Mapping: products');
+        attachMappingEvents('products');
+      } else if (event.target.matches('[data-nested-table], [data-nested-source-mode], [data-nested-upload], [data-nested-directory], [data-nested-field], [data-document-join]')) {
+        const openParents = [...editor.querySelectorAll('details[open]')].map(el => el.dataset.nestedParent);
+        editor.outerHTML = renderNestedRelations(activeTable || {name: '', columns: [], sample_rows: []});
+        document.querySelectorAll('#nestedRelationsEditor details').forEach(el => { el.open = openParents.includes(el.dataset.nestedParent); });
+      }
+      if (activeMode === 'products' && activeTable) collectMapping('products');
+      else saveProductWorkspaceState();
+      document.querySelectorAll('[data-nested-parent]').forEach(section => {
+        const status = section.querySelector('[data-join-status]');
+        if (status) status.textContent = sectionJoinStatus(configs[section.dataset.nestedParent] || {}, activeTable);
+      });
+    });
+
     function renderProductTypeRule(table) {
       const rule = productMappingProfile?._product_type_rule || loadedProject?.product_mapping_profile?._product_type_rule || {};
-      return `<div class="mapping-card" id="productTypeRulePanel">
+      return `<div class="mapping-card configuration-section" id="productTypeRulePanel">
         <h2 class="mapping-section-title">${esc(t("productType.title"))}</h2>
-        <div class="muted">${esc(t("productType.help"))}</div>
-        <div class="rule-grid">
+        <div class="product-type-layout">
+          <fieldset>
+          <legend>${esc(currentLang === "pl" ? "Źródło klasyfikacji" : "Classification source")}</legend>
           <label>${esc(t("productType.column"))}
             <select data-product-type-rule="sourceColumn">${columnOptions(table.columns, rule.source_column || rule.column || "")}</select>
-          </label>
-          <label>${esc(t("productType.ownValues"))}
-            <input type="text" data-product-type-rule="ownValues" value="${esc(rule.own_values || rule.company_values || "")}" placeholder="1">
-            <span class="helper">${esc(t("productType.valueHelp"))}</span>
-          </label>
-          <label>${esc(t("productType.otherValues"))}
-            <input type="text" data-product-type-rule="otherValues" value="${esc(rule.other_values || rule.foreign_values || "")}" placeholder="3">
-            <span class="helper">${esc(t("productType.valueHelp"))}</span>
-          </label>
-          <label>${esc(t("productType.ownTypeId"))}
-            <input type="number" min="1" step="1" data-product-type-rule="ownTypeId" value="${esc(rule.own_type_id || rule.company_type_id || "1")}">
-          </label>
-          <label>${esc(t("productType.otherTypeId"))}
-            <input type="number" min="1" step="1" data-product-type-rule="otherTypeId" value="${esc(rule.other_type_id || rule.foreign_type_id || "2")}">
           </label>
           <label>${esc(t("productType.defaultTypeId"))}
             <input type="number" min="1" step="1" data-product-type-rule="defaultTypeId" value="${esc(rule.default_type_id || rule.own_type_id || rule.company_type_id || "1")}">
           </label>
+          </fieldset>
+          <fieldset>
+          <legend>${esc(currentLang === "pl" ? "Produkty własne" : "Own products")}</legend>
+          <label>${esc(t("productType.ownValues"))}
+            <input type="text" data-product-type-rule="ownValues" value="${esc(rule.own_values || rule.company_values || "")}" placeholder="1">
+          </label>
+          <label>${esc(t("productType.ownTypeId"))}
+            <input type="number" min="1" step="1" data-product-type-rule="ownTypeId" value="${esc(rule.own_type_id || rule.company_type_id || "1")}">
+          </label>
+          </fieldset>
+          <fieldset>
+          <legend>${esc(currentLang === "pl" ? "Pozostałe produkty" : "Other products")}</legend>
+          <label>${esc(t("productType.otherValues"))}
+            <input type="text" data-product-type-rule="otherValues" value="${esc(rule.other_values || rule.foreign_values || "")}" placeholder="3">
+          </label>
+          <label>${esc(t("productType.otherTypeId"))}
+            <input type="number" min="1" step="1" data-product-type-rule="otherTypeId" value="${esc(rule.other_type_id || rule.foreign_type_id || "2")}">
+          </label>
+          </fieldset>
         </div>
       </div>`;
     }
@@ -5823,6 +6221,7 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           <h2>${esc(table.name)} (${esc(table.rows)} ${currentLang === "pl" ? "wierszy" : "rows"})</h2>
           <div class="muted">${esc(t("report.empty"))}</div>
           ${workspaceSwitcher}
+          ${mode === "products" ? renderNestedRelations(table) : ""}
           ${mode === "products" && mappingWorkspaceTab !== "enrichment" ? `<div class="target-structure is-live" id="targetStructure">${renderTargetStructure(targetFields)}</div>` : ""}
           ${mode === "products" ? `<div id="productPreview"></div>` : ""}
           ${mode === "supplement" ? renderSupplementOutputPanel() : ""}
@@ -6021,7 +6420,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
     }
 
     function renderAnalysis(data, mode) {
-      const best = bestAnalysisTable(data);
+      const selected = productMappingProfile?._product_table || loadedProject?.product_mapping_profile?._product_table;
+      const best = (mode === 'products' && data.tables?.find(table => table.name === selected)) || bestAnalysisTable(data);
 
       if (!best) {
         showReport(`<div class='muted'>${esc(t("analysis.noTables"))}</div>`, `Analysis: ${mode}`);
@@ -6180,8 +6580,8 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         enrichmentSession = normalizeEnrichmentSession(loadedProject.enrichment_session);
         productRootModels = loadedProject.product_root_models || productRootModels;
         activeProductRootModelId = String(loadedProject.active_product_root_model_id || activeProductRootModelId || "");
-        productMappingsByModel = loadedProject.product_mappings_by_model || productMappingsByModel;
-        productMappingProfilesByModel = loadedProject.product_mapping_profiles_by_model || productMappingProfilesByModel;
+        productMappingsByModel = loadedProject.product_mappings_by_model || {};
+        productMappingProfilesByModel = loadedProject.product_mapping_profiles_by_model || {};
         const legacyProductMapping = loadedProject.product_mapping || {};
         const legacyProductMappingProfile = loadedProject.product_mapping_profile || {};
         supplementMapping = loadedProject.supplement_mapping || null;
@@ -6203,14 +6603,15 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
           pimModelAccepted = false;
           acceptedProductModelSignature = "";
           activeProductModelFields = [];
+          activeProductNestedModels = [];
           if (!missing.length) {
             await loadProductModelFields(loadedProjectFiles.productModelFiles, activeProductRootModelId);
             pimModelAccepted = true;
             acceptedProductModelSignature = productModelSignature(loadedProjectFiles.productModelFiles);
-            if (activeProductRootModelId && Object.keys(legacyProductMapping).length && !productMappingsByModel[activeProductRootModelId]) {
+            if (activeProductRootModelId && Object.keys(legacyProductMapping).length) {
               productMappingsByModel[activeProductRootModelId] = legacyProductMapping;
             }
-            if (activeProductRootModelId && Object.keys(legacyProductMappingProfile).length && !productMappingProfilesByModel[activeProductRootModelId]) {
+            if (activeProductRootModelId && Object.keys(legacyProductMappingProfile).length) {
               productMappingProfilesByModel[activeProductRootModelId] = legacyProductMappingProfile;
             }
             restoreProductMappingForActiveModel();
@@ -6663,11 +7064,12 @@ def render_home(initial_product_model: dict | None = None, initial_analysis: dic
         await restoreProductWorkspaceState();
       }
       applyLanguage();
+      if (pimModelAccepted && !activeTable) renderProductModelPreview();
     }
     initializeProductPage();
   </script>
 </body>
-</html>""".replace("__INITIAL_PRODUCT_MODEL_JSON__", initial_model_json).replace("__INITIAL_ANALYSIS_JSON__", initial_analysis_json).replace("__INITIAL_PRODUCT_MODEL_STATUS__", initial_status).replace("__INITIAL_REPORT_HTML__", initial_report_html).replace("__REPORT_EMPTY_HIDDEN__", report_empty_hidden).replace("__INITIAL_SUMMARY__", initial_summary).replace("__MODEL_READY_DISABLED__", model_ready_disabled).replace("__PRODUCT_MODEL_ID_VALUE__", product_model_id_value).replace("__PRODUCTS_STATUS__", products_status).replace("__PRODUCTS_SOURCE_ID__", html.escape(str((initial_analysis or {}).get("source_id") or "")))
+</html>""".replace("__INITIAL_PRODUCT_MODEL_JSON__", initial_model_json).replace("__INITIAL_ANALYSIS_JSON__", initial_analysis_json).replace("__INITIAL_PRODUCT_MODEL_STATUS__", initial_status).replace("__INITIAL_REPORT_HTML__", initial_report_html).replace("__REPORT_EMPTY_HIDDEN__", report_empty_hidden).replace("__INITIAL_SUMMARY__", initial_summary).replace("__MODEL_READY_DISABLED__", model_ready_disabled).replace("__PRODUCT_MODEL_ID_VALUE__", product_model_id_value).replace("__PRODUCTS_STATUS__", products_status).replace("__PRODUCTS_SOURCE_ID__", html.escape(str((initial_analysis or {}).get("source_id") or ""))).replace("__APP_VERSION_LABEL__", html.escape(app_version_label()))
 
 
 def render_initial_model_report(initial_model: dict) -> str:

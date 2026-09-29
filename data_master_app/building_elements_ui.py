@@ -462,6 +462,7 @@ def render_building_elements_home() -> str:
       <a href="/products" data-i18n="nav.products">Produkty</a>
       <a class="active" href="/building-elements" data-i18n="nav.buildingElements">Elementy budowlane</a>
       <a href="/colors" data-i18n="nav.colors">Kolory</a>
+      <a href="/transfer">Paczka PIM</a>
     </nav>
     <div class="header-actions">
       <span class="status" data-i18n="app.subtitle">Mapowanie elementów budowlanych na podstawie modelu PIM</span>
@@ -483,9 +484,6 @@ def render_building_elements_home() -> str:
             <option value="modelBuilder" data-i18n="workflow.modelBuilder">Stwórz własne systemy z modelu</option>
           </select>
         </label>
-      </div>
-      <div class="panel">
-        <h3 data-i18n="elements.files">Model, produkty i dane</h3>
         <label><span data-i18n="elements.modelFiles">Pliki modelu: buildingElementsModels.json i buildingElementsAttributes.json</span>
           <input id="elementModelFiles" type="file" accept=".json" multiple>
         </label>
@@ -493,9 +491,14 @@ def render_building_elements_home() -> str:
           <select id="elementRootModelSelect" disabled></select>
         </label>
         <button type="button" class="secondary" onclick="loadElementModelHierarchy()" data-i18n="elements.loadModel">Wczytaj hierarchię modelu</button>
+      </div>
+      <div class="panel">
+        <h3 data-i18n="elements.files">Model, produkty i dane</h3>
         <label><span data-i18n="elements.productsReference">Referencyjne products.json</span>
           <input id="productReferenceFile" type="file" accept=".json">
         </label>
+        <details class="product-identity-settings">
+        <summary data-i18n="productIdentity.settings">Dopasowanie produktów</summary>
         <div class="notice" data-i18n="productIdentity.notice">Model produktu jest opcjonalny, ale zalecany. Pozwala wskazać, który atrybut produktu jest stabilnym identyfikatorem używanym przy warstwach.</div>
         <label><span data-i18n="productIdentity.modelFiles">Pliki modelu produktu: productsModels.json i productsAttributes.json</span>
           <input id="elementProductModelFiles" type="file" accept=".json" multiple>
@@ -508,6 +511,7 @@ def render_building_elements_home() -> str:
           <select id="elementProductIdentityFieldSelect" disabled></select>
         </label>
         <div id="elementProductIdentityStatus" class="status"></div>
+        </details>
         <label><span data-i18n="elements.importFile">Plik importowany</span>
           <input id="elementSourceFile" type="file" accept=".xlsx,.xlsm,.json,.csv,.tsv">
         </label>
@@ -553,6 +557,7 @@ def render_building_elements_home() -> str:
   <script>
     const I18N = {
       pl: {
+        "productIdentity.settings": "Dopasowanie produktów",
         "nav.products": "Produkty",
         "nav.menu": "Wróć do menu głównego",
         "nav.buildingElements": "Elementy budowlane",
@@ -567,7 +572,7 @@ def render_building_elements_home() -> str:
         "modelBuilder.title": "Budowanie systemów z modelu",
         "modelBuilder.help": "Najpierw wczytaj model elementów budowlanych. Edytor ręczny musi powstać z hierarchii modelu, więc nie używa pliku importowanego ani stałych pól.",
         "modelBuilder.load": "Wczytaj / odśwież model",
-        "elements.files": "Model, produkty i dane",
+        "elements.files": "Dane źródłowe",
         "elements.modelFiles": "Pliki modelu: buildingElementsModels.json i buildingElementsAttributes.json",
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
@@ -610,6 +615,7 @@ def render_building_elements_home() -> str:
         "modelBuilder.valueHelp": "Dla produktów w jednej komórce możesz wpisać kilka identyfikatorów po przecinku."
       },
       en: {
+        "productIdentity.settings": "Product matching",
         "nav.products": "Products",
         "nav.menu": "Back to main menu",
         "nav.buildingElements": "Building elements",
@@ -624,7 +630,7 @@ def render_building_elements_home() -> str:
         "modelBuilder.title": "Building systems from the model",
         "modelBuilder.help": "Load the building-element model first. The manual editor must be generated from the model hierarchy, so it does not use an imported file or fixed fields.",
         "modelBuilder.load": "Load / refresh model",
-        "elements.files": "Model, products and data",
+        "elements.files": "Source data",
         "elements.modelFiles": "Model files: buildingElementsModels.json and buildingElementsAttributes.json",
         "elements.modelsFile": "buildingElementsModels.json",
         "elements.attributesFile": "buildingElementsAttributes.json",
@@ -709,7 +715,7 @@ def render_building_elements_home() -> str:
       if (overlay) overlay.hidden = true;
     }
     function fileStatusHtml(label, file) {
-      return `<div class="file-status"><strong>${esc(label)}</strong><span class="${file ? "ok" : "muted"}">${file ? `Wczytano: ${esc(file.name)}` : "Nie wczytano"}</span></div>`;
+      return `<div class="file-status"><strong>${escapeHtml(label)}</strong><span class="${file ? "ok" : "muted"}">${file ? `Wczytano: ${escapeHtml(file.name)}` : "Nie wczytano"}</span></div>`;
     }
     function refreshElementProjectFiles() {
       const target = $("elementProjectFiles");

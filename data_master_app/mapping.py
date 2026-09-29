@@ -272,7 +272,7 @@ def aliases_from_pim_attribute(attribute: dict[str, Any], label: str) -> set[str
 
 
 def is_nested_attribute(attribute: dict[str, Any]) -> bool:
-    return str(attribute.get("AttributeType") or "") in {"Model_Array", "Table_Model"}
+    return str(attribute.get("AttributeType") or "") in {"Model", "Model_Array", "Table_Model"}
 
 
 def value_kind_from_attribute(attribute: dict[str, Any]) -> str:
@@ -285,6 +285,8 @@ def value_kind_from_attribute(attribute: dict[str, Any]) -> str:
         return "number"
     if attribute_type == "Files":
         return "files"
+    if attribute_type in {"Text", "Longtext", "LongText", "Long_text"}:
+        return "long_text"
     return "free_text"
 
 

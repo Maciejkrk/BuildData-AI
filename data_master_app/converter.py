@@ -35,6 +35,7 @@ from .mapping import (
     value_kind_from_attribute,
 )
 from .report_export import mapping_report_xlsx_bytes, product_acceptance_xlsx_bytes
+from .nested_mapping import nested_models, compile_relations, join_key
 from mapping_studio.services.connection_registry import build_connection_registry
 
 
@@ -182,6 +183,7 @@ class PimExportSchema:
     strict_model: bool = False
     product_attribute_ids: dict[str, int] | None = None
     product_parent_by_attribute_id: dict[int, int] | None = None
+    product_main_model_by_attribute_id: dict[int, int] | None = None
     attribute_value_kinds: dict[int, str] | None = None
     known_attribute_ids: frozenset[int] = frozenset()
     type_series_parent_id: int | None = None
@@ -214,6 +216,11 @@ class PimExportSchema:
         if self.strict_model:
             return 0
         return fallback
+
+    def product_main_model_for_attribute(self, attribute_id: int | None = None) -> int | None:
+        if attribute_id is None:
+            return None
+        return (self.product_main_model_by_attribute_id or {}).get(attribute_id)
 
     def type_series_attribute_id(self, target_path: str) -> int | None:
         return (self.type_series_attribute_ids or {}).get(target_path)
@@ -441,7 +448,9 @@ def analyze_uploaded_file(
         product_fields = product_fields_from_pim_bundle(product_model_files, root_model_id=product_root_model_id)
     elif product_model_content:
         product_fields = product_fields_from_json(product_model_content)
-    return analyze_tables(tables, product_fields=product_fields)
+    analysis = analyze_tables(tables, product_fields=product_fields)
+    analysis['nested_models'] = nested_models(product_model_files, product_root_model_id)
+    return analysis
 
 
 def analyze_product_model_files(product_model_files: dict[str, bytes], product_root_model_id: int | None = None) -> dict[str, Any]:
@@ -457,6 +466,7 @@ def analyze_product_model_files(product_model_files: dict[str, bytes], product_r
         "selected_root_model_id": selected_root_model_id,
         "product_models": model_choices,
         "target_fields": field_definitions_payload(fields),
+        "nested_models": nested_models(product_model_files, selected_root_model_id),
     }
 
 
@@ -1273,6 +1283,29 @@ def apply_typical_products_to_products(
     }
 
 
+def normalize_nested_product_attribute_hashes(products: list[dict[str, Any]]) -> None:
+    """Give every field in one nested model row the same row hash."""
+    for product in products:
+        product_id = product.get("Id")
+        for version in product.get("dataVersions") or []:
+            groups: dict[tuple[int, int, int, str], list[dict[str, Any]]] = {}
+            for attr in version.get("productAttributes") or []:
+                parent_id = int_value(attr.get("ParentAttributeId")) or 0
+                main_id = int_value(attr.get("MainAttributeId")) or 0
+                if not parent_id or not main_id:
+                    continue
+                row_i = int_value(attr.get("RowI")) or 0
+                parent_hash = str(attr.get("parentHash") or "")
+                groups.setdefault((parent_id, main_id, row_i, parent_hash), []).append(attr)
+
+            for (parent_id, main_id, row_i, parent_hash), attrs in groups.items():
+                row_hash = next((str(attr.get("hash")) for attr in attrs if attr.get("hash")), None)
+                if not row_hash:
+                    row_hash = stable_hash(product_id, version.get("VersionId"), parent_id, main_id, row_i, parent_hash)
+                for attr in attrs:
+                    attr["hash"] = row_hash
+
+
 def convert_products_file(
     filename: str,
     content: bytes,
@@ -1287,16 +1320,77 @@ def convert_products_file(
 ) -> dict[str, Any]:
     tables = read_source_tables(filename, content)
     product_root_model_id = int_value(product_root_model_id)
-    product_rows = choose_product_rows(tables)
+    selected_table = (product_mapping_profile or {}).get('_product_table')
+    if selected_table:
+        table = next((t for t in tables if t.name == selected_table), None)
+        if table is None:
+            raise ValueError(f'Missing product table: {selected_table}')
+        product_rows = table.rows
+    else:
+        product_rows = choose_product_rows(tables)
+    definitions = nested_models(product_model_files, product_root_model_id)
+    relations = compile_relations(tables, definitions, product_mapping_profile or {}, {key for row in product_rows for key in row})
+    primary_key = (product_mapping_profile or {}).get('_product_key')
+    if primary_key:
+        for relation in relations.values():
+            owners = {}
+            for row in product_rows:
+                owner = join_key(row.get(relation['config']['product_key']))
+                product_id = join_key(row.get(primary_key))
+                if owner and product_id:
+                    owners.setdefault(owner, set()).add(product_id)
+            if any(len(ids) > 1 for ids in owners.values()):
+                raise ValueError(f"Ambiguous product join key for {relation['definition']['label']}")
     if product_mapping_profile:
-        product_rows = apply_mapping_profile_to_rows(product_rows, product_mapping_profile)
+        runtime_profile = dict(product_mapping_profile)
+        primary_key = product_mapping_profile.get('_product_key')
+        if primary_key:
+            if primary_key not in {key for row in product_rows for key in row}:
+                raise ValueError(f'Missing product key column: {primary_key}')
+            if any(not join_key(row.get(primary_key)) for row in product_rows):
+                raise ValueError(f'Empty product key in column: {primary_key}')
+            runtime_profile['relation-join:product'] = {'source_column': primary_key, 'target_path': '__nested_key_product'}
+        for parent, relation in relations.items():
+            runtime_profile[f'relation-join:{parent}'] = {'source_column': relation['config']['product_key'], 'target_path': f'__nested_key_{parent}'}
+        product_rows = apply_mapping_profile_to_rows(product_rows, runtime_profile)
     elif product_mapping:
         product_rows = [apply_column_mapping(row, product_mapping) for row in product_rows]
     enrichment_report = apply_enrichment_session_to_rows(product_rows, enrichment_session)
     mapped_rows = unique_mapped_products([map_source_row(row) for row in product_rows])
     export_schema = export_schema_from_pim_bundle(product_model_files, root_model_id=product_root_model_id)
     products = [build_pim_product(mapped, index, export_schema=export_schema) for index, mapped in enumerate(mapped_rows, start=1)]
+    for product, mapped in zip(products, mapped_rows):
+        attrs = product['dataVersions'][0]['productAttributes']
+        for parent, relation in relations.items():
+            attrs[:] = [a for a in attrs if a.get('ParentAttributeId') != int(parent)]
+            key = join_key(mapped.get('nested_keys', {}).get(parent))
+            records = relation['index'].get(key, []) if key else []
+            for row_i, values in enumerate(records, start=1):
+                child_attrs = []
+                directory_source = relation['config'].get('source', {}).get('kind') == 'documents'
+                file_ids = {int(f['attribute_id']) for f in relation['definition']['fields'] if f.get('attribute_type') == 'Files'} if directory_source else set()
+                row_hash = stable_hash(product['Id'], parent, key, row_i)
+                add_generic_pim_attributes(child_attrs, [{'attribute_id': aid, 'value': value} for aid, value in values.items() if aid not in file_ids], export_schema)
+                for attr in child_attrs:
+                    attr.update(ParentAttributeId=int(parent), MainAttributeId=relation['definition']['model_id'], RowI=row_i, hash=row_hash)
+                for aid, value in values.items():
+                    if aid not in file_ids:
+                        continue
+                    if not child_attrs:
+                        raise ValueError('Map document metadata (for example its name) together with the file reference.')
+                    from .pim_bundle import safe_path
+                    from pathlib import PurePosixPath
+                    source_path = safe_path(str(value))
+                    product['dataVersions'][0].setdefault('filesAttributes', []).append({
+                        'AttributeId': aid, 'VersionId': product['dataVersions'][0]['VersionId'],
+                        'ParentAttributeId': int(parent), 'MainAttributeId': relation['definition']['model_id'],
+                        'RowI': row_i, 'parentHash': row_hash, 'fileUrl': None,
+                        'uploadedfileName': PurePosixPath(source_path).name, 'sourcePath': source_path,
+                        'OrderDisplayOrder': 0,
+                    })
+                attrs.extend(child_attrs)
     typical_enrichment_report = apply_typical_products_to_products(products, typical_products_payload, enrichment_session)
+    normalize_nested_product_attribute_hashes(products)
     report = build_mapping_report(
         filename,
         tables,
@@ -1313,6 +1407,15 @@ def convert_products_file(
             source_file=filename,
             root_model_id=export_schema.product_model_id,
         )
+    report['nested_relations'] = []
+    for parent, relation in relations.items():
+        keys = {join_key(mapped.get('nested_keys', {}).get(parent)) for mapped in mapped_rows}
+        report['nested_relations'].append({
+            'parent_attribute_id': int(parent), 'label': relation['definition']['label'],
+            'table': relation['config']['table'],
+            'matched_records': sum(len(rows) for key, rows in relation['index'].items() if key in keys),
+            'unmatched_records': sum(len(rows) for key, rows in relation['index'].items() if key not in keys),
+        })
     report["warnings"]["model_export_coverage"] = product_model_export_coverage_warnings(
         product_model_files,
         products,
@@ -1662,6 +1765,9 @@ def map_source_row(row: dict[str, Any]) -> dict[str, Any]:
     for raw_key, value in row.items():
         if value in (None, ""):
             continue
+        if str(raw_key).startswith('__nested_key_'):
+            mapped.setdefault('nested_keys', {})[str(raw_key).removeprefix('__nested_key_')] = value
+            continue
         if raw_key == "__product_type_id__":
             mapped.setdefault("meta", {})["product_type_id"] = value
             continue
@@ -1831,7 +1937,8 @@ def unique_mapped_products(mapped_rows: list[dict[str, Any]]) -> list[dict[str, 
     seen: set[str] = set()
     for mapped in mapped_rows:
         core = mapped["core"]
-        key = normalize_lookup(core.get("external_id") or core.get("product_name"))
+        relation_keys = mapped.get('nested_keys') or {}
+        key = json.dumps(relation_keys, sort_keys=True) if any(join_key(v) for v in relation_keys.values()) else normalize_lookup(core.get("external_id") or core.get("product_name"))
         if not key or key in seen:
             continue
         seen.add(key)
@@ -2091,6 +2198,7 @@ def add_product_information(
                     attr_id,
                     fallback=PIM_ATTR["product_information"],
                 ),
+                main_attribute_id=export_schema.product_main_model_for_attribute(attr_id),
                 row_hash=row_hash if export_schema.product_parent_for_attribute(attr_id, fallback=PIM_ATTR["product_information"]) else None,
             )
 
@@ -2162,7 +2270,7 @@ def add_typed_attr_value(
         )
         return
     text = str(value)
-    kwargs = {"varchar": text} if len(text) <= 255 else {"text": text}
+    kwargs = {"text": text} if value_kind == "long_text" or len(text) > 255 else {"varchar": text}
     add_attr(
         attrs,
         attribute_id,
@@ -2277,21 +2385,46 @@ def add_generic_pim_attributes(
         if not export_schema.has_attribute(attribute_id):
             continue
         parent_attribute_id = export_schema.product_parent_for_attribute(attribute_id, fallback=GENERIC_PIM_PARENT_IDS.get(attribute_id, 0))
+        main_attribute_id = export_schema.product_main_model_for_attribute(attribute_id)
+        value_kind = export_schema.attribute_value_kind(attribute_id)
         row_hash = stable_hash("pim", parent_attribute_id) if parent_attribute_id else None
         if isinstance(value, list):
             for option in value:
-                add_pim_option_or_value(attrs, attribute_id, option, parent_attribute_id=parent_attribute_id, row_hash=row_hash)
+                add_pim_option_or_value(
+                    attrs,
+                    attribute_id,
+                    option,
+                    parent_attribute_id=parent_attribute_id,
+                    main_attribute_id=main_attribute_id,
+                    value_kind=value_kind,
+                    row_hash=row_hash,
+                )
             continue
         if isinstance(value, dict):
-            add_pim_option_or_value(attrs, attribute_id, value, parent_attribute_id=parent_attribute_id, row_hash=row_hash)
+            add_pim_option_or_value(
+                attrs,
+                attribute_id,
+                value,
+                parent_attribute_id=parent_attribute_id,
+                main_attribute_id=main_attribute_id,
+                value_kind=value_kind,
+                row_hash=row_hash,
+            )
             continue
         kwargs: dict[str, Any]
         if isinstance(value, bool):
             kwargs = {"boolean": value}
         else:
             text = str(value)
-            kwargs = {"varchar": text} if len(text) <= 255 else {"text": text}
-        add_attr(attrs, attribute_id, parent_attribute_id=parent_attribute_id, row_hash=row_hash, **kwargs)
+            kwargs = {"text": text} if value_kind == "long_text" or len(text) > 255 else {"varchar": text}
+        add_attr(
+            attrs,
+            attribute_id,
+            parent_attribute_id=parent_attribute_id,
+            main_attribute_id=main_attribute_id,
+            row_hash=row_hash,
+            **kwargs,
+        )
 
 
 def add_pim_option_or_value(
@@ -2300,6 +2433,8 @@ def add_pim_option_or_value(
     option: Any,
     *,
     parent_attribute_id: int = 0,
+    main_attribute_id: int | None = None,
+    value_kind: str = "free_text",
     row_hash: str | None = None,
 ) -> None:
     if isinstance(option, dict):
@@ -2307,15 +2442,30 @@ def add_pim_option_or_value(
             return
         option_id = parse_int(option.get("id"))
         if option_id is not None:
-            add_attr(attrs, attribute_id, int_value=option_id, boolean=True, parent_attribute_id=parent_attribute_id, row_hash=row_hash)
+            add_attr(
+                attrs,
+                attribute_id,
+                int_value=option_id,
+                boolean=True,
+                parent_attribute_id=parent_attribute_id,
+                main_attribute_id=main_attribute_id,
+                row_hash=row_hash,
+            )
             return
         value = option.get("raw") or option.get("label") or option.get("value")
     else:
         value = option
     if value not in (None, ""):
         text = str(value)
-        kwargs = {"varchar": text} if len(text) <= 255 else {"text": text}
-        add_attr(attrs, attribute_id, parent_attribute_id=parent_attribute_id, row_hash=row_hash, **kwargs)
+        kwargs = {"text": text} if value_kind == "long_text" or len(text) > 255 else {"varchar": text}
+        add_attr(
+            attrs,
+            attribute_id,
+            parent_attribute_id=parent_attribute_id,
+            main_attribute_id=main_attribute_id,
+            row_hash=row_hash,
+            **kwargs,
+        )
 
 
 def add_attr(
@@ -2622,6 +2772,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
 
     product_attribute_ids: dict[str, int] = {}
     product_parent_by_attribute_id: dict[int, int] = {}
+    product_main_model_by_attribute_id: dict[int, int] = {}
     known_attribute_ids = frozenset(
         attribute_id
         for attribute in attributes
@@ -2670,6 +2821,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
                     ) or f"pim.attribute.{child_id}.value"
                     product_attribute_ids[target_path] = child_id
                     product_parent_by_attribute_id[child_id] = current_parent_id
+                    product_main_model_by_attribute_id[child_id] = target_model_id
                 continue
             parent_id = current_parent_id
             main_attribute_id = target_model_id
@@ -2685,6 +2837,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
                 ) or f"pim.attribute.{child_id}.value"
                 attribute_ids[target_path] = child_id
                 parent_by_attribute_id[child_id] = current_parent_id
+                product_main_model_by_attribute_id[child_id] = target_model_id
 
     if not product_attribute_ids and (parent_id is None or not attribute_ids):
         return DEFAULT_EXPORT_SCHEMA
@@ -2693,6 +2846,7 @@ def export_schema_from_pim_bundle(files: dict[str, bytes | str] | None, root_mod
         strict_model=True,
         product_attribute_ids=product_attribute_ids,
         product_parent_by_attribute_id=product_parent_by_attribute_id,
+        product_main_model_by_attribute_id=product_main_model_by_attribute_id,
         attribute_value_kinds=attribute_value_kinds,
         known_attribute_ids=known_attribute_ids,
         type_series_parent_id=parent_id,

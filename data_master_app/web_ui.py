@@ -3,6 +3,7 @@
 from .building_elements_ui import render_building_elements_home
 from .colors_ui import render_colors_home
 from .products_ui import render_home
+from .version import app_version_label
 
 def render_main_menu() -> str:
     return """<!doctype html>
@@ -26,55 +27,75 @@ def render_main_menu() -> str:
     .choice strong { display:block; margin-bottom:8px; font-size:20px; color:var(--text); }
     .choice span { display:block; color:var(--muted); line-height:1.45; }
     .choice .badge { display:inline-block; margin-top:18px; padding:6px 9px; border-radius:999px; background:#f0fdfa; color:var(--accent); font-weight:700; font-size:12px; }
+    .version-badge { display:inline-flex; align-items:center; min-height:28px; padding:5px 9px; border:1px solid var(--line); border-radius:6px; background:#f5f6f8; color:var(--muted); font-size:12px; font-weight:650; white-space:nowrap; }
   </style>
 </head>
 <body>
   <header>
     <h1>BuildData AI</h1>
-    <select id="languageSelect" aria-label="Language">
-      <option value="pl">Polski</option>
-      <option value="en">English</option>
-    </select>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <span class="version-badge" title="BuildData AI version">__APP_VERSION_LABEL__</span>
+      <select id="languageSelect" aria-label="Language">
+        <option value="pl">Polski</option>
+        <option value="en">English</option>
+      </select>
+    </div>
   </header>
-  <main>
-    <p class="intro" data-i18n="intro">Wybierz niezależną sekcję pracy. Projekty produktów, elementów budowlanych i kolorów są prowadzone osobno.</p>
-    <div class="choice-grid">
-      <a class="choice" href="/products">
+  <main class="home-workspace">
+    <div class="home-heading">
+      <div><h2 data-i18n="workspace.title">Przestrzeń danych</h2><p data-i18n="workspace.subtitle">Projekty mapowania</p></div>
+      <span class="home-label">EXCEL / CSV / JSON → PIM</span>
+    </div>
+    <div class="workspace-list">
+      <a class="workspace-link" href="/products">
+        <span class="workspace-symbol" aria-hidden="true">▦</span>
+        <div>
         <strong data-i18n="products.title">Mapowanie Produktów</strong>
         <span data-i18n="products.text">Import pliku klienta, mapowanie cech produktu i typoszeregu, czyszczenie danych oraz generowanie products.json.</span>
-        <span class="badge">BuildData AI Products</span>
+        </div><small>products.json</small><span aria-hidden="true">→</span>
       </a>
-      <a class="choice" href="/building-elements">
+      <a class="workspace-link" href="/building-elements">
+        <span class="workspace-symbol" aria-hidden="true">▤</span>
+        <div>
         <strong data-i18n="elements.title">Mapowanie Building Elementów</strong>
         <span data-i18n="elements.text">Mapowanie hierarchii systemów, wariantów, warstw i relacji odczytanej z modelu PIM elementów budowlanych.</span>
-        <span class="badge">BuildData AI Building Elements</span>
+        </div><small>building_elements.json</small><span aria-hidden="true">→</span>
       </a>
-      <a class="choice" href="/colors">
+      <a class="workspace-link" href="/colors">
+        <span class="workspace-symbol" aria-hidden="true">◐</span>
+        <div>
         <strong data-i18n="colors.title">Import Kolorów</strong>
         <span data-i18n="colors.text">Mapowanie kolorów prostych i tekstur. Bitmapy pozostają zewnętrznymi plikami, a eksport zapisuje tylko ich referencje.</span>
-        <span class="badge">BuildData AI Colors</span>
+        </div><small>colors.json</small><span aria-hidden="true">→</span>
       </a>
     </div>
+    <div class="home-footer"><span>BuildData AI</span><span data-i18n="workspace.footer">Modele · Dane źródłowe · Mapowanie · Eksport</span></div>
   </main>
   <script>
     const I18N = {
       pl: {
+        "workspace.title": "Przestrzeń danych",
+        "workspace.subtitle": "Projekty mapowania",
+        "workspace.footer": "Modele · Dane źródłowe · Mapowanie · Eksport",
         intro: "Wybierz niezależną sekcję pracy. Projekty produktów, elementów budowlanych i kolorów są prowadzone osobno.",
-        "products.title": "Mapowanie Produktów",
-        "products.text": "Import pliku klienta, mapowanie cech produktu i typoszeregu, czyszczenie danych oraz generowanie products.json.",
-        "elements.title": "Mapowanie Building Elementów",
-        "elements.text": "Mapowanie hierarchii systemów, wariantów, warstw i relacji odczytanej z modelu PIM elementów budowlanych.",
-        "colors.title": "Import Kolorów",
-        "colors.text": "Mapowanie kolorów prostych i tekstur. Bitmapy pozostają zewnętrznymi plikami, a eksport zapisuje tylko ich referencje.",
+        "products.title": "Produkty",
+        "products.text": "Cechy produktów, typoszeregi i warianty",
+        "elements.title": "Elementy budowlane",
+        "elements.text": "Systemy, warianty, warstwy i produkty",
+        "colors.title": "Kolory i tekstury",
+        "colors.text": "Palety, grupy kolorów i materiały",
       },
       en: {
+        "workspace.title": "Data workspace",
+        "workspace.subtitle": "Mapping projects",
+        "workspace.footer": "Models · Source data · Mapping · Export",
         intro: "Choose an independent workspace. Product, building-element, and color projects are handled separately.",
-        "products.title": "Product Mapping",
-        "products.text": "Import a client file, map product and type-series attributes, clean data, and generate products.json.",
-        "elements.title": "Building Element Mapping",
-        "elements.text": "Map system, variant, layer, and nested relations from the PIM building-element model.",
-        "colors.title": "Color Import",
-        "colors.text": "Map simple colors and textures. Bitmap files remain external, and the export stores only their references.",
+        "products.title": "Products",
+        "products.text": "Product attributes, type series and variants",
+        "elements.title": "Building elements",
+        "elements.text": "Systems, variants, layers and products",
+        "colors.title": "Colors and textures",
+        "colors.text": "Palettes, color groups and materials",
       }
     };
     let currentLang = localStorage.getItem("aiDataMasterLang") || "pl";
@@ -94,4 +115,4 @@ def render_main_menu() -> str:
     applyLanguage();
   </script>
 </body>
-</html>"""
+</html>""".replace("__APP_VERSION_LABEL__", app_version_label())

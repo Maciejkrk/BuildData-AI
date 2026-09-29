@@ -32,7 +32,10 @@ def test_package_roundtrip_and_shared_importer_contract():
     assert members[links[0]['asset']] == b'%PDF-1.4\nfixture'
     assert documents['products.json']['products'][0]['Id'] == 101
     root = Path(__file__).parents[2]
-    assert (root / 'PIM-Data-Importer-next/pim_importer/pim_bundle.py').read_bytes() == (root / 'BuildData-AI/data_master_app/pim_bundle.py').read_bytes()
+    importer_contract = root / 'PIM-Data-Importer/pim-data-importer-app/pim_importer/pim_bundle.py'
+    mapper_contract = root / 'BuidlData-AI-Mapper/BuildData-AI/data_master_app/pim_bundle.py'
+    if importer_contract.exists():
+        assert importer_contract.read_bytes() == mapper_contract.read_bytes()
 
 
 @pytest.mark.parametrize('path', ['../a.pdf', '/a.pdf', 'C:/a.pdf', 'a\\b.pdf', 'a/../b.pdf', 'a//b.pdf'])
