@@ -7,7 +7,7 @@ from data_master_app.converter import (
     export_schema_from_pim_bundle,
     normalize_nested_product_attribute_hashes,
 )
-from data_master_app.mapping import product_fields_from_pim_bundle
+from data_master_app.mapping import FieldDefinition, product_fields_from_pim_bundle, suggest_mapping
 
 
 @pytest.mark.parametrize('relation_type', ['Model', 'Model_Array', 'Table_Model'])
@@ -59,3 +59,24 @@ def test_nested_product_row_hashes_are_repaired_after_enrichment():
 
     assert attrs[0]['hash'] == attrs[1]['hash'] == 'existing-row'
     assert attrs[2]['hash'] != 'existing-row'
+
+
+def test_choice_values_select_device_type_instead_of_similar_subgroup_column():
+    field = FieldDefinition(
+        'pim.attribute.783.value',
+        'Subgroup/Device type',
+        False,
+        set(),
+        value_kind='single_choice',
+        options=(
+            {'id': 916, 'label': 'Folding gate', 'value': ''},
+            {'id': 917, 'label': 'Swing gate', 'value': ''},
+        ),
+    )
+    result = suggest_mapping(
+        [{'subgroup': 'Speed Folding Gates', 'device type [single select]': 'Folding gate'}],
+        [field],
+    )
+
+    assert result['mapping']['subgroup'] == 'ignore'
+    assert result['mapping']['device type [single select]'] == field.key

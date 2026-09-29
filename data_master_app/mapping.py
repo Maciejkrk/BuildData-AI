@@ -624,6 +624,16 @@ def suggest_mapping(rows: list[dict[str, Any]], fields: list[FieldDefinition]) -
 
     for column in columns:
         match, score = best_field_match(column, fields)
+        present = [row.get(column) for row in rows if row.get(column) not in (None, "")]
+        if match and match.options and present and choice_match_ratio(present, match) == 0:
+            score = min(score, 0.4)
+        for option_field in (field for field in fields if field.options):
+            option_ratio = choice_match_ratio(present, option_field)
+            if option_ratio < 0.5:
+                continue
+            option_score = 0.72 + (0.28 * option_ratio)
+            if option_score > score:
+                match, score = option_field, option_score
         if match and score >= 0.72:
             mapping[column] = match.key
             confidence[column] = score
@@ -707,6 +717,24 @@ def choice_quality(values: list[Any], field: FieldDefinition) -> dict[str, Any]:
         "matched_values": sorted(matched)[:20],
         "unmatched_values": sorted(unmatched)[:20],
     }
+
+
+def choice_match_ratio(values: list[Any], field: FieldDefinition) -> float:
+    options = {
+        normalize(key)
+        for option in field.options
+        for key in (option.get("label"), option.get("value"), option.get("id"))
+        if normalize(key)
+    }
+    parts = [
+        part
+        for value in values
+        for part in choice_value_parts(value, multi=field.value_kind == "multi_choice")
+        if normalize(part)
+    ]
+    if not parts:
+        return 0.0
+    return sum(1 for part in parts if normalize(part) in options) / len(parts)
 
 
 def choice_value_parts(value: Any, *, multi: bool) -> list[str]:
